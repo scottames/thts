@@ -1,1 +1,8 @@
 git-ignored*
+
+# Build artifacts
+/tpd
+
+# Test artifacts
+coverage.out
+coverage.html

@@ -1,0 +1,248 @@
+package profile
+
+import (
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+
+	"github.com/charmbracelet/huh"
+	"github.com/scottames/tpd/internal/config"
+	"github.com/spf13/cobra"
+)
+
+var (
+	createRepo      string
+	createReposDir  string
+	createGlobalDir string
+)
+
+var createCmd = &cobra.Command{
+	Use:   "create <name>",
+	Short: "Create a new profile",
+	Long: `Create a new profile for a separate thoughts repository.
+
+Profiles allow you to have different thoughts repositories for different contexts
+(e.g., work vs personal projects).
+
+You can specify all options via flags for non-interactive usage, or run
+interactively to be prompted for each option.`,
+	Args: cobra.ExactArgs(1),
+	RunE: runCreate,
+}
+
+func init() {
+	createCmd.Flags().StringVar(&createRepo, "repo", "", "Thoughts repository path for this profile")
+	createCmd.Flags().StringVar(&createReposDir, "repos-dir", "", "Repository-specific thoughts directory name (default: repos)")
+	createCmd.Flags().StringVar(&createGlobalDir, "global-dir", "", "Global thoughts directory name (default: global)")
+}
+
+func runCreate(cmd *cobra.Command, args []string) error {
+	profileName := args[0]
+
+	// Load existing config
+	cfg, err := config.Load()
+	if err != nil {
+		if err == config.ErrConfigNotFound {
+			fmt.Println(styleError.Render("Error: Thoughts not configured."))
+			fmt.Printf("Run %s first to set up the base configuration.\n", styleCyan.Render("tpd setup"))
+			return nil
+		}
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	// Sanitize profile name
+	sanitizedName := config.SanitizeProfileName(profileName)
+	if sanitizedName != profileName {
+		fmt.Println(styleWarning.Render(fmt.Sprintf("Profile name sanitized: \"%s\" → \"%s\"", profileName, sanitizedName)))
+	}
+
+	// Check if profile already exists
+	if cfg.ValidateProfile(sanitizedName) {
+		fmt.Println(styleError.Render(fmt.Sprintf("Error: Profile \"%s\" already exists.", sanitizedName)))
+		fmt.Println("Use a different name or delete the existing profile first.")
+		return nil
+	}
+
+	// Get profile configuration
+	var thoughtsRepo, reposDir, globalDir string
+
+	if createRepo != "" {
+		// Non-interactive mode (at least repo is specified)
+		thoughtsRepo = createRepo
+		reposDir = createReposDir
+		if reposDir == "" {
+			reposDir = "repos"
+		}
+		globalDir = createGlobalDir
+		if globalDir == "" {
+			globalDir = "global"
+		}
+	} else {
+		// Interactive mode
+		fmt.Println()
+		fmt.Println(styleInfo.Render(fmt.Sprintf("=== Creating Profile: %s ===", sanitizedName)))
+		fmt.Println()
+
+		defaultRepo := config.DefaultThoughtsRepo() + "-" + sanitizedName
+
+		fmt.Println(styleMuted.Render("Specify the thoughts repository location for this profile."))
+
+		err = huh.NewInput().
+			Title("Thoughts repository").
+			Placeholder(defaultRepo).
+			Value(&thoughtsRepo).
+			Run()
+		if err != nil {
+			return err
+		}
+		if thoughtsRepo == "" {
+			thoughtsRepo = defaultRepo
+		}
+
+		fmt.Println()
+
+		err = huh.NewInput().
+			Title("Repository-specific thoughts directory").
+			Placeholder("repos").
+			Value(&reposDir).
+			Run()
+		if err != nil {
+			return err
+		}
+		if reposDir == "" {
+			reposDir = "repos"
+		}
+
+		err = huh.NewInput().
+			Title("Global thoughts directory").
+			Placeholder("global").
+			Value(&globalDir).
+			Run()
+		if err != nil {
+			return err
+		}
+		if globalDir == "" {
+			globalDir = "global"
+		}
+	}
+
+	// Create profile config
+	profileConfig := &config.ProfileConfig{
+		ThoughtsRepo: thoughtsRepo,
+		ReposDir:     reposDir,
+		GlobalDir:    globalDir,
+	}
+
+	// Initialize profiles map if nil
+	if cfg.Profiles == nil {
+		cfg.Profiles = make(map[string]*config.ProfileConfig)
+	}
+
+	// Add profile
+	cfg.Profiles[sanitizedName] = profileConfig
+
+	// Save config
+	if err := config.Save(cfg); err != nil {
+		return fmt.Errorf("failed to save config: %w", err)
+	}
+
+	// Create the profile's thoughts repository structure
+	fmt.Println()
+	fmt.Println(styleMuted.Render("Initializing profile thoughts repository..."))
+	if err := ensureProfileRepoExists(profileConfig); err != nil {
+		return fmt.Errorf("failed to create profile repository: %w", err)
+	}
+
+	fmt.Println()
+	fmt.Println(styleSuccess.Render(fmt.Sprintf("✅ Profile \"%s\" created successfully!", sanitizedName)))
+	fmt.Println()
+	fmt.Println(styleInfo.Render("=== Profile Configuration ==="))
+	fmt.Printf("  Name: %s\n", styleCyan.Render(sanitizedName))
+	fmt.Printf("  Thoughts repository: %s\n", styleCyan.Render(thoughtsRepo))
+	fmt.Printf("  Repos directory: %s\n", styleCyan.Render(reposDir))
+	fmt.Printf("  Global directory: %s\n", styleCyan.Render(globalDir))
+	fmt.Println()
+	fmt.Println(styleMuted.Render("Next steps:"))
+	fmt.Printf("  1. Run %s in a repository\n", styleCyan.Render(fmt.Sprintf("tpd init --profile %s", sanitizedName)))
+	fmt.Println("  2. Your thoughts will sync to the profile's repository")
+
+	return nil
+}
+
+// ensureProfileRepoExists creates the profile's thoughts repo structure and initializes git if needed.
+func ensureProfileRepoExists(profile *config.ProfileConfig) error {
+	expandedRepo := config.ExpandPath(profile.ThoughtsRepo)
+
+	// Create thoughts repo if it doesn't exist
+	if err := os.MkdirAll(expandedRepo, 0755); err != nil {
+		return fmt.Errorf("failed to create thoughts repo: %w", err)
+	}
+
+	// Create subdirectories
+	reposDir := filepath.Join(expandedRepo, profile.ReposDir)
+	globalDir := filepath.Join(expandedRepo, profile.GlobalDir)
+
+	if err := os.MkdirAll(reposDir, 0755); err != nil {
+		return fmt.Errorf("failed to create repos dir: %w", err)
+	}
+
+	if err := os.MkdirAll(globalDir, 0755); err != nil {
+		return fmt.Errorf("failed to create global dir: %w", err)
+	}
+
+	// Check if it's already a git repo
+	gitPath := filepath.Join(expandedRepo, ".git")
+	info, err := os.Stat(gitPath)
+	if err == nil && (info.IsDir() || info.Mode().IsRegular()) {
+		// Already a git repo
+		fmt.Println(styleSuccess.Render("✓ Profile thoughts repository exists"))
+		return nil
+	}
+
+	// Initialize as git repo
+	fmt.Println(styleInfo.Render("Initializing profile thoughts repository as git repo..."))
+
+	gitInit := exec.Command("git", "init")
+	gitInit.Dir = expandedRepo
+	if err := gitInit.Run(); err != nil {
+		return fmt.Errorf("failed to init git repo: %w", err)
+	}
+
+	// Create initial .gitignore
+	gitignoreContent := `# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Temporary files
+*.tmp
+*.bak
+`
+	gitignorePath := filepath.Join(expandedRepo, ".gitignore")
+	if err := os.WriteFile(gitignorePath, []byte(gitignoreContent), 0644); err != nil {
+		return fmt.Errorf("failed to create .gitignore: %w", err)
+	}
+
+	// Initial commit
+	gitAdd := exec.Command("git", "add", ".gitignore")
+	gitAdd.Dir = expandedRepo
+	if err := gitAdd.Run(); err != nil {
+		return fmt.Errorf("failed to add .gitignore: %w", err)
+	}
+
+	gitCommit := exec.Command("git", "commit", "-m", "Initial thoughts repository setup")
+	gitCommit.Dir = expandedRepo
+	if err := gitCommit.Run(); err != nil {
+		return fmt.Errorf("failed to create initial commit: %w", err)
+	}
+
+	fmt.Println(styleSuccess.Render("✓ Profile thoughts repository initialized"))
+	return nil
+}
