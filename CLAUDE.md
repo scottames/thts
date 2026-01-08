@@ -17,7 +17,7 @@ HumanLayer's `thoughts` subcommand with full feature compatibility.
 
 ## Project Structure
 
-```
+```plaintext
 cmd/tpd/           # Entry point
 internal/
   cmd/             # Cobra commands
@@ -65,3 +65,34 @@ go test -tags=integration ./...                  # All tests
 ```
 
 **Coverage targets:** config/git >70%, fs/tpd >60% (all met)
+
+## Documentation
+
+User-facing docs live in `docs/`:
+
+- `README.md` - Entry point, quick start
+- `docs/guide.md` - Complete user guide
+- `docs/troubleshooting.md` - Common issues and solutions
+
+### Documentation Style
+
+- **Minimal and concise** - Easy to scan and find what you need
+- **No emojis** - Keep it professional
+- **Include examples** - Shell commands with expected behavior
+- **Consistent terminology**:
+  - "thoughts repo" = central `~/thoughts/` git repository
+  - "thoughts directory" = project's `thoughts/` symlinks
+
+### Key Concept to Clarify
+
+The distinction between the **thoughts repo** and **thoughts directory** is
+easily confused. Always be explicit:
+
+|            | Thoughts Repo                   | Thoughts Directory                 |
+| ---------- | ------------------------------- | ---------------------------------- |
+| Location   | `~/thoughts/`                   | `~/src/project/thoughts/`          |
+| What it is | Real git repo with actual files | Symlinks pointing to thoughts repo |
+| Created by | `tpd setup`                     | `tpd init`                         |
+
+Editing a file in the thoughts directory actually edits the file in the thoughts
+repo through the symlink. This should be called out when relevant.
