@@ -5,15 +5,17 @@ HumanLayer's `thoughts` subcommand with full feature compatibility.
 
 ## Commands
 
-| Command       | Description                                      |
-| ------------- | ------------------------------------------------ |
-| `tpd setup`   | Initial setup - configure thoughts repo location |
-| `tpd init`    | Initialize thoughts in current git repo          |
-| `tpd sync`    | Sync thoughts to central repo                    |
-| `tpd status`  | Show thoughts status                             |
-| `tpd uninit`  | Remove thoughts from current repo                |
-| `tpd config`  | View/edit configuration                          |
-| `tpd profile` | Manage profiles (create/list/show/delete)        |
+| Command             | Description                                      |
+| ------------------- | ------------------------------------------------ |
+| `tpd setup`         | Initial setup - configure thoughts repo location |
+| `tpd init`          | Initialize thoughts in current git repo          |
+| `tpd sync`          | Sync thoughts to central repo                    |
+| `tpd status`        | Show thoughts status                             |
+| `tpd uninit`        | Remove thoughts from current repo                |
+| `tpd config`        | View/edit configuration                          |
+| `tpd profile`       | Manage profiles (create/list/show/delete)        |
+| `tpd claude init`   | Install Claude Code integration to `.claude/`    |
+| `tpd claude uninit` | Remove Claude Code integration from `.claude/`   |
 
 ## Project Structure
 
@@ -25,7 +27,26 @@ internal/
   fs/              # Filesystem utilities (symlinks, gitignore)
   git/             # Git operations, hooks
   tpd/             # Searchable directory (hard links)
+instructions/      # Embedded: tpd-instructions.md
+skills/            # Embedded: tpd-integrate.md
+commands/          # Embedded: tpd-handoff.md, tpd-resume.md
+agents/            # Embedded: thoughts-locator.md, thoughts-analyzer.md
+embed.go           # Go embed declarations for above
 ```
+
+## Claude Integration Files
+
+Files in `instructions/`, `skills/`, `commands/`, `agents/` are embedded in the
+binary and copied to `.claude/` by `tpd claude init`.
+
+| File                   | Purpose                        | Invocation       |
+| ---------------------- | ------------------------------ | ---------------- |
+| `tpd-instructions.md`  | Teaches Claude about thoughts/ | @include         |
+| `tpd-integrate.md`     | On-demand activation           | `/tpd-integrate` |
+| `tpd-handoff.md`       | Session handoff                | `/tpd-handoff`   |
+| `tpd-resume.md`        | Resume from handoff            | `/tpd-resume`    |
+| `thoughts-locator.md`  | Find documents                 | Task tool agent  |
+| `thoughts-analyzer.md` | Analyze documents              | Task tool agent  |
 
 ## Reference
 
@@ -67,6 +88,9 @@ go test -tags=integration ./...                  # All tests
 **Coverage targets:** config/git >70%, fs/tpd >60% (all met)
 
 ## Documentation
+
+**Any relevant docs should be updated or created to consider any work
+"complete".**
 
 User-facing docs live in `docs/`:
 

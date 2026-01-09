@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/charmbracelet/huh"
+	"github.com/scottames/tpd/internal/cmd/claude"
 	"github.com/scottames/tpd/internal/config"
 	"github.com/scottames/tpd/internal/fs"
 	"github.com/spf13/cobra"
@@ -118,8 +119,14 @@ func runUninit(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// Also remove Claude integration if present (leave no trace)
+	fmt.Println(styleMuted.Render("Checking for Claude integration..."))
+	if err := claude.Uninit(currentRepo, true); err != nil {
+		fmt.Printf("%s Could not remove Claude integration: %v\n", styleWarning.Render("Warning:"), err)
+	}
+
 	fmt.Println()
-	fmt.Println(styleSuccess.Render("✅ Thoughts removed from repository"))
+	fmt.Println(styleSuccess.Render("Thoughts removed from repository"))
 
 	// Provide info about what was preserved
 	if mappedName != "" {

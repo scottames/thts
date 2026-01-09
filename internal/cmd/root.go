@@ -3,6 +3,7 @@ package cmd
 import (
 	"os"
 
+	"github.com/scottames/tpd/internal/cmd/claude"
 	"github.com/scottames/tpd/internal/cmd/profile"
 	"github.com/spf13/cobra"
 )
@@ -31,5 +32,6 @@ func Execute() {
 
 func init() {
 	rootCmd.Version = Version
+	rootCmd.AddCommand(claude.ClaudeCmd)
 	rootCmd.AddCommand(profile.ProfileCmd)
 }

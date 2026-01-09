@@ -179,7 +179,7 @@ ls -la .git/hooks/
 git -C ~/thoughts status
 
 # Verify hard links (same inode = working)
-stat thoughts/scotty/file.md thoughts/searchable/scotty/file.md
+stat thoughts/{user}/file.md thoughts/searchable/{user}/file.md
 ```
 
 ## Getting Help

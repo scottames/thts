@@ -36,20 +36,20 @@ is just a window into the relevant parts of that repo.
 ~/thoughts/                              # THOUGHTS REPO - files live here
 ├── repos/
 │   ├── myproject/
-│   │   ├── scotty/
+│   │   ├── {user}/
 │   │   │   └── notes.md                 # ← actual file
 │   │   └── shared/
 │   │       └── architecture.md          # ← actual file
 │   └── another-project/
 │       └── ...
 └── global/
-    ├── scotty/
+    ├── {user}/
     │   └── snippets.md                  # ← actual file
     └── shared/
         └── team-standards.md            # ← actual file
 
 ~/src/myproject/thoughts/                # THOUGHTS DIRECTORY - symlinks
-├── scotty/        → ~/thoughts/repos/myproject/scotty/
+├── {user}/        → ~/thoughts/repos/myproject/{user}/
 ├── shared/        → ~/thoughts/repos/myproject/shared/
 ├── global/        → ~/thoughts/global/
 └── searchable/                          # hard links (explained below)
@@ -57,8 +57,8 @@ is just a window into the relevant parts of that repo.
 
 ### Editing Through Symlinks
 
-When you edit `~/src/myproject/thoughts/scotty/notes.md`, you're actually
-editing `~/thoughts/repos/myproject/scotty/notes.md` through the symlink.
+When you edit `~/src/myproject/thoughts/{user}/notes.md`, you're actually
+editing `~/thoughts/repos/myproject/{user}/notes.md` through the symlink.
 
 This means:
 
@@ -68,21 +68,22 @@ This means:
 
 ### The Searchable Directory
 
-Many tools (including AI assistants) don't follow symlinks when searching.
-The `searchable/` directory contains **hard links** to all your thoughts files,
+Many tools (including AI assistants) don't follow symlinks when searching. The
+`searchable/` directory contains **hard links** to all your thoughts files,
 making them discoverable.
 
 ```plaintext
 thoughts/searchable/
-├── scotty/notes.md           # hard link to actual file
+├── {user}/notes.md           # hard link to actual file
 ├── shared/architecture.md    # hard link to actual file
-└── global/scotty/snippets.md # hard link to actual file
+└── global/{user}/snippets.md # hard link to actual file
 ```
 
 **Important:**
 
 - Hard links are the same file (editing one edits both)
-- Always reference files by their canonical path (e.g., `thoughts/scotty/notes.md`)
+- Always reference files by their canonical path (e.g.,
+  `thoughts/{user}/notes.md`)
 - The searchable directory rebuilds on `tpd sync`
 
 ## Getting Started
@@ -130,7 +131,7 @@ tpd init --force               # Reinitialize existing setup
 
 ```bash
 # Create a note
-echo "# Project Architecture" > thoughts/scotty/architecture.md
+echo "# Project Architecture" > thoughts/{user}/architecture.md
 
 # Check status
 tpd status
@@ -153,7 +154,7 @@ tpd sync -m "Added architecture notes"
 ### Suggested Structure
 
 ```plaintext
-thoughts/scotty/                    # Personal project notes
+thoughts/{user}/                    # Personal project notes
 ├── todo.md                         # Your task list
 ├── investigations/
 │   └── 2024-01-15-auth-bug.md     # Debugging sessions
@@ -166,7 +167,7 @@ thoughts/shared/                    # Team project notes
 └── decisions/
     └── 2024-01-10-database.md     # Team decisions (ADRs)
 
-thoughts/global/scotty/             # Your cross-project notes
+thoughts/global/{user}/             # Your cross-project notes
 ├── snippets.md                     # Reusable code patterns
 └── tools.md                        # Tool configurations
 
@@ -234,7 +235,7 @@ automatically appear:
 
 ```plaintext
 thoughts/
-├── scotty/          # Your notes
+├── {user}/          # Your notes
 ├── alice/           # Alice's notes (auto-discovered)
 ├── bob/             # Bob's notes (auto-discovered)
 ├── shared/          # Team notes
@@ -246,8 +247,8 @@ and creates symlinks for them.
 
 ## Profiles
 
-Profiles let you maintain separate thoughts repos for different contexts
-(work vs personal, different clients).
+Profiles let you maintain separate thoughts repos for different contexts (work
+vs personal, different clients).
 
 ### Creating a Profile
 
@@ -281,7 +282,7 @@ it maps that project to use the profile's repo.
     "work": { "thoughtsRepo": "~/work-thoughts" }
   },
   "repoMappings": {
-    "/home/scotty/src/work-project": { "profile": "work" }
+    "/home/{user}/src/work-project": { "profile": "work" }
   }
 }
 ```
@@ -333,7 +334,7 @@ tpd config --edit       # Opens in $EDITOR
   "thoughtsRepo": "~/thoughts",
   "reposDir": "repos",
   "globalDir": "global",
-  "user": "scotty",
+  "user": "{user}",
   "autoSyncInWorktrees": true,
   "gitIgnore": "project"
 }
@@ -365,5 +366,87 @@ don't follow symlinks.
 When working with AI assistants:
 
 - Point them to search in `thoughts/searchable/` for finding content
-- Reference files by canonical path (e.g., `thoughts/scotty/notes.md`)
+- Reference files by canonical path (e.g., `thoughts/{user}/notes.md`)
 - Run `tpd sync` to update searchable directory before AI sessions
+
+### Claude Code Integration
+
+tpd provides deep integration with Claude Code to give AI assistants awareness
+of your thoughts directory and enable session continuity.
+
+#### Installing Integration
+
+```bash
+tpd claude init              # Install with default options
+tpd claude init -i           # Interactive mode
+tpd claude init --with-settings  # Also create settings.json
+```
+
+#### Integration Levels
+
+When you run `tpd claude init`, you'll be asked how to activate the integration:
+
+| Level                     | Description                                              | Best For                    |
+| ------------------------- | -------------------------------------------------------- | --------------------------- |
+| **Always-on (CLAUDE.md)** | Adds `@.claude/tpd-instructions.md` to project CLAUDE.md | Teams sharing Claude config |
+| **Always-on (local)**     | Creates `.claude/CLAUDE.local.md` (gitignored)           | Personal always-on          |
+| **On-demand only**        | Just installs skill/commands                             | Manual activation           |
+
+#### What Gets Installed
+
+**Files copied to `.claude/`:**
+
+- `tpd-instructions.md` - Teaches Claude about thoughts/ structure and usage
+- `skills/tpd-integrate.md` - On-demand activation skill
+- `commands/tpd-handoff.md` - Create session handoff documents
+- `commands/tpd-resume.md` - Resume from handoff documents
+- `agents/thoughts-locator.md` - Find documents in thoughts/
+- `agents/thoughts-analyzer.md` - Extract insights from documents
+
+#### Using the Commands
+
+| Command              | Purpose                                         |
+| -------------------- | ----------------------------------------------- |
+| `/tpd-integrate`     | Activate thoughts/ awareness for current task   |
+| `/tpd-handoff`       | Create a handoff document when ending a session |
+| `/tpd-resume <path>` | Resume work from a handoff document             |
+
+#### Session Handoffs
+
+Handoffs preserve context across Claude Code sessions:
+
+```bash
+# At end of session
+/tpd-handoff
+
+# Next session (or different person)
+/tpd-resume thoughts/shared/handoffs/2024-01-15_10-30-00_feature-work.md
+```
+
+The handoff document captures:
+
+- Current git state (branch, commit, uncommitted changes)
+- Tasks completed and in-progress
+- Key learnings and gotchas
+- Next steps
+
+#### Removing Integration
+
+To remove Claude Code integration from a project:
+
+```bash
+tpd claude uninit              # Interactive confirmation
+tpd claude uninit --force      # Skip confirmation
+tpd claude uninit --dry-run    # Preview what would be removed
+```
+
+This removes:
+
+- All tpd files from `.claude/` (instructions, skills, commands, agents)
+- The `@.claude/tpd-instructions.md` include from CLAUDE.md (if present)
+- Gitignore patterns added by init
+
+The `.claude/` directory itself is preserved if it contains other files.
+
+**Note:** Running `tpd uninit` (to remove thoughts/ integration) also removes
+Claude integration automatically, ensuring a clean teardown.

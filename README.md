@@ -23,7 +23,7 @@ cd ~/src/myproject
 tpd init
 
 # Start writing
-echo "# Architecture Notes" > thoughts/scotty/architecture.md
+echo "# Architecture Notes" > thoughts/$user/architecture.md
 
 # Sync happens automatically on commits, or manually:
 tpd sync -m "Added architecture notes"
@@ -43,6 +43,8 @@ tpd sync -m "Added architecture notes"
 | `tpd profile list`            | List profiles                       |
 | `tpd profile show <name>`     | Show profile details                |
 | `tpd profile delete <name>`   | Delete a profile                    |
+| `tpd claude init`             | Install Claude Code integration     |
+| `tpd claude uninit`           | Remove Claude Code integration      |
 
 ## How It Works
 
@@ -51,13 +53,33 @@ run `tpd init` in a project, it creates symlinks so notes appear locally:
 
 ```plaintext
 ~/src/myproject/thoughts/     # Symlinks (git-ignored)
-├── scotty/   →  ~/thoughts/repos/myproject/scotty/
+├── {user}/   →  ~/thoughts/repos/myproject/{user}/
 ├── shared/   →  ~/thoughts/repos/myproject/shared/
 └── global/   →  ~/thoughts/global/
 ```
 
-Editing `thoughts/scotty/notes.md` in your project actually edits the file in
+Editing `thoughts/{user}/notes.md` in your project actually edits the file in
 your central thoughts repo. Changes sync automatically on commits.
+
+## Claude Code Integration
+
+tpd integrates with Claude Code to give AI assistants awareness of your thoughts
+directory:
+
+```bash
+tpd claude init              # Install integration files
+tpd claude init -i           # Interactive mode (select files/options)
+tpd claude uninit            # Remove integration (run tpd claude uninit --help for options)
+```
+
+This installs:
+
+- `/tpd-integrate` - Skill to activate thoughts/ awareness for current task
+- `/tpd-handoff` - Create session handoff documents
+- `/tpd-resume` - Resume from handoff documents
+- Specialized agents for searching/analyzing thoughts
+
+See [User Guide](docs/guide.md#claude-code-integration) for integration options.
 
 ## Documentation
 
@@ -66,6 +88,7 @@ your central thoughts repo. Changes sync automatically on commits.
 
 ## Compatibility
 
-`tpd` is compatible with [HumanLayer](https://github.com/humanlayer/humanlayer)'s
-`thoughts` subcommand. You can switch between them - they read/write the same
-config format and directory structure.
+`tpd` is compatible with
+[HumanLayer](https://github.com/humanlayer/humanlayer)'s `thoughts` subcommand.
+You can switch between them - they read/write the same config format and
+directory structure.

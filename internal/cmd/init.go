@@ -10,6 +10,7 @@ import (
 	"github.com/scottames/tpd/internal/config"
 	"github.com/scottames/tpd/internal/fs"
 	"github.com/scottames/tpd/internal/git"
+	"github.com/scottames/tpd/internal/tpd"
 	"github.com/spf13/cobra"
 )
 
@@ -155,6 +156,14 @@ func runInit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to create symlinks: %w", err)
 	}
 
+	// Generate CLAUDE.md for Claude Code integration
+	created, err := tpd.WriteClaudeMD(thoughtsDir, projectName, cfg.User)
+	if err != nil {
+		fmt.Printf("%s Could not create CLAUDE.md: %v\n", styleWarning.Render("Warning:"), err)
+	} else if created {
+		fmt.Println(styleSuccess.Render("✓ Created thoughts/CLAUDE.md"))
+	}
+
 	// Add to gitignore
 	gitIgnoreMode := cfg.GitIgnore
 	if gitIgnoreMode == "" {
@@ -206,7 +215,8 @@ func runInit(cmd *cobra.Command, args []string) error {
 	fmt.Printf("    └── thoughts/\n")
 	fmt.Printf("         ├── %s/     %s\n", cfg.User, styleMuted.Render(fmt.Sprintf("→ %s/%s/%s/%s/", config.ContractPath(profileConfig.ThoughtsRepo), profileConfig.ReposDir, projectName, cfg.User)))
 	fmt.Printf("         ├── shared/      %s\n", styleMuted.Render(fmt.Sprintf("→ %s/%s/%s/shared/", config.ContractPath(profileConfig.ThoughtsRepo), profileConfig.ReposDir, projectName)))
-	fmt.Printf("         └── global/      %s\n", styleMuted.Render(fmt.Sprintf("→ %s/%s/", config.ContractPath(profileConfig.ThoughtsRepo), profileConfig.GlobalDir)))
+	fmt.Printf("         ├── global/      %s\n", styleMuted.Render(fmt.Sprintf("→ %s/%s/", config.ContractPath(profileConfig.ThoughtsRepo), profileConfig.GlobalDir)))
+	fmt.Printf("         └── CLAUDE.md    %s\n", styleMuted.Render("(Claude Code documentation)"))
 	fmt.Println()
 	fmt.Println("Protection enabled:")
 	fmt.Printf("  %s Pre-commit hook: Prevents committing thoughts/\n", styleSuccess.Render("✓"))
