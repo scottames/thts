@@ -1,5 +1,58 @@
 # tpd User Guide
 
+<!-- mtoc-start -->
+
+- [What tpd Does](#what-tpd-does)
+- [Key Concepts](#key-concepts)
+  - [Two Places, One Set of Files](#two-places-one-set-of-files)
+  - [Where Files Actually Live](#where-files-actually-live)
+  - [Editing Through Symlinks](#editing-through-symlinks)
+  - [The Searchable Directory](#the-searchable-directory)
+- [Getting Started](#getting-started)
+  - [First-Time Setup](#first-time-setup)
+  - [Initializing a Project](#initializing-a-project)
+  - [Your First Notes](#your-first-notes)
+- [Directory Organization](#directory-organization)
+  - [Where to Put What](#where-to-put-what)
+  - [Suggested Structure](#suggested-structure)
+- [Syncing](#syncing)
+  - [Automatic Sync](#automatic-sync)
+  - [Manual Sync](#manual-sync)
+  - [Handling Conflicts](#handling-conflicts)
+- [Team Collaboration](#team-collaboration)
+  - [Sharing a Thoughts Repo](#sharing-a-thoughts-repo)
+  - [Discovering Teammates' Notes](#discovering-teammates-notes)
+- [Profiles](#profiles)
+  - [Creating a Profile](#creating-a-profile)
+  - [Using a Profile](#using-a-profile)
+  - [Managing Profiles](#managing-profiles)
+  - [How Profiles Work](#how-profiles-work)
+- [Git Worktrees](#git-worktrees)
+  - [Disabling Auto-Sync in Worktrees](#disabling-auto-sync-in-worktrees)
+- [Configuration](#configuration)
+  - [Viewing Config](#viewing-config)
+  - [Editing Config](#editing-config)
+  - [Config Options](#config-options)
+  - [gitIgnore Options](#gitignore-options)
+- [Working with AI Assistants](#working-with-ai-assistants)
+  - [Claude Code Integration](#claude-code-integration)
+    - [Installing Integration](#installing-integration)
+    - [Integration Levels](#integration-levels)
+    - [What Gets Installed](#what-gets-installed)
+    - [Using the Commands](#using-the-commands)
+    - [Session Handoffs](#session-handoffs)
+    - [Removing Integration](#removing-integration)
+- [Compatibility with HumanLayer](#compatibility-with-humanlayer)
+  - [Why Two Tools?](#why-two-tools)
+  - [What's Shared](#whats-shared)
+  - [Switching Between Tools](#switching-between-tools)
+  - [Team Compatibility](#team-compatibility)
+  - [Config Compatibility](#config-compatibility)
+  - [Command Mapping](#command-mapping)
+  - [Differences](#differences)
+
+<!-- mtoc-end -->
+
 ## What tpd Does
 
 tpd manages developer notes (architecture decisions, TODOs, investigation logs)
@@ -450,3 +503,85 @@ The `.claude/` directory itself is preserved if it contains other files.
 
 **Note:** Running `tpd uninit` (to remove thoughts/ integration) also removes
 Claude integration automatically, ensuring a clean teardown.
+
+## Compatibility with HumanLayer
+
+`tpd` is a Go reimplementation of the `thoughts` subcommand from
+[HumanLayer's CLI](https://github.com/humanlayer/humanlayer) (`humanlayer`). The
+two tools are fully interoperable.
+
+### Why Two Tools?
+
+| Tool                  | Best For                                                                    |
+| --------------------- | --------------------------------------------------------------------------- |
+| `tpd`                 | Standalone binary, no runtime dependencies, Go ecosystem                    |
+| `humanlayer thoughts` | Already using HumanLayer, Node.js ecosystem, additional humanlayer features |
+
+### What's Shared
+
+Both tools use identical:
+
+| Component               | Location                                                   |
+| ----------------------- | ---------------------------------------------------------- |
+| Config file             | `~/.config/humanlayer/humanlayer.json`                     |
+| Thoughts repo structure | `~/thoughts/repos/<project>/`, `~/thoughts/global/`        |
+| Symlink layout          | `thoughts/{user}/`, `thoughts/shared/`, `thoughts/global/` |
+| Searchable directory    | `thoughts/searchable/` with hard links                     |
+| Git hooks               | Pre-commit protection, post-commit sync                    |
+
+### Switching Between Tools
+
+You can switch tools at any time without migration:
+
+```bash
+# Using tpd
+tpd init
+tpd sync -m "Some notes"
+
+# Later, using humanlayer (same project, same notes)
+humanlayer thoughts sync -m "More notes"
+
+# Back to tpd
+tpd status
+```
+
+### Team Compatibility
+
+Team members can use different tools:
+
+- Alice uses `tpd` (prefers Go binaries)
+- Bob uses `humanlayer thoughts` (already has HumanLayer installed)
+- Both share the same thoughts repo
+- Notes sync correctly regardless of which tool created them
+
+### Config Compatibility
+
+`tpd` reads from HumanLayer's config location for compatibility:
+
+```plaintext
+~/.config/humanlayer/humanlayer.json  # Read by both tools
+~/.config/tpd/config.json             # tpd also writes here
+```
+
+When you run `tpd setup`, it checks for existing HumanLayer config and uses
+those settings if found.
+
+### Command Mapping
+
+| tpd          | humanlayer thoughts          | Description              |
+| ------------ | ---------------------------- | ------------------------ |
+| `tpd setup`  | `humanlayer thoughts setup`  | First-time configuration |
+| `tpd init`   | `humanlayer thoughts init`   | Initialize in a project  |
+| `tpd sync`   | `humanlayer thoughts sync`   | Sync to thoughts repo    |
+| `tpd status` | `humanlayer thoughts status` | Show status              |
+| `tpd uninit` | `humanlayer thoughts uninit` | Remove from project      |
+
+### Differences
+
+`tpd` adds some features not in `humanlayer thoughts`:
+
+- Profile management (`tpd profile create/list/show/delete`)
+- Claude Code integration (`tpd claude init/uninit`)
+- Cross-platform binaries via goreleaser
+
+The core thoughts workflow is identical.

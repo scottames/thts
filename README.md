@@ -3,6 +3,20 @@
 A CLI for managing developer notes separately from code repositories while
 keeping them accessible in every project.
 
+<!-- mtoc-start -->
+
+- [Why tpd?](#why-tpd)
+- [Quick Start](#quick-start)
+- [Commands](#commands)
+- [How It Works](#how-it-works)
+- [Claude Code Integration](#claude-code-integration)
+- [Documentation](#documentation)
+- [Attribution](#attribution)
+- [Compatibility with HumanLayer](#compatibility-with-humanlayer)
+- [License](#license)
+
+<!-- mtoc-end -->
+
 ## Why tpd?
 
 - **Keep notes out of code repos** - Architecture decisions, TODOs, and
@@ -11,6 +25,15 @@ keeping them accessible in every project.
   `thoughts/` directory via symlinks
 - **Never lose context** - Notes sync to a central git repo you control
 - **Share selectively** - Personal notes stay private, team notes are shared
+
+<!-- prettier-ignore-start -->
+> [!INFO]
+> `tbd` is a Go reimplementation of the `thoughts` subcommand from
+> [HumanLayer's CLI](https://github.com/humanlayer/humanlayer) (`humanlayer`).
+> See [Compatibility with HumanLayer](#compatibility-with-humanlayer) for more
+> information.
+
+<!-- prettier-ignore-end -->
 
 ## Quick Start
 
@@ -86,9 +109,37 @@ See [User Guide](docs/guide.md#claude-code-integration) for integration options.
 - [User Guide](docs/guide.md) - Complete documentation
 - [Troubleshooting](docs/troubleshooting.md) - Common issues and solutions
 
-## Compatibility
+## Attribution
 
-`tpd` is compatible with
-[HumanLayer](https://github.com/humanlayer/humanlayer)'s `thoughts` subcommand.
-You can switch between them - they read/write the same config format and
-directory structure.
+This project is inspired by and based on the `thoughts` subcommand from
+[HumanLayer](https://github.com/humanlayer/humanlayer) by the HumanLayer
+Authors.
+
+The original implementation provided the design, directory structure, and config
+format that `tpd` replicates for compatibility. Thanks to the HumanLayer team
+for creating and open-sourcing this workflow.
+
+## Compatibility with HumanLayer
+
+`tpd` is a Go reimplementation of
+[HumanLayer](https://github.com/humanlayer/humanlayer)'s `humanlayer thoughts`
+subcommand. **You can switch between them freely** - they use the same:
+
+- Config file format (`~/.config/humanlayer/humanlayer.json`)
+- Directory structure (`~/thoughts/repos/<project>/`)
+- Symlink layout in projects
+- Git hooks
+
+This means:
+
+- Use `tpd` on machines where you prefer a standalone binary
+- Use `humanlayer thoughts` where you already have HumanLayer installed
+- Team members can use whichever tool they prefer
+- Your notes work with both tools simultaneously
+
+See the [Compatibility Guide](docs/guide.md#compatibility-with-humanlayer) for
+details.
+
+## License
+
+Apache License 2.0 - see [LICENSE](LICENSE) for details.
