@@ -33,3 +33,7 @@ backend = "core:go"
 "platforms.macos-arm64" = { checksum = "sha256:5bfa117e401ae64e7ffb960243c448b535fe007e682a13ff6c7371f4a6f0ccaa", url = "https://dl.google.com/go/go1.23.12.darwin-arm64.tar.gz"}
 "platforms.macos-x64" = { checksum = "sha256:0f6efdc3ffc6f03b230016acca0aef43c229de022d0ff401e7aa4ad4862eca8e", url = "https://dl.google.com/go/go1.23.12.darwin-amd64.tar.gz"}
 "platforms.windows-x64" = { checksum = "sha256:07c35866cdd864b81bb6f1cfbf25ac7f87ddc3a976ede1bf5112acbb12dfe6dc", url = "https://dl.google.com/go/go1.23.12.windows-amd64.zip"}
+
+[[tools.trunk]]
+version = "1.3.4"
+backend = "npm:@trunkio/launcher"

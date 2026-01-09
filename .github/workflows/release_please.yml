@@ -3,7 +3,7 @@ on:
   push:
     branches:
       - main
-name: release-please
+name: release/please
 permissions: read-all
 jobs:
   release-please:

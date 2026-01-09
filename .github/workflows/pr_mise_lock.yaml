@@ -1,5 +1,5 @@
 ---
-name: mise
+name: pr/mise
 on:
   pull_request:
     paths:
