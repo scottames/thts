@@ -1,0 +1,43 @@
+---
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+permissions: read-all
+concurrency:
+  # yamllint disable-line rule:line-length
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        # yamllint disable-line rule:line-length
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: install mise
+        # yamllint disable-line rule:line-length
+        uses: jdx/mise-action@146a28175021df8ca24f8ee1828cc2a60f980bd5 # v3.5.1
+        with:
+          install: true
+          cache: true
+
+      - name: build
+        run: mise run build
+
+      - name: unit tests
+        run: mise run test
+
+      - name: configure git for integration tests
+        run: |
+          git config --global user.email "ci@test.com"
+          git config --global user.name "CI"
+
+      - name: integration tests
+        run: mise run test-integration
+
+      - name: lint
+        run: mise run lint

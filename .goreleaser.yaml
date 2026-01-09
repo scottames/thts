@@ -1,0 +1,42 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+---
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: tpd
+    main: ./cmd/tpd
+    binary: tpd
+    ldflags:
+      - -s -w
+      - -X github.com/scottames/tpd/internal/cmd.Version={{.Version}}
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - id: tpd
+    formats:
+      - tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  use: github-native
+
+release:
+  github:
+    owner: scottames
+    name: tpd
+  draft: false
+  prerelease: auto

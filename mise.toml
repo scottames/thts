@@ -1,0 +1,35 @@
+[tools]
+"aqua:goreleaser/goreleaser" = "2.13.2"
+"aqua:int128/ghcp" = "1.15.1"
+go = "1.23"
+
+[tasks.build]
+run = "go build -o tpd ./cmd/tpd"
+
+[tasks.test]
+run = "go test ./..."
+
+[tasks.test-integration]
+run = "go test -tags=integration ./internal/cmd/..."
+
+[tasks.test-all]
+depends = ["test"]
+run = "go test -tags=integration ./internal/cmd/..."
+
+[tasks.test-coverage]
+run = """
+go test -coverprofile=coverage.out ./...
+go tool cover -html=coverage.out -o coverage.html
+"""
+
+[tasks.lint]
+run = "trunk check"
+
+[tasks.lint-fix]
+run = "trunk check --fix && trunk fmt"
+
+[tasks.check]
+depends = ["lint", "test", "test-integration"]
+
+[tasks.clean]
+run = "rm -f tpd coverage.out coverage.html"

@@ -1,0 +1,35 @@
+[[tools."aqua:casey/just"]]
+version = "1.46.0"
+backend = "aqua:casey/just"
+"platforms.linux-arm64" = { checksum = "sha256:b81970c8247fa64cfb30d2a3da0e487e4253f9f2d01865ed5e7d53cdc7b02188", url = "https://github.com/casey/just/releases/download/1.46.0/just-1.46.0-aarch64-unknown-linux-musl.tar.gz"}
+"platforms.linux-x64" = { checksum = "sha256:79966e6e353f535ee7d1c6221641bcc8e3381c55b0d0a6dc6e54b34f9db36eaa", url = "https://github.com/casey/just/releases/download/1.46.0/just-1.46.0-x86_64-unknown-linux-musl.tar.gz"}
+"platforms.macos-arm64" = { checksum = "sha256:438eaf6468a115aa7db93e501cc7e3272f453f6b7083be3863adfab546b23358", url = "https://github.com/casey/just/releases/download/1.46.0/just-1.46.0-aarch64-apple-darwin.tar.gz"}
+"platforms.macos-x64" = { checksum = "sha256:ec54dd60ac876261b7318f1852ef9c0319fede1e5a73c14f56d908a8edf595b8", url = "https://github.com/casey/just/releases/download/1.46.0/just-1.46.0-x86_64-apple-darwin.tar.gz"}
+"platforms.windows-x64" = { checksum = "sha256:f0acf3f8ccbcf360b481baae9cae4c921774c89d5d932012481d3e0bda78ab39", url = "https://github.com/casey/just/releases/download/1.46.0/just-1.46.0-x86_64-pc-windows-msvc.zip"}
+
+[[tools."aqua:goreleaser/goreleaser"]]
+version = "2.13.2"
+backend = "aqua:goreleaser/goreleaser"
+"platforms.linux-arm64" = { checksum = "sha256:81b59a932f6cb6632d29f334f890bd7a8414cb1b765451517a2e0b8de523453d", url = "https://github.com/goreleaser/goreleaser/releases/download/v2.13.2/goreleaser_Linux_arm64.tar.gz"}
+"platforms.linux-x64" = { checksum = "sha256:b38d8f8f9231ee52eeac9bbd1e3441467a8b1a2e0aa7461f2b1e52b80cd5c62a", url = "https://github.com/goreleaser/goreleaser/releases/download/v2.13.2/goreleaser_Linux_x86_64.tar.gz"}
+"platforms.macos-arm64" = { checksum = "sha256:d63ba9584b71a0ffdb0f66bddcbe4db5ca1f23eef1000a63328e19e3ed71d91d", url = "https://github.com/goreleaser/goreleaser/releases/download/v2.13.2/goreleaser_Darwin_all.tar.gz"}
+"platforms.macos-x64" = { checksum = "sha256:d63ba9584b71a0ffdb0f66bddcbe4db5ca1f23eef1000a63328e19e3ed71d91d", url = "https://github.com/goreleaser/goreleaser/releases/download/v2.13.2/goreleaser_Darwin_all.tar.gz"}
+"platforms.windows-x64" = { checksum = "sha256:105b8b760449d111775376580ce1b28bef11afac5cb1b0fc4231113c52daf06a", url = "https://github.com/goreleaser/goreleaser/releases/download/v2.13.2/goreleaser_Windows_x86_64.zip"}
+
+[[tools."aqua:int128/ghcp"]]
+version = "1.15.1"
+backend = "aqua:int128/ghcp"
+"platforms.linux-arm64" = { checksum = "sha256:801db65a3ea5148c7a89f5201f8992963f2592fc17ed5fd88e4d996bad9542b2", url = "https://github.com/int128/ghcp/releases/download/v1.15.1/ghcp_linux_arm64.zip"}
+"platforms.linux-x64" = { checksum = "sha256:c5ba74d0b2652a4375c4ae653b7c065024a619adcff40dedbfdd10d40e287d3d", url = "https://github.com/int128/ghcp/releases/download/v1.15.1/ghcp_linux_amd64.zip"}
+"platforms.macos-arm64" = { checksum = "sha256:5a923e288ce67b454cd1c7d5118ebf4028e9f1905df3b1105ae8d05a1fe23a6e", url = "https://github.com/int128/ghcp/releases/download/v1.15.1/ghcp_darwin_arm64.zip"}
+"platforms.macos-x64" = { checksum = "sha256:9fb8839ee08bc0d98973970f3fef88322e49e8486ac3bd80dce57dcea97035e2", url = "https://github.com/int128/ghcp/releases/download/v1.15.1/ghcp_darwin_amd64.zip"}
+"platforms.windows-x64" = { checksum = "sha256:a7673944cefaa9955a3fefa5ddf5b03c4ccec2f7e5f0d14d2707804af88ba22b", url = "https://github.com/int128/ghcp/releases/download/v1.15.1/ghcp_windows_amd64.zip"}
+
+[[tools.go]]
+version = "1.23.12"
+backend = "core:go"
+"platforms.linux-arm64" = { checksum = "sha256:52ce172f96e21da53b1ae9079808560d49b02ac86cecfa457217597f9bc28ab3", url = "https://dl.google.com/go/go1.23.12.linux-arm64.tar.gz"}
+"platforms.linux-x64" = { checksum = "sha256:d3847fef834e9db11bf64e3fb34db9c04db14e068eeb064f49af747010454f90", url = "https://dl.google.com/go/go1.23.12.linux-amd64.tar.gz"}
+"platforms.macos-arm64" = { checksum = "sha256:5bfa117e401ae64e7ffb960243c448b535fe007e682a13ff6c7371f4a6f0ccaa", url = "https://dl.google.com/go/go1.23.12.darwin-arm64.tar.gz"}
+"platforms.macos-x64" = { checksum = "sha256:0f6efdc3ffc6f03b230016acca0aef43c229de022d0ff401e7aa4ad4862eca8e", url = "https://dl.google.com/go/go1.23.12.darwin-amd64.tar.gz"}
+"platforms.windows-x64" = { checksum = "sha256:07c35866cdd864b81bb6f1cfbf25ac7f87ddc3a976ede1bf5112acbb12dfe6dc", url = "https://dl.google.com/go/go1.23.12.windows-amd64.zip"}

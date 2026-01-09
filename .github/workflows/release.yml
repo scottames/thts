@@ -1,0 +1,40 @@
+---
+name: release
+on:
+  push:
+    tags:
+      - v*
+permissions: read-all
+jobs:
+  goreleaser:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      # yamllint disable-line rule:line-length
+      - name: Generate GitHub token
+        # https://github.com/actions/create-github-app-token
+        uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf # v2.2.1
+        id: generate-token
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          permission-contents: write
+
+      - name: checkout
+        # yamllint disable-line rule:line-length
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: install mise
+        # yamllint disable-line rule:line-length
+        uses: jdx/mise-action@146a28175021df8ca24f8ee1828cc2a60f980bd5 # v3.5.1
+        with:
+          install: true
+          cache: true
+
+      - name: goreleaser
+        run: mise x -- goreleaser release --clean
+        env:
+          GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
