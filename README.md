@@ -5,29 +5,52 @@ keeping them accessible in every project.
 
 <!-- mtoc-start -->
 
+- [How It Works](#how-it-works)
 - [Why tpd?](#why-tpd)
 - [Quick Start](#quick-start)
 - [Commands](#commands)
-- [How It Works](#how-it-works)
-- [Claude Code Integration](#claude-code-integration)
 - [Documentation](#documentation)
+- [Claude Code Integration](#claude-code-integration)
 - [Attribution](#attribution)
 - [Compatibility with HumanLayer](#compatibility-with-humanlayer)
 - [License](#license)
 
 <!-- mtoc-end -->
 
+## How It Works
+
+Your notes live in a _central thoughts repo_ (e.g., `~/thoughts/`). When you run
+`tpd init` in a project, it creates symlinks so notes appear locally:
+
+```plaintext
+~/src/myproject/thoughts/     # Symlinks (git-ignored)
+├── {user}/   →  ~/thoughts/repos/myproject/{user}/
+├── shared/   →  ~/thoughts/repos/myproject/shared/
+└── global/   →  ~/thoughts/global/
+```
+
+Editing `thoughts/{user}/notes.md` in your project actually edits the file in
+your central thoughts repo. Changes sync automatically on commits.
+
 ## Why tpd?
 
-- **Keep notes out of code repos** - Architecture decisions, TODOs, and
-  investigation notes don't belong in git history
-- **Access notes in every project** - Your thoughts appear as a local
-  `thoughts/` directory via symlinks
-- **Never lose context** - Notes sync to a central git repo you control
-- **Share selectively** - Personal notes stay private, team notes are shared
+`tdp` stores thoughts, plans, dreams, research, etc. in one central repo and
+links it to existing repos so that they can be shared across projects and with
+teams without versioning them in every repo independently.
+
+- Access notes in every project
+  - "thoughts" appear as a local `thoughts/` directory via symlinks in each
+    enabled repo/project
+- Never lose context
+  - Notes sync to a central git repo and can be queried from anywhere
+- Share with a team
+  - By design notes can be given a personal, project, or team scope
+- Automatic LLM integration
+  - Claude will automatically, if [configured](#claude-code-integration) use
+    `tdp` to keep track of research, notes, plans, etc.
 
 <!-- prettier-ignore-start -->
-> [!INFO]
+>[!INFO]
 > `tbd` is a Go reimplementation of the `thoughts` subcommand from
 > [HumanLayer's CLI](https://github.com/humanlayer/humanlayer) (`humanlayer`).
 > See [Compatibility with HumanLayer](#compatibility-with-humanlayer) for more
@@ -48,7 +71,8 @@ tpd init
 # Start writing
 echo "# Architecture Notes" > thoughts/$user/architecture.md
 
-# Sync happens automatically on commits, or manually:
+# Sync with central remote repo
+#  - If integrated with Claude, Claude will be instructed to do so automatically
 tpd sync -m "Added architecture notes"
 ```
 
@@ -69,20 +93,10 @@ tpd sync -m "Added architecture notes"
 | `tpd claude init`             | Install Claude Code integration     |
 | `tpd claude uninit`           | Remove Claude Code integration      |
 
-## How It Works
+## Documentation
 
-Your notes live in a **central thoughts repo** (e.g., `~/thoughts/`). When you
-run `tpd init` in a project, it creates symlinks so notes appear locally:
-
-```plaintext
-~/src/myproject/thoughts/     # Symlinks (git-ignored)
-├── {user}/   →  ~/thoughts/repos/myproject/{user}/
-├── shared/   →  ~/thoughts/repos/myproject/shared/
-└── global/   →  ~/thoughts/global/
-```
-
-Editing `thoughts/{user}/notes.md` in your project actually edits the file in
-your central thoughts repo. Changes sync automatically on commits.
+- [User Guide](docs/guide.md) - Complete documentation
+- [Troubleshooting](docs/troubleshooting.md) - Common issues and solutions
 
 ## Claude Code Integration
 
@@ -103,11 +117,6 @@ This installs:
 - Specialized agents for searching/analyzing thoughts
 
 See [User Guide](docs/guide.md#claude-code-integration) for integration options.
-
-## Documentation
-
-- [User Guide](docs/guide.md) - Complete documentation
-- [Troubleshooting](docs/troubleshooting.md) - Common issues and solutions
 
 ## Attribution
 
