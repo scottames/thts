@@ -48,7 +48,7 @@ func XDGConfigHome() string {
 
 // TPDConfigPath returns the path to the tpd config file.
 func TPDConfigPath() string {
-	return filepath.Join(XDGConfigHome(), "tpd", "config.json")
+	return filepath.Join(XDGConfigHome(), "tpd", "config.yaml")
 }
 
 // HumanLayerConfigPath returns the path to the HumanLayer config file.

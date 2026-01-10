@@ -28,6 +28,7 @@ var setupCmd = &cobra.Command{
 	Long: `Configure tpd for first-time use.
 
 This command will prompt you for:
+- A name for your default profile
 - The location of your thoughts repository
 - Your username (used for personal notes directories)
 
@@ -43,8 +44,12 @@ func runSetup(cmd *cobra.Command, args []string) error {
 	// Check if config already exists
 	if config.Exists() {
 		cfg, _ := config.Load()
+		defaultProfile, defaultName := cfg.GetDefaultProfile()
 		fmt.Println(styleWarning.Render("Configuration already exists:"))
-		fmt.Printf("  Thoughts repo: %s\n", styleCyan.Render(cfg.ThoughtsRepo))
+		if defaultProfile != nil {
+			fmt.Printf("  Default profile: %s\n", styleCyan.Render(defaultName))
+			fmt.Printf("  Thoughts repo: %s\n", styleCyan.Render(defaultProfile.ThoughtsRepo))
+		}
 		fmt.Printf("  User: %s\n", styleCyan.Render(cfg.User))
 		fmt.Println()
 
@@ -67,11 +72,27 @@ func runSetup(cmd *cobra.Command, args []string) error {
 	fmt.Println("Let's configure your thoughts system.")
 	fmt.Println()
 
+	// Get profile name
+	var profileName string
+	err := huh.NewInput().
+		Title("Profile name").
+		Description("Name for your default profile (e.g., personal, work).").
+		Placeholder("personal").
+		Value(&profileName).
+		Run()
+	if err != nil {
+		return err
+	}
+	if profileName == "" {
+		profileName = "personal"
+	}
+	profileName = config.SanitizeProfileName(profileName)
+
 	// Get thoughts repository location
 	defaultRepo := config.DefaultThoughtsRepo()
 	var thoughtsRepo string
 
-	err := huh.NewInput().
+	err = huh.NewInput().
 		Title("Thoughts repository location").
 		Description("This is where all your thoughts across all projects will be stored.").
 		Placeholder(defaultRepo).
@@ -104,34 +125,58 @@ func runSetup(cmd *cobra.Command, args []string) error {
 
 		// Validate username
 		if strings.ToLower(user) == "global" {
-			fmt.Println(styleError.Render("Username cannot be \"global\" - it's reserved for cross-project thoughts."))
+			fmt.Println(
+				styleError.Render(
+					"Username cannot be \"global\" - it's reserved for cross-project thoughts.",
+				),
+			)
 			user = ""
 			continue
 		}
 		if strings.ToLower(user) == "shared" {
-			fmt.Println(styleError.Render("Username cannot be \"shared\" - it's reserved for team-shared notes."))
+			fmt.Println(
+				styleError.Render(
+					"Username cannot be \"shared\" - it's reserved for team-shared notes.",
+				),
+			)
 			user = ""
 			continue
 		}
 		break
 	}
 
-	// Create config
+	// Create config with profile
 	cfg := config.Defaults()
-	cfg.ThoughtsRepo = thoughtsRepo
 	cfg.User = user
+	cfg.Profiles[profileName] = &config.ProfileConfig{
+		ThoughtsRepo: thoughtsRepo,
+		ReposDir:     "repos",
+		GlobalDir:    "global",
+		Default:      true,
+	}
+
+	profile := cfg.Profiles[profileName]
 
 	// Show what will be created
 	fmt.Println()
 	fmt.Println(styleWarning.Render("Creating thoughts structure:"))
 	displayRepo := config.ContractPath(config.ExpandPath(thoughtsRepo))
+	fmt.Printf("  Profile: %s\n", styleCyan.Render(profileName))
 	fmt.Printf("  %s/\n", styleCyan.Render(displayRepo))
-	fmt.Printf("    ├── %s/     %s\n", styleCyan.Render(cfg.ReposDir), styleMuted.Render("(project-specific thoughts)"))
-	fmt.Printf("    └── %s/    %s\n", styleCyan.Render(cfg.GlobalDir), styleMuted.Render("(cross-project thoughts)"))
+	fmt.Printf(
+		"    ├── %s/     %s\n",
+		styleCyan.Render(profile.ReposDir),
+		styleMuted.Render("(project-specific thoughts)"),
+	)
+	fmt.Printf(
+		"    └── %s/    %s\n",
+		styleCyan.Render(profile.GlobalDir),
+		styleMuted.Render("(cross-project thoughts)"),
+	)
 	fmt.Println()
 
 	// Ensure thoughts repo exists and is a git repo
-	if err := ensureThoughtsRepoExists(cfg); err != nil {
+	if err := ensureThoughtsRepoExistsForProfile(profile); err != nil {
 		return fmt.Errorf("failed to create thoughts repository: %w", err)
 	}
 
@@ -140,21 +185,30 @@ func runSetup(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
 
-	fmt.Println(styleSuccess.Render("✓ Configuration saved to ") + styleMuted.Render(config.TPDConfigPath()))
+	fmt.Println(
+		styleSuccess.Render(
+			"✓ Configuration saved to ",
+		) + styleMuted.Render(
+			config.TPDConfigPath(),
+		),
+	)
 	fmt.Println()
-	fmt.Println(styleSuccess.Render("✅ Setup complete!"))
+	fmt.Println(styleSuccess.Render("✓ Setup complete!"))
 	fmt.Println()
 	fmt.Println("Next steps:")
 	fmt.Printf("  1. Navigate to a git repository\n")
-	fmt.Printf("  2. Run %s to initialize thoughts for that project\n", styleCyan.Render("tpd init"))
+	fmt.Printf(
+		"  2. Run %s to initialize thoughts for that project\n",
+		styleCyan.Render("tpd init"),
+	)
 	fmt.Println()
 
 	return nil
 }
 
-// ensureThoughtsRepoExists creates the thoughts repo structure and initializes git if needed.
-func ensureThoughtsRepoExists(cfg *config.Config) error {
-	expandedRepo := config.ExpandPath(cfg.ThoughtsRepo)
+// ensureThoughtsRepoExistsForProfile creates the thoughts repo structure and initializes git if needed.
+func ensureThoughtsRepoExistsForProfile(profile *config.ProfileConfig) error {
+	expandedRepo := config.ExpandPath(profile.ThoughtsRepo)
 
 	// Create thoughts repo if it doesn't exist
 	if err := os.MkdirAll(expandedRepo, 0755); err != nil {
@@ -162,8 +216,8 @@ func ensureThoughtsRepoExists(cfg *config.Config) error {
 	}
 
 	// Create subdirectories
-	reposDir := filepath.Join(expandedRepo, cfg.ReposDir)
-	globalDir := filepath.Join(expandedRepo, cfg.GlobalDir)
+	reposDir := filepath.Join(expandedRepo, profile.ReposDir)
+	globalDir := filepath.Join(expandedRepo, profile.GlobalDir)
 
 	if err := os.MkdirAll(reposDir, 0755); err != nil {
 		return fmt.Errorf("failed to create repos dir: %w", err)

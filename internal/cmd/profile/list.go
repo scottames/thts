@@ -50,29 +50,29 @@ func runList(cmd *cobra.Command, args []string) error {
 	fmt.Println(styleMuted.Render(strings.Repeat("=", 50)))
 	fmt.Println()
 
-	// Show default config
-	fmt.Println(styleWarning.Render("Default Configuration:"))
-	fmt.Printf("  Thoughts repository: %s\n", styleCyan.Render(cfg.ThoughtsRepo))
-	fmt.Printf("  Repos directory: %s\n", styleCyan.Render(cfg.ReposDir))
-	fmt.Printf("  Global directory: %s\n", styleCyan.Render(cfg.GlobalDir))
-	fmt.Println()
-
 	// Show profiles
 	if len(cfg.Profiles) == 0 {
 		fmt.Println(styleMuted.Render("No profiles configured."))
 		fmt.Println()
-		fmt.Println(styleMuted.Render("Create a profile with: tpd profile create <name>"))
+		fmt.Printf("Run %s to create your first profile.\n", styleCyan.Render("tpd setup"))
 	} else {
 		fmt.Println(styleWarning.Render(fmt.Sprintf("Profiles (%d):", len(cfg.Profiles))))
 		fmt.Println()
 
 		for name, profile := range cfg.Profiles {
-			fmt.Printf("  %s:\n", styleCyan.Render(name))
+			// Mark default profile with *
+			nameDisplay := name
+			if profile.Default {
+				nameDisplay = name + " *"
+			}
+			fmt.Printf("  %s:\n", styleCyan.Render(nameDisplay))
 			fmt.Printf("    Thoughts repository: %s\n", profile.ThoughtsRepo)
 			fmt.Printf("    Repos directory: %s\n", profile.ReposDir)
 			fmt.Printf("    Global directory: %s\n", profile.GlobalDir)
 			fmt.Println()
 		}
+
+		fmt.Println(styleMuted.Render("* = default profile"))
 	}
 
 	return nil

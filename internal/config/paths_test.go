@@ -186,7 +186,7 @@ func TestTPDConfigPath(t *testing.T) {
 		t.Fatalf("failed to set XDG_CONFIG_HOME: %v", err)
 	}
 	got := TPDConfigPath()
-	want := "/test/config/tpd/config.json"
+	want := "/test/config/tpd/config.yaml"
 
 	if got != want {
 		t.Errorf("TPDConfigPath() = %q, want %q", got, want)

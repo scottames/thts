@@ -8,15 +8,6 @@ import (
 func TestDefaults(t *testing.T) {
 	cfg := Defaults()
 
-	if cfg.ThoughtsRepo != "~/thoughts" {
-		t.Errorf("expected ThoughtsRepo to be ~/thoughts, got %s", cfg.ThoughtsRepo)
-	}
-	if cfg.ReposDir != "repos" {
-		t.Errorf("expected ReposDir to be repos, got %s", cfg.ReposDir)
-	}
-	if cfg.GlobalDir != "global" {
-		t.Errorf("expected GlobalDir to be global, got %s", cfg.GlobalDir)
-	}
 	if !cfg.AutoSyncInWorktrees {
 		t.Error("expected AutoSyncInWorktrees to be true")
 	}
@@ -39,29 +30,16 @@ func TestResolveProfileForRepo(t *testing.T) {
 		want     *ResolvedProfile
 	}{
 		{
-			name: "no mapping returns default",
+			name: "no mapping returns default profile",
 			cfg: &Config{
-				ThoughtsRepo: "~/thoughts",
-				ReposDir:     "repos",
-				GlobalDir:    "global",
 				RepoMappings: map[string]*RepoMapping{},
-			},
-			repoPath: "/some/repo",
-			want: &ResolvedProfile{
-				ThoughtsRepo: "~/thoughts",
-				ReposDir:     "repos",
-				GlobalDir:    "global",
-				ProfileName:  "",
-			},
-		},
-		{
-			name: "mapping without profile returns default",
-			cfg: &Config{
-				ThoughtsRepo: "~/thoughts",
-				ReposDir:     "repos",
-				GlobalDir:    "global",
-				RepoMappings: map[string]*RepoMapping{
-					"/some/repo": {Repo: "my-repo"},
+				Profiles: map[string]*ProfileConfig{
+					"personal": {
+						ThoughtsRepo: "~/thoughts",
+						ReposDir:     "repos",
+						GlobalDir:    "global",
+						Default:      true,
+					},
 				},
 			},
 			repoPath: "/some/repo",
@@ -69,19 +47,45 @@ func TestResolveProfileForRepo(t *testing.T) {
 				ThoughtsRepo: "~/thoughts",
 				ReposDir:     "repos",
 				GlobalDir:    "global",
-				ProfileName:  "",
+				ProfileName:  "personal",
+			},
+		},
+		{
+			name: "mapping without profile returns default profile",
+			cfg: &Config{
+				RepoMappings: map[string]*RepoMapping{
+					"/some/repo": {Repo: "my-repo"},
+				},
+				Profiles: map[string]*ProfileConfig{
+					"personal": {
+						ThoughtsRepo: "~/thoughts",
+						ReposDir:     "repos",
+						GlobalDir:    "global",
+						Default:      true,
+					},
+				},
+			},
+			repoPath: "/some/repo",
+			want: &ResolvedProfile{
+				ThoughtsRepo: "~/thoughts",
+				ReposDir:     "repos",
+				GlobalDir:    "global",
+				ProfileName:  "personal",
 			},
 		},
 		{
 			name: "mapping with profile returns profile config",
 			cfg: &Config{
-				ThoughtsRepo: "~/thoughts",
-				ReposDir:     "repos",
-				GlobalDir:    "global",
 				RepoMappings: map[string]*RepoMapping{
 					"/some/repo": {Repo: "my-repo", Profile: "work"},
 				},
 				Profiles: map[string]*ProfileConfig{
+					"personal": {
+						ThoughtsRepo: "~/thoughts",
+						ReposDir:     "repos",
+						GlobalDir:    "global",
+						Default:      true,
+					},
 					"work": {
 						ThoughtsRepo: "~/work-thoughts",
 						ReposDir:     "projects",
@@ -98,48 +102,65 @@ func TestResolveProfileForRepo(t *testing.T) {
 			},
 		},
 		{
-			name: "mapping with missing profile returns default",
+			name: "mapping with missing profile returns default profile",
 			cfg: &Config{
-				ThoughtsRepo: "~/thoughts",
-				ReposDir:     "repos",
-				GlobalDir:    "global",
 				RepoMappings: map[string]*RepoMapping{
 					"/some/repo": {Repo: "my-repo", Profile: "nonexistent"},
 				},
-				Profiles: map[string]*ProfileConfig{},
+				Profiles: map[string]*ProfileConfig{
+					"personal": {
+						ThoughtsRepo: "~/thoughts",
+						ReposDir:     "repos",
+						GlobalDir:    "global",
+						Default:      true,
+					},
+				},
 			},
 			repoPath: "/some/repo",
 			want: &ResolvedProfile{
 				ThoughtsRepo: "~/thoughts",
 				ReposDir:     "repos",
 				GlobalDir:    "global",
-				ProfileName:  "",
+				ProfileName:  "personal",
 			},
 		},
 		{
-			name: "nil profiles map with profile specified returns default",
+			name: "nil profiles map returns nil",
 			cfg: &Config{
-				ThoughtsRepo: "~/thoughts",
-				ReposDir:     "repos",
-				GlobalDir:    "global",
 				RepoMappings: map[string]*RepoMapping{
 					"/some/repo": {Repo: "my-repo", Profile: "work"},
 				},
 				Profiles: nil,
 			},
 			repoPath: "/some/repo",
-			want: &ResolvedProfile{
-				ThoughtsRepo: "~/thoughts",
-				ReposDir:     "repos",
-				GlobalDir:    "global",
-				ProfileName:  "",
+			want:     nil,
+		},
+		{
+			name: "empty profiles map returns nil",
+			cfg: &Config{
+				RepoMappings: map[string]*RepoMapping{},
+				Profiles:     map[string]*ProfileConfig{},
 			},
+			repoPath: "/some/repo",
+			want:     nil,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := tt.cfg.ResolveProfileForRepo(tt.repoPath)
+
+			if tt.want == nil {
+				if got != nil {
+					t.Errorf("expected nil, got %+v", got)
+				}
+				return
+			}
+
+			if got == nil {
+				t.Errorf("expected %+v, got nil", tt.want)
+				return
+			}
 
 			if got.ThoughtsRepo != tt.want.ThoughtsRepo {
 				t.Errorf("ThoughtsRepo = %s, want %s", got.ThoughtsRepo, tt.want.ThoughtsRepo)
@@ -155,6 +176,146 @@ func TestResolveProfileForRepo(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestGetDefaultProfile(t *testing.T) {
+	tests := []struct {
+		name        string
+		cfg         *Config
+		wantProfile *ProfileConfig
+		wantName    string
+	}{
+		{
+			name: "returns profile marked as default",
+			cfg: &Config{
+				Profiles: map[string]*ProfileConfig{
+					"work": {
+						ThoughtsRepo: "~/work",
+						Default:      false,
+					},
+					"personal": {
+						ThoughtsRepo: "~/personal",
+						Default:      true,
+					},
+				},
+			},
+			wantProfile: &ProfileConfig{
+				ThoughtsRepo: "~/personal",
+				Default:      true,
+			},
+			wantName: "personal",
+		},
+		{
+			name: "returns nil for empty profiles",
+			cfg: &Config{
+				Profiles: map[string]*ProfileConfig{},
+			},
+			wantProfile: nil,
+			wantName:    "",
+		},
+		{
+			name: "returns nil for nil profiles",
+			cfg: &Config{
+				Profiles: nil,
+			},
+			wantProfile: nil,
+			wantName:    "",
+		},
+		{
+			name: "returns first profile if no default marked",
+			cfg: &Config{
+				Profiles: map[string]*ProfileConfig{
+					"work": {
+						ThoughtsRepo: "~/work",
+						Default:      false,
+					},
+				},
+			},
+			wantProfile: &ProfileConfig{
+				ThoughtsRepo: "~/work",
+				Default:      false,
+			},
+			wantName: "work",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotProfile, gotName := tt.cfg.GetDefaultProfile()
+
+			if tt.wantProfile == nil {
+				if gotProfile != nil {
+					t.Errorf("expected nil profile, got %+v", gotProfile)
+				}
+				if gotName != "" {
+					t.Errorf("expected empty name, got %s", gotName)
+				}
+				return
+			}
+
+			if gotProfile == nil {
+				t.Errorf("expected profile, got nil")
+				return
+			}
+
+			if gotProfile.ThoughtsRepo != tt.wantProfile.ThoughtsRepo {
+				t.Errorf("ThoughtsRepo = %s, want %s", gotProfile.ThoughtsRepo, tt.wantProfile.ThoughtsRepo)
+			}
+			if gotName != tt.wantName {
+				t.Errorf("name = %s, want %s", gotName, tt.wantName)
+			}
+		})
+	}
+}
+
+func TestSetDefaultProfile(t *testing.T) {
+	t.Run("sets default profile", func(t *testing.T) {
+		cfg := &Config{
+			Profiles: map[string]*ProfileConfig{
+				"personal": {ThoughtsRepo: "~/personal", Default: true},
+				"work":     {ThoughtsRepo: "~/work", Default: false},
+			},
+		}
+
+		result := cfg.SetDefaultProfile("work")
+
+		if !result {
+			t.Error("expected SetDefaultProfile to return true")
+		}
+		if cfg.Profiles["personal"].Default {
+			t.Error("expected personal profile Default to be false")
+		}
+		if !cfg.Profiles["work"].Default {
+			t.Error("expected work profile Default to be true")
+		}
+	})
+
+	t.Run("returns false for non-existent profile", func(t *testing.T) {
+		cfg := &Config{
+			Profiles: map[string]*ProfileConfig{
+				"personal": {ThoughtsRepo: "~/personal", Default: true},
+			},
+		}
+
+		result := cfg.SetDefaultProfile("nonexistent")
+
+		if result {
+			t.Error("expected SetDefaultProfile to return false")
+		}
+		if !cfg.Profiles["personal"].Default {
+			t.Error("expected personal profile Default to remain true")
+		}
+	})
+
+	t.Run("returns false for nil profiles", func(t *testing.T) {
+		cfg := &Config{Profiles: nil}
+
+		result := cfg.SetDefaultProfile("work")
+
+		if result {
+			t.Error("expected SetDefaultProfile to return false")
+		}
+	})
 }
 
 func TestValidateProfile(t *testing.T) {

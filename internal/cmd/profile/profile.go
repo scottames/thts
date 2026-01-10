@@ -29,4 +29,5 @@ func init() {
 	ProfileCmd.AddCommand(createCmd)
 	ProfileCmd.AddCommand(showCmd)
 	ProfileCmd.AddCommand(deleteCmd)
+	ProfileCmd.AddCommand(setDefaultCmd)
 }

@@ -3,15 +3,16 @@ package config
 // RepoMapping represents a repository mapping that can be either a simple string
 // (repo name only) or a full object with profile information.
 type RepoMapping struct {
-	Repo    string `json:"repo"`
-	Profile string `json:"profile,omitempty"`
+	Repo    string `yaml:"repo"`
+	Profile string `yaml:"profile,omitempty"`
 }
 
 // ProfileConfig represents a named profile with its own thoughts repository.
 type ProfileConfig struct {
-	ThoughtsRepo string `json:"thoughtsRepo"`
-	ReposDir     string `json:"reposDir"`
-	GlobalDir    string `json:"globalDir"`
+	ThoughtsRepo string `yaml:"thoughtsRepo"`
+	ReposDir     string `yaml:"reposDir"`
+	GlobalDir    string `yaml:"globalDir"`
+	Default      bool   `yaml:"default,omitempty"`
 }
 
 // GitIgnoreMode specifies where to add the thoughts/ ignore rule.
@@ -26,14 +27,11 @@ const (
 
 // Config represents the tpd configuration.
 type Config struct {
-	ThoughtsRepo        string                    `json:"thoughtsRepo"`
-	ReposDir            string                    `json:"reposDir"`
-	GlobalDir           string                    `json:"globalDir"`
-	User                string                    `json:"user"`
-	AutoSyncInWorktrees bool                      `json:"autoSyncInWorktrees,omitempty"`
-	GitIgnore           GitIgnoreMode             `json:"gitIgnore,omitempty"`
-	RepoMappings        map[string]*RepoMapping   `json:"repoMappings,omitempty"`
-	Profiles            map[string]*ProfileConfig `json:"profiles,omitempty"`
+	User                string                    `yaml:"user"`
+	AutoSyncInWorktrees bool                      `yaml:"autoSyncInWorktrees,omitempty"`
+	GitIgnore           GitIgnoreMode             `yaml:"gitIgnore,omitempty"`
+	RepoMappings        map[string]*RepoMapping   `yaml:"repoMappings,omitempty"`
+	Profiles            map[string]*ProfileConfig `yaml:"profiles"`
 }
 
 // ResolvedProfile represents a resolved profile configuration for a repository.
@@ -47,29 +45,64 @@ type ResolvedProfile struct {
 // Defaults returns a Config with default values set.
 func Defaults() *Config {
 	return &Config{
-		ThoughtsRepo:        "~/thoughts",
-		ReposDir:            "repos",
-		GlobalDir:           "global",
 		AutoSyncInWorktrees: true,
 		GitIgnore:           GitIgnoreProject,
 		RepoMappings:        make(map[string]*RepoMapping),
-		Profiles:            make(map[string]*ProfileConfig),
+		Profiles: map[string]*ProfileConfig{
+			"default": {
+				ThoughtsRepo: "~/thoughts",
+				ReposDir:     "repos",
+				GlobalDir:    "global",
+				Default:      true,
+			},
+		},
 	}
+}
+
+// GetDefaultProfile returns the default profile and its name.
+// If no profile is marked as default, returns the first profile found and warns.
+// Returns nil, "" if no profiles exist.
+func (c *Config) GetDefaultProfile() (*ProfileConfig, string) {
+	if len(c.Profiles) == 0 {
+		return nil, ""
+	}
+
+	// Look for explicitly marked default
+	for name, profile := range c.Profiles {
+		if profile.Default {
+			return profile, name
+		}
+	}
+
+	// No explicit default - use first profile (map iteration order is random,
+	// but this is a fallback for misconfigured state)
+	for name, profile := range c.Profiles {
+		return profile, name
+	}
+
+	return nil, ""
 }
 
 // ResolveProfileForRepo resolves the profile configuration for a given repository path.
 func (c *Config) ResolveProfileForRepo(repoPath string) *ResolvedProfile {
 	mapping := c.RepoMappings[repoPath]
 
-	// Default config
-	defaultProfile := &ResolvedProfile{
-		ThoughtsRepo: c.ThoughtsRepo,
-		ReposDir:     c.ReposDir,
-		GlobalDir:    c.GlobalDir,
+	// Get default profile for fallback
+	defaultProf, defaultName := c.GetDefaultProfile()
+
+	// Build default resolved profile
+	var defaultResolved *ResolvedProfile
+	if defaultProf != nil {
+		defaultResolved = &ResolvedProfile{
+			ThoughtsRepo: defaultProf.ThoughtsRepo,
+			ReposDir:     defaultProf.ReposDir,
+			GlobalDir:    defaultProf.GlobalDir,
+			ProfileName:  defaultName,
+		}
 	}
 
 	if mapping == nil {
-		return defaultProfile
+		return defaultResolved
 	}
 
 	// If profile specified, look it up
@@ -84,7 +117,7 @@ func (c *Config) ResolveProfileForRepo(repoPath string) *ResolvedProfile {
 		}
 	}
 
-	return defaultProfile
+	return defaultResolved
 }
 
 // ValidateProfile checks if a profile exists in the configuration.
@@ -145,4 +178,25 @@ func (c *Config) DeleteProfile(profileName string) {
 	if c.Profiles != nil {
 		delete(c.Profiles, profileName)
 	}
+}
+
+// SetDefaultProfile sets the specified profile as the default.
+// It clears the default flag from all other profiles.
+func (c *Config) SetDefaultProfile(profileName string) bool {
+	if c.Profiles == nil {
+		return false
+	}
+	profile, exists := c.Profiles[profileName]
+	if !exists {
+		return false
+	}
+
+	// Clear default from all profiles
+	for _, p := range c.Profiles {
+		p.Default = false
+	}
+
+	// Set new default
+	profile.Default = true
+	return true
 }

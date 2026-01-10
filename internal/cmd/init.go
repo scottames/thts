@@ -37,10 +37,14 @@ The project name is determined by (in order):
 }
 
 func init() {
-	initCmd.Flags().StringVarP(&initProfile, "profile", "p", "", "Profile to use for this repository")
-	initCmd.Flags().StringVarP(&initName, "name", "n", "", "Project name (overrides auto-detection)")
-	initCmd.Flags().BoolVarP(&initForce, "force", "f", false, "Force re-initialization even if thoughts exists")
-	initCmd.Flags().BoolVarP(&initInteractive, "interactive", "i", false, "Force interactive project name selection")
+	initCmd.Flags().
+		StringVarP(&initProfile, "profile", "p", "", "Profile to use for this repository")
+	initCmd.Flags().
+		StringVarP(&initName, "name", "n", "", "Project name (overrides auto-detection)")
+	initCmd.Flags().
+		BoolVarP(&initForce, "force", "f", false, "Force re-initialization even if thoughts exists")
+	initCmd.Flags().
+		BoolVarP(&initInteractive, "interactive", "i", false, "Force interactive project name selection")
 	rootCmd.AddCommand(initCmd)
 }
 
@@ -60,14 +64,19 @@ func runInit(cmd *cobra.Command, args []string) error {
 	cfg, err := config.Load()
 	if err != nil {
 		fmt.Println(styleError.Render("Error: tpd not configured."))
-		fmt.Printf("Run %s first to set up your thoughts repository.\n", styleCyan.Render("tpd setup"))
+		fmt.Printf(
+			"Run %s first to set up your thoughts repository.\n",
+			styleCyan.Render("tpd setup"),
+		)
 		return nil
 	}
 
 	// Validate profile if specified
 	if initProfile != "" {
 		if !cfg.ValidateProfile(initProfile) {
-			fmt.Println(styleError.Render(fmt.Sprintf("Error: Profile %q does not exist.", initProfile)))
+			fmt.Println(
+				styleError.Render(fmt.Sprintf("Error: Profile %q does not exist.", initProfile)),
+			)
 			fmt.Println()
 			fmt.Println(styleMuted.Render("Available profiles:"))
 			if len(cfg.Profiles) > 0 {
@@ -78,20 +87,33 @@ func runInit(cmd *cobra.Command, args []string) error {
 				fmt.Println(styleMuted.Render("  (none)"))
 			}
 			fmt.Println()
-			fmt.Printf("Create a profile first: %s\n", styleCyan.Render(fmt.Sprintf("tpd profile create %s", initProfile)))
+			fmt.Printf(
+				"Create a profile first: %s\n",
+				styleCyan.Render(fmt.Sprintf("tpd profile create %s", initProfile)),
+			)
 			return nil
 		}
 	}
 
 	// Resolve profile config
 	profileConfig := resolveInitProfile(cfg, currentRepo)
+	if profileConfig == nil {
+		fmt.Println(styleError.Render("Error: No profiles configured."))
+		fmt.Printf(
+			"Run %s first to create a profile.\n",
+			styleCyan.Render("tpd setup"),
+		)
+		return nil
+	}
 
 	// Check existing setup
 	thoughtsDir := filepath.Join(currentRepo, "thoughts")
 	if fs.Exists(thoughtsDir) && !initForce {
 		// Check if it's a valid setup
 		if isValidThoughtsSetup(thoughtsDir, cfg.User) {
-			fmt.Println(styleWarning.Render("Thoughts directory already configured for this repository."))
+			fmt.Println(
+				styleWarning.Render("Thoughts directory already configured for this repository."),
+			)
 			var reconfigure bool
 			err := huh.NewConfirm().
 				Title("Do you want to reconfigure?").
@@ -206,25 +228,65 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 	// Print success summary
 	fmt.Println()
-	fmt.Println(styleSuccess.Render("✅ Thoughts setup complete!"))
+	fmt.Println(styleSuccess.Render("Thoughts setup complete!"))
 	fmt.Println()
 	fmt.Println(styleInfo.Render("=== Summary ==="))
 	fmt.Println()
 	fmt.Println("Repository structure created:")
 	fmt.Printf("  %s/\n", styleCyan.Render(config.ContractPath(currentRepo)))
 	fmt.Printf("    └── thoughts/\n")
-	fmt.Printf("         ├── %s/     %s\n", cfg.User, styleMuted.Render(fmt.Sprintf("→ %s/%s/%s/%s/", config.ContractPath(profileConfig.ThoughtsRepo), profileConfig.ReposDir, projectName, cfg.User)))
-	fmt.Printf("         ├── shared/      %s\n", styleMuted.Render(fmt.Sprintf("→ %s/%s/%s/shared/", config.ContractPath(profileConfig.ThoughtsRepo), profileConfig.ReposDir, projectName)))
-	fmt.Printf("         ├── global/      %s\n", styleMuted.Render(fmt.Sprintf("→ %s/%s/", config.ContractPath(profileConfig.ThoughtsRepo), profileConfig.GlobalDir)))
+	fmt.Printf(
+		"         ├── %s/     %s\n",
+		cfg.User,
+		styleMuted.Render(
+			fmt.Sprintf(
+				"→ %s/%s/%s/%s/",
+				config.ContractPath(profileConfig.ThoughtsRepo),
+				profileConfig.ReposDir,
+				projectName,
+				cfg.User,
+			),
+		),
+	)
+	fmt.Printf(
+		"         ├── shared/      %s\n",
+		styleMuted.Render(
+			fmt.Sprintf(
+				"→ %s/%s/%s/shared/",
+				config.ContractPath(profileConfig.ThoughtsRepo),
+				profileConfig.ReposDir,
+				projectName,
+			),
+		),
+	)
+	fmt.Printf(
+		"         ├── global/      %s\n",
+		styleMuted.Render(
+			fmt.Sprintf(
+				"→ %s/%s/",
+				config.ContractPath(profileConfig.ThoughtsRepo),
+				profileConfig.GlobalDir,
+			),
+		),
+	)
 	fmt.Printf("         └── CLAUDE.md    %s\n", styleMuted.Render("(Claude Code documentation)"))
 	fmt.Println()
 	fmt.Println("Protection enabled:")
 	fmt.Printf("  %s Pre-commit hook: Prevents committing thoughts/\n", styleSuccess.Render("✓"))
-	fmt.Printf("  %s Post-commit hook: Auto-syncs thoughts after commits\n", styleSuccess.Render("✓"))
+	fmt.Printf(
+		"  %s Post-commit hook: Auto-syncs thoughts after commits\n",
+		styleSuccess.Render("✓"),
+	)
 	fmt.Println()
 	fmt.Println("Next steps:")
-	fmt.Printf("  1. Run %s to sync and create the searchable index\n", styleCyan.Render("tpd sync"))
-	fmt.Printf("  2. Create markdown files in %s for your notes\n", styleCyan.Render(fmt.Sprintf("thoughts/%s/", cfg.User)))
+	fmt.Printf(
+		"  1. Run %s to sync and create the searchable index\n",
+		styleCyan.Render("tpd sync"),
+	)
+	fmt.Printf(
+		"  2. Create markdown files in %s for your notes\n",
+		styleCyan.Render(fmt.Sprintf("thoughts/%s/", cfg.User)),
+	)
 	fmt.Println()
 
 	return nil
@@ -244,11 +306,17 @@ func resolveInitProfile(cfg *config.Config, repoPath string) *config.ResolvedPro
 		}
 	}
 
-	// Otherwise use default config
+	// Use default profile
+	defaultProfile, defaultName := cfg.GetDefaultProfile()
+	if defaultProfile == nil {
+		return nil
+	}
+
 	return &config.ResolvedProfile{
-		ThoughtsRepo: cfg.ThoughtsRepo,
-		ReposDir:     cfg.ReposDir,
-		GlobalDir:    cfg.GlobalDir,
+		ThoughtsRepo: defaultProfile.ThoughtsRepo,
+		ReposDir:     defaultProfile.ReposDir,
+		GlobalDir:    defaultProfile.GlobalDir,
+		ProfileName:  defaultName,
 	}
 }
 
@@ -297,11 +365,17 @@ func interactiveProjectName(profile *config.ResolvedProfile, repoPath string) (s
 	var options []huh.Option[string]
 
 	// Add "Create new" option with default name
-	options = append(options, huh.NewOption(fmt.Sprintf("Create new: %s", defaultName), "new:"+defaultName))
+	options = append(
+		options,
+		huh.NewOption(fmt.Sprintf("Create new: %s", defaultName), "new:"+defaultName),
+	)
 
 	// Add existing repos
 	for _, repo := range existingRepos {
-		options = append(options, huh.NewOption(fmt.Sprintf("Use existing: %s", repo), "existing:"+repo))
+		options = append(
+			options,
+			huh.NewOption(fmt.Sprintf("Use existing: %s", repo), "existing:"+repo),
+		)
 	}
 
 	// Add "Custom name" option
@@ -417,7 +491,11 @@ This directory contains thoughts and notes that apply across all repositories.
 }
 
 // createThoughtsSymlinks creates the thoughts directory with symlinks.
-func createThoughtsSymlinks(thoughtsDir string, profile *config.ResolvedProfile, projectName, user string) error {
+func createThoughtsSymlinks(
+	thoughtsDir string,
+	profile *config.ResolvedProfile,
+	projectName, user string,
+) error {
 	// Create thoughts directory
 	if err := os.MkdirAll(thoughtsDir, 0755); err != nil {
 		return fmt.Errorf("failed to create thoughts directory: %w", err)

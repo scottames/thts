@@ -43,6 +43,17 @@ func runDelete(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
+	// Check if this is the default profile
+	profile := cfg.Profiles[profileName]
+	if profile.Default {
+		fmt.Println(styleError.Render(fmt.Sprintf("Error: Cannot delete the default profile \"%s\".", profileName)))
+		fmt.Println()
+		fmt.Println(styleMuted.Render("Options:"))
+		fmt.Printf("  1. Set another profile as default first: %s\n", styleCyan.Render("tpd profile set-default <other-profile>"))
+		fmt.Println("  2. Then delete this profile")
+		return nil
+	}
+
 	// Check if any repositories are using this profile
 	usingRepos := cfg.GetReposUsingProfile(profileName)
 
@@ -96,7 +107,8 @@ func runDelete(cmd *cobra.Command, args []string) error {
 
 	if len(usingRepos) > 0 {
 		fmt.Println()
-		fmt.Println(styleWarning.Render("⚠️  Warning: Repositories using this profile will fall back to default config"))
+		fmt.Println(styleWarning.Render("Warning: Repositories using this profile will need to be re-initialized"))
+		fmt.Printf("Run %s in each affected repository.\n", styleCyan.Render("tpd init"))
 	}
 
 	return nil

@@ -133,15 +133,24 @@ func runUninit(cmd *cobra.Command, args []string) error {
 		fmt.Println()
 		fmt.Println(styleMuted.Render("Note: Your thoughts content remains safe in:"))
 
+		// Look up the profile that was used
+		var profile *config.ProfileConfig
+		var displayProfileName string
+
 		if profileName != "" && cfg.Profiles != nil {
-			if profile, exists := cfg.Profiles[profileName]; exists {
-				fmt.Printf("  %s\n", styleMuted.Render(fmt.Sprintf("%s/%s/%s", profile.ThoughtsRepo, profile.ReposDir, mappedName)))
-				fmt.Printf("  %s\n", styleMuted.Render(fmt.Sprintf("(profile: %s)", profileName)))
-			} else {
-				fmt.Printf("  %s\n", styleMuted.Render(fmt.Sprintf("%s/%s/%s", cfg.ThoughtsRepo, cfg.ReposDir, mappedName)))
+			if p, exists := cfg.Profiles[profileName]; exists {
+				profile = p
+				displayProfileName = profileName
 			}
-		} else {
-			fmt.Printf("  %s\n", styleMuted.Render(fmt.Sprintf("%s/%s/%s", cfg.ThoughtsRepo, cfg.ReposDir, mappedName)))
+		}
+		if profile == nil {
+			// Fall back to default profile
+			profile, displayProfileName = cfg.GetDefaultProfile()
+		}
+
+		if profile != nil {
+			fmt.Printf("  %s\n", styleMuted.Render(fmt.Sprintf("%s/%s/%s", profile.ThoughtsRepo, profile.ReposDir, mappedName)))
+			fmt.Printf("  %s\n", styleMuted.Render(fmt.Sprintf("(profile: %s)", displayProfileName)))
 		}
 
 		fmt.Println(styleMuted.Render("Only the local symlinks and configuration were removed."))

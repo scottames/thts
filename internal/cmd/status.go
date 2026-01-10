@@ -43,12 +43,22 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	fmt.Println(styleMuted.Render(strings.Repeat("=", 50)))
 	fmt.Println()
 
+	// Get default profile for config display
+	defaultProfile, defaultProfileName := cfg.GetDefaultProfile()
+
 	// Show configuration
 	fmt.Println(styleWarning.Render("Configuration:"))
-	fmt.Printf("  Repository: %s\n", styleCyan.Render(cfg.ThoughtsRepo))
-	fmt.Printf("  Repos directory: %s\n", styleCyan.Render(cfg.ReposDir))
-	fmt.Printf("  Global directory: %s\n", styleCyan.Render(cfg.GlobalDir))
+	if defaultProfile != nil {
+		fmt.Printf("  Default profile: %s\n", styleCyan.Render(defaultProfileName))
+		fmt.Printf("  Repository: %s\n", styleCyan.Render(defaultProfile.ThoughtsRepo))
+		fmt.Printf("  Repos directory: %s\n", styleCyan.Render(defaultProfile.ReposDir))
+		fmt.Printf("  Global directory: %s\n", styleCyan.Render(defaultProfile.GlobalDir))
+	} else {
+		fmt.Printf("  %s\n", styleError.Render("No profiles configured"))
+		fmt.Printf("  Run %s to create a profile\n", styleCyan.Render("tpd setup"))
+	}
 	fmt.Printf("  User: %s\n", styleCyan.Render(cfg.User))
+	fmt.Printf("  Profiles: %s\n", styleCyan.Render(fmt.Sprintf("%d", len(cfg.Profiles))))
 	fmt.Printf("  Mapped repos: %s\n", styleCyan.Render(fmt.Sprintf("%d", len(cfg.RepoMappings))))
 	fmt.Println()
 
@@ -62,17 +72,13 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	mapping := cfg.RepoMappings[currentRepo]
 	profileConfig := cfg.ResolveProfileForRepo(currentRepo)
 
-	if mapping != nil {
+	if mapping != nil && profileConfig != nil {
 		fmt.Println(styleWarning.Render("Current Repository:"))
 		fmt.Printf("  Path: %s\n", styleCyan.Render(currentRepo))
 		fmt.Printf("  Thoughts directory: %s\n", styleCyan.Render(fmt.Sprintf("%s/%s", profileConfig.ReposDir, mapping.GetRepoName())))
 
-		// Show profile info
-		if mapping.Profile != "" {
-			fmt.Printf("  Profile: %s\n", styleCyan.Render(mapping.Profile))
-		} else {
-			fmt.Printf("  Profile: %s\n", styleMuted.Render("(default)"))
-		}
+		// Show profile info (always show the resolved profile name)
+		fmt.Printf("  Profile: %s\n", styleCyan.Render(profileConfig.ProfileName))
 
 		// Check if thoughts directory exists
 		thoughtsDir := filepath.Join(currentRepo, "thoughts")
@@ -86,13 +92,16 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Println()
 
-	// Show thoughts repository git status
+	// Show thoughts repository git status (use default profile if available)
+	if profileConfig == nil {
+		fmt.Println(styleMuted.Render("No profile available for git status"))
+		return nil
+	}
+
 	expandedRepo := config.ExpandPath(profileConfig.ThoughtsRepo)
 
 	fmt.Println(styleWarning.Render("Thoughts Repository Git Status:"))
-	if profileConfig.ProfileName != "" {
-		fmt.Printf("  %s\n", styleMuted.Render(fmt.Sprintf("(using profile: %s)", profileConfig.ProfileName)))
-	}
+	fmt.Printf("  %s\n", styleMuted.Render(fmt.Sprintf("(profile: %s)", profileConfig.ProfileName)))
 
 	// Git branch status
 	branchStatus := getGitBranchStatus(expandedRepo)

@@ -100,9 +100,6 @@ func displayConfig(cfg *config.Config) error {
 	fmt.Println(styleInfo.Render("=== tpd Configuration ==="))
 	fmt.Println()
 
-	fmt.Printf("  %s %s\n", styleMuted.Render("Thoughts repo:"), styleCyan.Render(cfg.ThoughtsRepo))
-	fmt.Printf("  %s       %s\n", styleMuted.Render("Repos dir:"), cfg.ReposDir)
-	fmt.Printf("  %s      %s\n", styleMuted.Render("Global dir:"), cfg.GlobalDir)
 	fmt.Printf("  %s           %s\n", styleMuted.Render("User:"), styleSuccess.Render(cfg.User))
 
 	// Optional settings
@@ -112,15 +109,24 @@ func displayConfig(cfg *config.Config) error {
 	fmt.Printf("  %s %v\n", styleMuted.Render("Auto-sync in worktrees:"), cfg.AutoSyncInWorktrees)
 
 	// Profiles
-	if len(cfg.Profiles) > 0 {
-		fmt.Println()
-		fmt.Println(styleInfo.Render("Profiles:"))
+	fmt.Println()
+	fmt.Println(styleInfo.Render("Profiles:"))
+	if len(cfg.Profiles) == 0 {
+		fmt.Println(styleMuted.Render("  No profiles configured."))
+		fmt.Printf("  Run %s to create one.\n", styleCyan.Render("tpd setup"))
+	} else {
 		for name, profile := range cfg.Profiles {
-			fmt.Printf("  %s:\n", styleCyan.Render(name))
+			nameDisplay := name
+			if profile.Default {
+				nameDisplay = name + " *"
+			}
+			fmt.Printf("  %s:\n", styleCyan.Render(nameDisplay))
 			fmt.Printf("    Thoughts repo: %s\n", profile.ThoughtsRepo)
 			fmt.Printf("    Repos dir: %s\n", profile.ReposDir)
 			fmt.Printf("    Global dir: %s\n", profile.GlobalDir)
 		}
+		fmt.Println()
+		fmt.Println(styleMuted.Render("  * = default profile"))
 	}
 
 	// Repo mappings
