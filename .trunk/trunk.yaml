@@ -1,3 +1,4 @@
+---
 # This file controls the behavior of Trunk: https://docs.trunk.io/cli
 # To learn more about the format of this file, see https://docs.trunk.io/reference/trunk-yaml
 version: 0.1
@@ -9,6 +10,8 @@ plugins:
     - id: trunk
       ref: v1.7.4
       uri: https://github.com/trunk-io/plugins
+repo:
+  trunk_branch: main
 # Many linters and tools depend on runtimes - configure them here. (https://docs.trunk.io/runtimes)
 runtimes:
   enabled:
@@ -16,6 +19,10 @@ runtimes:
     - python@3.10.8
 # This is the section where you manage your linters. (https://docs.trunk.io/check/configuration)
 lint:
+  ignore:
+    - linters: [markdownlint, prettier]
+      paths:
+        - CHANGELOG.md
   enabled:
     - actionlint@1.7.10
     - gitleaks@8.30.0
