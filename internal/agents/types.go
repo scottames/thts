@@ -1,0 +1,210 @@
+// Package agents provides multi-agent tool support for thts.
+// Currently supports Claude Code, OpenAI Codex CLI, and OpenCode.
+package agents
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+)
+
+// AgentType represents a supported AI coding agent.
+type AgentType string
+
+const (
+	AgentClaude   AgentType = "claude"
+	AgentCodex    AgentType = "codex"
+	AgentOpenCode AgentType = "opencode"
+)
+
+// AllAgentTypes returns all supported agent types in canonical order.
+func AllAgentTypes() []AgentType {
+	return []AgentType{AgentClaude, AgentCodex, AgentOpenCode}
+}
+
+// AgentTypeLabels provides human-readable labels for agent types.
+var AgentTypeLabels = map[AgentType]string{
+	AgentClaude:   "Claude Code",
+	AgentCodex:    "OpenAI Codex CLI",
+	AgentOpenCode: "OpenCode",
+}
+
+// AgentConfig describes the configuration and conventions for a specific agent.
+type AgentConfig struct {
+	Type AgentType
+
+	// RootDir is the agent's config directory (e.g., ".claude", ".codex", ".opencode").
+	RootDir string
+
+	// InstructionsFile is the primary instructions file name.
+	// For Claude this is "CLAUDE.md", for others it's "AGENTS.md".
+	InstructionsFile string
+
+	// SymlinkToAgents indicates if InstructionsFile should symlink to AGENTS.md.
+	// True for Claude (CLAUDE.md -> AGENTS.md), false for others.
+	SymlinkToAgents bool
+
+	// SkillsDir is the directory name for skills (e.g., "skills", "skill").
+	SkillsDir string
+
+	// SkillNeedsDir indicates if skills require a subdirectory with SKILL.md.
+	// Codex and OpenCode use skills/skill-name/SKILL.md format.
+	SkillNeedsDir bool
+
+	// AgentsDir is the directory name for agents.
+	AgentsDir string
+
+	// SupportsCommands indicates if this agent supports commands (only Claude).
+	SupportsCommands bool
+
+	// SettingsFile is the settings file name for this agent.
+	SettingsFile string
+
+	// SettingsFormat is the format of the settings file ("json", "toml").
+	SettingsFormat string
+}
+
+// AgentConfigs contains the configuration for each supported agent.
+var AgentConfigs = map[AgentType]*AgentConfig{
+	AgentClaude: {
+		Type:             AgentClaude,
+		RootDir:          ".claude",
+		InstructionsFile: "CLAUDE.md",
+		SymlinkToAgents:  true,
+		SkillsDir:        "skills",
+		SkillNeedsDir:    false,
+		AgentsDir:        "agents",
+		SupportsCommands: true,
+		SettingsFile:     "settings.json",
+		SettingsFormat:   "json",
+	},
+	AgentCodex: {
+		Type:             AgentCodex,
+		RootDir:          ".codex",
+		InstructionsFile: "AGENTS.md",
+		SymlinkToAgents:  false,
+		SkillsDir:        "skills",
+		SkillNeedsDir:    true,
+		AgentsDir:        "agents",
+		SupportsCommands: false,
+		SettingsFile:     "config.toml",
+		SettingsFormat:   "toml",
+	},
+	AgentOpenCode: {
+		Type:             AgentOpenCode,
+		RootDir:          ".opencode",
+		InstructionsFile: "AGENTS.md",
+		SymlinkToAgents:  false,
+		SkillsDir:        "skill",
+		SkillNeedsDir:    true,
+		AgentsDir:        "agent",
+		SupportsCommands: false,
+		SettingsFile:     "opencode.json",
+		SettingsFormat:   "json",
+	},
+}
+
+// GetConfig returns the configuration for an agent type.
+func GetConfig(agentType AgentType) *AgentConfig {
+	return AgentConfigs[agentType]
+}
+
+// ParseAgentType parses a string into an AgentType.
+func ParseAgentType(s string) (AgentType, error) {
+	normalized := strings.ToLower(strings.TrimSpace(s))
+	switch normalized {
+	case "claude":
+		return AgentClaude, nil
+	case "codex":
+		return AgentCodex, nil
+	case "opencode":
+		return AgentOpenCode, nil
+	default:
+		return "", fmt.Errorf("unknown agent type: %q (valid: claude, codex, opencode)", s)
+	}
+}
+
+// ParseAgentTypes parses a comma-separated list of agent types.
+func ParseAgentTypes(s string) ([]AgentType, error) {
+	if strings.TrimSpace(s) == "" {
+		return nil, nil
+	}
+
+	parts := strings.Split(s, ",")
+	seen := make(map[AgentType]bool)
+	var agents []AgentType
+
+	for _, part := range parts {
+		agentType, err := ParseAgentType(part)
+		if err != nil {
+			return nil, err
+		}
+		if !seen[agentType] {
+			seen[agentType] = true
+			agents = append(agents, agentType)
+		}
+	}
+
+	return agents, nil
+}
+
+// DetectExistingAgents looks for existing agent directories in a project.
+func DetectExistingAgents(projectDir string) []AgentType {
+	var found []AgentType
+
+	for _, agentType := range AllAgentTypes() {
+		config := GetConfig(agentType)
+		agentDir := filepath.Join(projectDir, config.RootDir)
+		if info, err := os.Stat(agentDir); err == nil && info.IsDir() {
+			found = append(found, agentType)
+		}
+	}
+
+	return found
+}
+
+// AgentTypesToStrings converts a slice of AgentTypes to strings.
+func AgentTypesToStrings(agents []AgentType) []string {
+	result := make([]string, len(agents))
+	for i, a := range agents {
+		result[i] = string(a)
+	}
+	return result
+}
+
+// StringsToAgentTypes converts a slice of strings to AgentTypes.
+func StringsToAgentTypes(strings []string) ([]AgentType, error) {
+	result := make([]AgentType, len(strings))
+	for i, s := range strings {
+		agentType, err := ParseAgentType(s)
+		if err != nil {
+			return nil, err
+		}
+		result[i] = agentType
+	}
+	return result, nil
+}
+
+// SortAgentTypes sorts agent types in canonical order (claude, codex, opencode).
+func SortAgentTypes(agents []AgentType) {
+	order := map[AgentType]int{
+		AgentClaude:   0,
+		AgentCodex:    1,
+		AgentOpenCode: 2,
+	}
+	sort.Slice(agents, func(i, j int) bool {
+		return order[agents[i]] < order[agents[j]]
+	})
+}
+
+// ValidateAgentTypes checks if all provided agent types are valid.
+func ValidateAgentTypes(agents []AgentType) error {
+	for _, a := range agents {
+		if GetConfig(a) == nil {
+			return fmt.Errorf("unknown agent type: %q", a)
+		}
+	}
+	return nil
+}

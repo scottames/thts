@@ -3,6 +3,7 @@ package profile
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/scottames/thts/internal/config"
 	"github.com/scottames/thts/internal/ui"
@@ -68,6 +69,11 @@ func runShow(cmd *cobra.Command, args []string) error {
 	tbl.Row("Thoughts repository", profile.ThoughtsRepo)
 	tbl.Row("Repos directory", profile.ReposDir)
 	tbl.Row("Global directory", profile.GlobalDir)
+	if len(profile.DefaultAgents) > 0 {
+		tbl.Row("Default agents", strings.Join(profile.DefaultAgents, ", "))
+	} else {
+		tbl.Row("Default agents", "(none)")
+	}
 	fmt.Println(tbl)
 	fmt.Println()
 

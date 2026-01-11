@@ -1,2 +1,6 @@
 # Prettier friendly markdownlint config (all formatting rules disabled)
 extends: markdownlint/style/prettier
+
+# Disable MD041 - many files use YAML frontmatter (skills, agents, commands)
+# The linter incorrectly requires a heading as the first line even with frontmatter
+MD041: false

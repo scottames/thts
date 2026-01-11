@@ -5,17 +5,20 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/charmbracelet/huh"
+	"github.com/scottames/thts/internal/agents"
 	"github.com/scottames/thts/internal/config"
 	"github.com/scottames/thts/internal/ui"
 	"github.com/spf13/cobra"
 )
 
 var (
-	createRepo      string
-	createReposDir  string
-	createGlobalDir string
+	createRepo          string
+	createReposDir      string
+	createGlobalDir     string
+	createDefaultAgents string
 )
 
 var createCmd = &cobra.Command{
@@ -36,6 +39,7 @@ func init() {
 	createCmd.Flags().StringVar(&createRepo, "repo", "", "Thoughts repository path for this profile")
 	createCmd.Flags().StringVar(&createReposDir, "repos-dir", "", "Repository-specific thoughts directory name (default: repos)")
 	createCmd.Flags().StringVar(&createGlobalDir, "global-dir", "", "Global thoughts directory name (default: global)")
+	createCmd.Flags().StringVar(&createDefaultAgents, "default-agents", "", "Comma-separated list of default agents (claude,codex,opencode)")
 }
 
 func runCreate(cmd *cobra.Command, args []string) error {
@@ -67,6 +71,16 @@ func runCreate(cmd *cobra.Command, args []string) error {
 
 	// Get profile configuration
 	var thoughtsRepo, reposDir, globalDir string
+	var defaultAgentsList []string
+
+	// Parse default agents flag
+	if createDefaultAgents != "" {
+		agentTypes, err := agents.ParseAgentTypes(createDefaultAgents)
+		if err != nil {
+			return fmt.Errorf("invalid default agents: %w", err)
+		}
+		defaultAgentsList = agents.AgentTypesToStrings(agentTypes)
+	}
 
 	if createRepo != "" {
 		// Non-interactive mode (at least repo is specified)
@@ -126,13 +140,35 @@ func runCreate(cmd *cobra.Command, args []string) error {
 		if globalDir == "" {
 			globalDir = "global"
 		}
+
+		// Ask about default agents in interactive mode
+		if len(defaultAgentsList) == 0 {
+			var selectedAgents []string
+			var options []huh.Option[string]
+			for _, at := range agents.AllAgentTypes() {
+				label := fmt.Sprintf("%s (%s)", at, agents.AgentTypeLabels[at])
+				options = append(options, huh.NewOption(label, string(at)))
+			}
+
+			err = huh.NewMultiSelect[string]().
+				Title("Default agents for this profile (optional)").
+				Description("These will be used by 'thts agents init' when no --agents flag is provided").
+				Options(options...).
+				Value(&selectedAgents).
+				Run()
+			if err != nil {
+				return err
+			}
+			defaultAgentsList = selectedAgents
+		}
 	}
 
 	// Create profile config
 	profileConfig := &config.ProfileConfig{
-		ThoughtsRepo: thoughtsRepo,
-		ReposDir:     reposDir,
-		GlobalDir:    globalDir,
+		ThoughtsRepo:  thoughtsRepo,
+		ReposDir:      reposDir,
+		GlobalDir:     globalDir,
+		DefaultAgents: defaultAgentsList,
 	}
 
 	// Initialize profiles map if nil
@@ -163,6 +199,9 @@ func runCreate(cmd *cobra.Command, args []string) error {
 	fmt.Printf("  Thoughts repository: %s\n", ui.Accent(thoughtsRepo))
 	fmt.Printf("  Repos directory: %s\n", ui.Accent(reposDir))
 	fmt.Printf("  Global directory: %s\n", ui.Accent(globalDir))
+	if len(defaultAgentsList) > 0 {
+		fmt.Printf("  Default agents: %s\n", ui.Accent(strings.Join(defaultAgentsList, ", ")))
+	}
 	fmt.Println()
 	fmt.Println(ui.Muted("Next steps:"))
 	fmt.Printf("  1. Run %s in a repository\n", ui.Accent(fmt.Sprintf("thts init --profile %s", sanitizedName)))

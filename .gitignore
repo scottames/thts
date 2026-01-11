@@ -6,3 +6,4 @@ git-ignored*
 # Test artifacts
 coverage.out
 coverage.html
+thoughts/

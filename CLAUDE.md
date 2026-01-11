@@ -5,31 +5,32 @@ HumanLayer's `thoughts` subcommand with full feature compatibility.
 
 ## Commands
 
-| Command              | Description                                      |
-| -------------------- | ------------------------------------------------ |
-| `thts setup`         | Initial setup - configure thoughts repo location |
-| `thts init`          | Initialize thoughts in current git repo          |
-| `thts sync`          | Sync thoughts to central repo                    |
-| `thts status`        | Show thoughts status                             |
-| `thts uninit`        | Remove thoughts from current repo                |
-| `thts config`        | View/edit configuration                          |
-| `thts profile`       | Manage profiles (create/list/show/delete)        |
-| `thts claude init`   | Install Claude Code integration to `.claude/`    |
-| `thts claude uninit` | Remove Claude Code integration from `.claude/`   |
+| Command              | Description                                         |
+| -------------------- | --------------------------------------------------- |
+| `thts setup`         | Initial setup - configure thoughts repo location    |
+| `thts init`          | Initialize thoughts in current git repo             |
+| `thts sync`          | Sync thoughts to central repo                       |
+| `thts status`        | Show thoughts status                                |
+| `thts uninit`        | Remove thoughts from current repo                   |
+| `thts config`        | View/edit configuration                             |
+| `thts profile`       | Manage profiles (create/list/show/delete)           |
+| `thts agents init`   | Install agent integration (claude, codex, opencode) |
+| `thts agents uninit` | Remove agent integration from project               |
 
 ## Project Structure
 
 ```plaintext
 cmd/thts/          # Entry point
 internal/
+  agents/          # Agent type registry and detection
   cmd/             # Cobra commands
   config/          # Config loading/saving, paths, types
   fs/              # Filesystem utilities (symlinks, gitignore)
   git/             # Git operations, hooks
   thts/            # Searchable directory (hard links)
-instructions/      # Embedded: thts-instructions.md
-skills/            # Embedded: thts-integrate.md
-commands/          # Embedded: thts-handoff.md, thts-resume.md
+instructions/      # Embedded: AGENTS.md (shared instructions)
+skills/            # Embedded: skills per agent (claude/codex/opencode)
+commands/          # Embedded: thts-handoff.md, thts-resume.md (claude only)
 agents/            # Embedded: thoughts-locator.md, thoughts-analyzer.md
 embed.go           # Go embed declarations for above
 ```
@@ -63,19 +64,29 @@ Terminal output uses the `internal/ui` package for consistency.
 - `ui.Muted(text)` - Gray, for secondary info
 - `ui.Bullet(text)` - Indented bullet point
 
-## Claude Integration Files
+## Agent Integration Files
 
 Files in `instructions/`, `skills/`, `commands/`, `agents/` are embedded in the
-binary and copied to `.claude/` by `thts claude init`.
+binary and copied to agent directories by `thts agents init`.
 
-| File                   | Purpose                        | Invocation        |
-| ---------------------- | ------------------------------ | ----------------- |
-| `thts-instructions.md` | Teaches Claude about thoughts/ | @include          |
-| `thts-integrate.md`    | On-demand activation           | `/thts-integrate` |
-| `thts-handoff.md`      | Session handoff                | `/thts-handoff`   |
-| `thts-resume.md`       | Resume from handoff            | `/thts-resume`    |
-| `thoughts-locator.md`  | Find documents                 | Task tool agent   |
-| `thoughts-analyzer.md` | Analyze documents              | Task tool agent   |
+### Supported Agents
+
+| Agent    | Directory    | Skill Format        | Settings File   |
+| -------- | ------------ | ------------------- | --------------- |
+| Claude   | `.claude/`   | `skills/*.md`       | `settings.json` |
+| Codex    | `.codex/`    | `skills/*/SKILL.md` | `config.toml`   |
+| OpenCode | `.opencode/` | `skill/*/SKILL.md`  | `opencode.json` |
+
+### Embedded Files
+
+| File                   | Purpose                       | Agent Support |
+| ---------------------- | ----------------------------- | ------------- |
+| `AGENTS.md`            | Shared thoughts/ instructions | All           |
+| `thts-integrate`       | On-demand activation skill    | All           |
+| `thts-handoff.md`      | Session handoff command       | Claude only   |
+| `thts-resume.md`       | Resume from handoff command   | Claude only   |
+| `thoughts-locator.md`  | Find documents agent          | All           |
+| `thoughts-analyzer.md` | Analyze documents agent       | All           |
 
 ## Reference
 
@@ -149,3 +160,12 @@ easily confused. Always be explicit:
 
 Editing a file in the thoughts directory actually edits the file in the thoughts
 repo through the symlink. This should be called out when relevant.
+
+## thts
+
+@.claude/thts-instructions.md
+
+### Dogfooding thts
+
+We're dogfooding `thts` in this repo - capture any bugs/issues/learnings to
+thoughts/shared/notes/2026-01-11-thts-meta-testing.md

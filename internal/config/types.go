@@ -9,10 +9,11 @@ type RepoMapping struct {
 
 // ProfileConfig represents a named profile with its own thoughts repository.
 type ProfileConfig struct {
-	ThoughtsRepo string `yaml:"thoughtsRepo"`
-	ReposDir     string `yaml:"reposDir"`
-	GlobalDir    string `yaml:"globalDir"`
-	Default      bool   `yaml:"default,omitempty"`
+	ThoughtsRepo  string   `yaml:"thoughtsRepo"`
+	ReposDir      string   `yaml:"reposDir"`
+	GlobalDir     string   `yaml:"globalDir"`
+	Default       bool     `yaml:"default,omitempty"`
+	DefaultAgents []string `yaml:"defaultAgents,omitempty"`
 }
 
 // GitIgnoreMode specifies where to add the thoughts/ ignore rule.

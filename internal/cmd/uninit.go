@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/charmbracelet/huh"
-	"github.com/scottames/thts/internal/cmd/claude"
+	agentscmd "github.com/scottames/thts/internal/cmd/agents"
 	"github.com/scottames/thts/internal/config"
 	"github.com/scottames/thts/internal/fs"
 	"github.com/scottames/thts/internal/ui"
@@ -120,10 +120,10 @@ func runUninit(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Also remove Claude integration if present (leave no trace)
-	fmt.Println(ui.Muted("Checking for Claude integration..."))
-	if err := claude.Uninit(currentRepo, true); err != nil {
-		fmt.Println(ui.WarningF("Could not remove Claude integration: %v", err))
+	// Also remove agent integrations if present (leave no trace)
+	fmt.Println(ui.Muted("Checking for agent integrations..."))
+	if err := agentscmd.Uninit(currentRepo, true, nil); err != nil {
+		fmt.Println(ui.WarningF("Could not remove agent integrations: %v", err))
 	}
 
 	fmt.Println()
