@@ -134,19 +134,19 @@ for creating and open-sourcing this workflow.
 
 `thts` is a Go reimplementation of
 [HumanLayer](https://github.com/humanlayer/humanlayer)'s `humanlayer thoughts`
-subcommand. **You can switch between them freely** - they use the same:
+subcommand. They share:
 
-- Config file format (`~/.config/humanlayer/humanlayer.json`)
 - Directory structure (`~/thoughts/repos/<project>/`)
 - Symlink layout in projects
 - Git hooks
 
-This means:
+**Config handling:** thts uses its own config at `~/.config/thts/config.yaml`
+(YAML format). It can read HumanLayer's config (`~/.config/humanlayer/humanlayer.json`)
+as a fallback, but never writes to it. This means:
 
-- Use `thts` on machines where you prefer a standalone binary
-- Use `humanlayer thoughts` where you already have HumanLayer installed
-- Team members can use whichever tool they prefer
-- Your notes work with both tools simultaneously
+- Migrating from HumanLayer to thts is seamless—your existing config is read automatically
+- thts writes its own config, so HumanLayer won't see changes made via thts
+- Team members can use whichever tool they prefer on the same thoughts repo
 
 See the [Compatibility Guide](docs/guide.md#compatibility-with-humanlayer) for
 details.

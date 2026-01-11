@@ -45,9 +45,8 @@
 - [Compatibility with HumanLayer](#compatibility-with-humanlayer)
   - [Why Two Tools?](#why-two-tools)
   - [What's Shared](#whats-shared)
-  - [Switching Between Tools](#switching-between-tools)
+  - [Config Handling](#config-handling)
   - [Team Compatibility](#team-compatibility)
-  - [Config Compatibility](#config-compatibility)
   - [Command Mapping](#command-mapping)
 
 <!-- mtoc-end -->
@@ -328,15 +327,13 @@ thts profile delete work       # Delete a profile
 Each profile has its own thoughts repo. When you init a project with a profile,
 it maps that project to use the profile's repo.
 
-```json
-{
-  "profiles": {
-    "work": { "thoughtsRepo": "~/work-thoughts" }
-  },
-  "repoMappings": {
-    "/home/{user}/src/work-project": { "profile": "work" }
-  }
-}
+```yaml
+profiles:
+  work:
+    thoughtsRepo: ~/work-thoughts
+repoMappings:
+  /home/{user}/src/work-project:
+    profile: work
 ```
 
 ## Git Worktrees
@@ -381,15 +378,13 @@ thts config --edit       # Opens in $EDITOR
 
 ### Config Options
 
-```json
-{
-  "thoughtsRepo": "~/thoughts",
-  "reposDir": "repos",
-  "globalDir": "global",
-  "user": "{user}",
-  "autoSyncInWorktrees": true,
-  "gitIgnore": "project"
-}
+```yaml
+thoughtsRepo: ~/thoughts
+reposDir: repos
+globalDir: global
+user: "{user}"
+autoSyncInWorktrees: true
+gitIgnore: project
 ```
 
 | Option                | Description                       | Default      |
@@ -507,8 +502,7 @@ Claude integration automatically, ensuring a clean teardown.
 ## Compatibility with HumanLayer
 
 `thts` is a Go reimplementation of the `thoughts` subcommand from
-[HumanLayer's CLI](https://github.com/humanlayer/humanlayer) (`humanlayer`). The
-two tools are fully interoperable.
+[HumanLayer's CLI](https://github.com/humanlayer/humanlayer) (`humanlayer`).
 
 ### Why Two Tools?
 
@@ -523,48 +517,38 @@ Both tools use identical:
 
 | Component               | Location                                                   |
 | ----------------------- | ---------------------------------------------------------- |
-| Config file             | `~/.config/humanlayer/humanlayer.json`                     |
 | Thoughts repo structure | `~/thoughts/repos/<project>/`, `~/thoughts/global/`        |
 | Symlink layout          | `thoughts/{user}/`, `thoughts/shared/`, `thoughts/global/` |
 | Searchable directory    | `thoughts/searchable/` with hard links                     |
 | Git hooks               | Pre-commit protection, post-commit sync                    |
 
-### Switching Between Tools
+### Config Handling
 
-You can switch tools at any time without migration:
+The tools use **different config files**:
 
-```bash
-# Using thts
-thts init
-thts sync -m "Some notes"
+| Tool       | Config Path                            | Format |
+| ---------- | -------------------------------------- | ------ |
+| thts       | `~/.config/thts/config.yaml`           | YAML   |
+| humanlayer | `~/.config/humanlayer/humanlayer.json` | JSON   |
 
-# Later, using humanlayer (same project, same notes)
-humanlayer thoughts sync -m "More notes"
+**thts can read HumanLayer's config as a fallback**, but never writes to it.
+This means:
 
-# Back to thts
-thts status
-```
+- Migrating from HumanLayer to thts is seamless—existing config is read
+  automatically
+- Changes made via thts are written to thts's own config
+- HumanLayer won't see config changes made by thts
 
 ### Team Compatibility
 
-Team members can use different tools:
+Team members can use different tools on the same thoughts repo:
 
 - Alice uses `thts` (prefers Go binaries)
 - Bob uses `humanlayer thoughts` (already has HumanLayer installed)
 - Both share the same thoughts repo
 - Notes sync correctly regardless of which tool created them
 
-### Config Compatibility
-
-`thts` reads from HumanLayer's config location for compatibility:
-
-```plaintext
-~/.config/humanlayer/humanlayer.json  # Read by both tools
-~/.config/thts/config.json             # thts also writes here
-```
-
-When you run `thts setup`, it checks for existing HumanLayer config and uses
-those settings if found.
+Each team member maintains their own config file for their preferred tool.
 
 ### Command Mapping
 
