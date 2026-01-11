@@ -131,6 +131,7 @@ func runSetup(cmd *cobra.Command, args []string) error {
 	// Create config with profile
 	cfg := config.Defaults()
 	cfg.User = user
+	cfg.Profiles = make(map[string]*config.ProfileConfig) // Start fresh
 	cfg.Profiles[profileName] = &config.ProfileConfig{
 		ThoughtsRepo: thoughtsRepo,
 		ReposDir:     "repos",
