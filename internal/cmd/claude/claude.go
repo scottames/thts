@@ -8,7 +8,7 @@ import (
 var ClaudeCmd = &cobra.Command{
 	Use:   "claude",
 	Short: "Claude Code integration commands",
-	Long: `Manage Claude Code integration for tpd.
+	Long: `Manage Claude Code integration for thts.
 
 These commands help configure and manage Claude Code features including
 commands, agents, and settings for your project.`,

@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/scottames/tpd/internal/config"
+	"github.com/scottames/thts/internal/config"
 )
 
 // AddToGitignore adds a pattern to the appropriate gitignore file.

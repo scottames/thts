@@ -7,11 +7,11 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/huh"
-	"github.com/scottames/tpd/internal/config"
-	"github.com/scottames/tpd/internal/fs"
-	"github.com/scottames/tpd/internal/git"
-	"github.com/scottames/tpd/internal/tpd"
-	"github.com/scottames/tpd/internal/ui"
+	"github.com/scottames/thts/internal/config"
+	"github.com/scottames/thts/internal/fs"
+	"github.com/scottames/thts/internal/git"
+	"github.com/scottames/thts/internal/thts"
+	"github.com/scottames/thts/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -64,10 +64,10 @@ func runInit(cmd *cobra.Command, args []string) error {
 	// Check if config exists
 	cfg, err := config.Load()
 	if err != nil {
-		fmt.Println(ui.Error("tpd not configured."))
+		fmt.Println(ui.Error("thts not configured."))
 		fmt.Printf(
 			"Run %s first to set up your thoughts repository.\n",
-			ui.Accent("tpd setup"),
+			ui.Accent("thts setup"),
 		)
 		return nil
 	}
@@ -88,7 +88,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 			fmt.Println()
 			fmt.Printf(
 				"Create a profile first: %s\n",
-				ui.Accent(fmt.Sprintf("tpd profile create %s", initProfile)),
+				ui.Accent(fmt.Sprintf("thts profile create %s", initProfile)),
 			)
 			return nil
 		}
@@ -100,7 +100,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 		fmt.Println(ui.Error("No profiles configured."))
 		fmt.Printf(
 			"Run %s first to create a profile.\n",
-			ui.Accent("tpd setup"),
+			ui.Accent("thts setup"),
 		)
 		return nil
 	}
@@ -176,7 +176,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 
 	// Generate CLAUDE.md for Claude Code integration
-	created, err := tpd.WriteClaudeMD(thoughtsDir, projectName, cfg.User)
+	created, err := thts.WriteClaudeMD(thoughtsDir, projectName, cfg.User)
 	if err != nil {
 		fmt.Println(ui.WarningF("Could not create CLAUDE.md: %v", err))
 	} else if created {
@@ -271,7 +271,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	fmt.Println(ui.Success("Post-commit hook: Auto-syncs thoughts after commits"))
 	fmt.Println()
 	fmt.Println("Next steps:")
-	fmt.Printf("  1. Run %s to sync and create the searchable index\n", ui.Accent("tpd sync"))
+	fmt.Printf("  1. Run %s to sync and create the searchable index\n", ui.Accent("thts sync"))
 	fmt.Printf("  2. Create markdown files in %s for your notes\n", ui.Accent(fmt.Sprintf("thoughts/%s/", cfg.User)))
 	fmt.Println()
 

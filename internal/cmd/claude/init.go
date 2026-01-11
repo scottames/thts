@@ -11,10 +11,10 @@ import (
 	"time"
 
 	"github.com/charmbracelet/huh"
-	tpdfiles "github.com/scottames/tpd"
-	fsutil "github.com/scottames/tpd/internal/fs"
-	"github.com/scottames/tpd/internal/git"
-	"github.com/scottames/tpd/internal/ui"
+	thtsfiles "github.com/scottames/thts"
+	fsutil "github.com/scottames/thts/internal/fs"
+	"github.com/scottames/thts/internal/git"
+	"github.com/scottames/thts/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -57,7 +57,7 @@ const (
 )
 
 // ManifestFile is the name of the manifest file that tracks init operations.
-const ManifestFile = ".tpd-manifest.json"
+const ManifestFile = ".thts-manifest.json"
 
 // Manifest tracks files created by claude init for clean uninit.
 type Manifest struct {
@@ -90,13 +90,13 @@ type GitignoreModification struct {
 var initCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Initialize Claude Code configuration for this project",
-	Long: `Initialize Claude Code configuration by copying tpd integration files
+	Long: `Initialize Claude Code configuration by copying thts integration files
 to the project's .claude/ directory.
 
 This enables thoughts/ integration with Claude Code including:
-  - /tpd-integrate skill (activate integration for current task)
-  - /tpd-handoff command (create session handoff documents)
-  - /tpd-resume command (resume from handoff documents)
+  - /thts-integrate skill (activate integration for current task)
+  - /thts-handoff command (create session handoff documents)
+  - /thts-resume command (resume from handoff documents)
   - Specialized agents (thoughts-locator, thoughts-analyzer)
 
 Integration levels:
@@ -188,8 +188,8 @@ func runClaudeInit(cmd *cobra.Command, args []string) error {
 		fmt.Println(ui.WarningF("Could not copy instructions: %v", err))
 	} else {
 		filesCopied++
-		manifest.Files = append(manifest.Files, "tpd-instructions.md")
-		fmt.Println(ui.Success("Copied tpd-instructions.md"))
+		manifest.Files = append(manifest.Files, "thts-instructions.md")
+		fmt.Println(ui.Success("Copied thts-instructions.md"))
 	}
 
 	// Copy selected categories
@@ -273,7 +273,7 @@ func runClaudeInit(cmd *cobra.Command, args []string) error {
 	if filesSkipped > 0 {
 		fmt.Println(ui.Muted(fmt.Sprintf("   Skipped %d file(s)", filesSkipped)))
 	}
-	fmt.Println(ui.Muted("   You can now use /tpd-integrate, /tpd-handoff, /tpd-resume in Claude Code."))
+	fmt.Println(ui.Muted("   You can now use /thts-integrate, /thts-handoff, /thts-resume in Claude Code."))
 
 	return nil
 }
@@ -313,8 +313,8 @@ func selectCategories() ([]string, error) {
 	err := huh.NewMultiSelect[string]().
 		Title("What would you like to copy?").
 		Options(
-			huh.NewOption("Skills (/tpd-integrate for on-demand activation)", "skills").Selected(true),
-			huh.NewOption("Commands (/tpd-handoff, /tpd-resume for session continuity)", "commands").Selected(true),
+			huh.NewOption("Skills (/thts-integrate for on-demand activation)", "skills").Selected(true),
+			huh.NewOption("Commands (/thts-handoff, /thts-resume for session continuity)", "commands").Selected(true),
 			huh.NewOption("Agents (thoughts-locator, thoughts-analyzer)", "agents").Selected(true),
 		).
 		Value(&selected).
@@ -329,23 +329,23 @@ func selectCategories() ([]string, error) {
 func getEmbedFSForCategory(category string) (fs.FS, string) {
 	switch category {
 	case "commands":
-		return tpdfiles.Commands, "commands"
+		return thtsfiles.Commands, "commands"
 	case "agents":
-		return tpdfiles.Agents, "agents"
+		return thtsfiles.Agents, "agents"
 	case "skills":
-		return tpdfiles.Skills, "skills"
+		return thtsfiles.Skills, "skills"
 	default:
 		return nil, ""
 	}
 }
 
-// copyInstructionsFile copies the tpd-instructions.md file to .claude/.
+// copyInstructionsFile copies the thts-instructions.md file to .claude/.
 func copyInstructionsFile(claudeDir string) error {
-	content, err := fs.ReadFile(tpdfiles.Instructions, "instructions/tpd-instructions.md")
+	content, err := fs.ReadFile(thtsfiles.Instructions, "instructions/thts-instructions.md")
 	if err != nil {
 		return fmt.Errorf("failed to read instructions: %w", err)
 	}
-	targetPath := filepath.Join(claudeDir, "tpd-instructions.md")
+	targetPath := filepath.Join(claudeDir, "thts-instructions.md")
 	return os.WriteFile(targetPath, content, 0644)
 }
 
@@ -384,7 +384,7 @@ func setupIntegrationLevel(projectDir, claudeDir string, level IntegrationLevel)
 
 	case IntegrationOnDemand:
 		// Nothing to do - files are already copied
-		fmt.Println(ui.Info("On-demand mode: use /tpd-integrate to activate"))
+		fmt.Println(ui.Info("On-demand mode: use /thts-integrate to activate"))
 		return nil, nil, nil
 	}
 	return nil, nil, nil
@@ -394,8 +394,8 @@ func setupIntegrationLevel(projectDir, claudeDir string, level IntegrationLevel)
 // Returns modification info if changes were made, or nil if already present.
 func appendToClaudeMD(gitRoot string) (*ClaudeMDModification, error) {
 	claudeMDPath := filepath.Join(gitRoot, "CLAUDE.md")
-	includeDirective := "\n@.claude/tpd-instructions.md\n"
-	pattern := "@.claude/tpd-instructions.md"
+	includeDirective := "\n@.claude/thts-instructions.md\n"
+	pattern := "@.claude/thts-instructions.md"
 
 	// Check if file exists and already has the include
 	if fsutil.Exists(claudeMDPath) {
@@ -404,7 +404,7 @@ func appendToClaudeMD(gitRoot string) (*ClaudeMDModification, error) {
 			return nil, fmt.Errorf("failed to read CLAUDE.md: %w", err)
 		}
 		if strings.Contains(string(content), pattern) {
-			fmt.Println(ui.Info("CLAUDE.md already includes tpd-instructions.md"))
+			fmt.Println(ui.Info("CLAUDE.md already includes thts-instructions.md"))
 			return nil, nil
 		}
 		// Append to existing file
@@ -441,7 +441,7 @@ func appendToClaudeMD(gitRoot string) (*ClaudeMDModification, error) {
 // createLocalClaudeMD creates .claude/CLAUDE.local.md with the @include directive.
 func createLocalClaudeMD(claudeDir string) error {
 	localPath := filepath.Join(claudeDir, "CLAUDE.local.md")
-	content := "# Local Claude Code Instructions\n\n@tpd-instructions.md\n"
+	content := "# Local Claude Code Instructions\n\n@thts-instructions.md\n"
 	return os.WriteFile(localPath, []byte(content), 0644)
 }
 

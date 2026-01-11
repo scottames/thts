@@ -5,7 +5,7 @@ go = "1.23"
 trunk = "1.3.4"
 
 [tasks.build]
-run = "go build -o tpd ./cmd/tpd"
+run = "go build -o thts ./cmd/thts"
 
 [tasks.test]
 run = "go test ./..."
@@ -33,4 +33,4 @@ run = "trunk check --fix && trunk fmt"
 depends = ["lint", "test", "test-integration"]
 
 [tasks.clean]
-run = "rm -f tpd coverage.out coverage.html"
+run = "rm -f thts coverage.out coverage.html"

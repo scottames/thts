@@ -67,7 +67,7 @@ func installPreCommitHook(hooksDir string) (bool, error) {
 	oldHookPath := hookPath + ".old"
 
 	content := fmt.Sprintf(`#!/bin/bash
-# tpd thoughts protection - prevent committing thoughts directory
+# thts thoughts protection - prevent committing thoughts directory
 # Version: %s
 
 if git diff --cached --name-only | grep -q "^thoughts/"; then
@@ -83,7 +83,7 @@ if [ -f "%s" ]; then
 fi
 `, HookVersion, oldHookPath, oldHookPath)
 
-	return installHook(hookPath, oldHookPath, content, "tpd thoughts")
+	return installHook(hookPath, oldHookPath, content, "thts thoughts")
 }
 
 // installPostCommitHook installs the post-commit hook for auto-sync.
@@ -103,14 +103,14 @@ fi
 	}
 
 	content := fmt.Sprintf(`#!/bin/bash
-# tpd thoughts auto-sync
+# thts thoughts auto-sync
 # Version: %s
 %s
 # Get the commit message
 COMMIT_MSG=$(git log -1 --pretty=%%B)
 
 # Auto-sync thoughts after each commit
-tpd sync --message "Auto-sync with commit: $COMMIT_MSG" >/dev/null 2>&1 &
+thts sync --message "Auto-sync with commit: $COMMIT_MSG" >/dev/null 2>&1 &
 
 # Call any existing post-commit hook
 if [ -f "%s" ]; then
@@ -118,10 +118,10 @@ if [ -f "%s" ]; then
 fi
 `, HookVersion, worktreeCheck, oldHookPath, oldHookPath)
 
-	return installHook(hookPath, oldHookPath, content, "tpd thoughts")
+	return installHook(hookPath, oldHookPath, content, "thts thoughts")
 }
 
-// installHook installs a hook, backing up any existing non-tpd hook.
+// installHook installs a hook, backing up any existing non-thts hook.
 // Returns true if the hook was installed/updated.
 func installHook(hookPath, oldHookPath, content, marker string) (bool, error) {
 	// Check if hook needs updating
@@ -192,7 +192,7 @@ func fileExists(path string) bool {
 	return err == nil
 }
 
-// RemoveHooks removes tpd hooks and restores any backed up hooks.
+// RemoveHooks removes thts hooks and restores any backed up hooks.
 func RemoveHooks(repoPath string) error {
 	gitCommonDir, err := GetGitCommonDirAt(repoPath)
 	if err != nil {
@@ -207,7 +207,7 @@ func RemoveHooks(repoPath string) error {
 
 		if fileExists(hookPath) {
 			content, err := os.ReadFile(hookPath)
-			if err == nil && strings.Contains(string(content), "tpd thoughts") {
+			if err == nil && strings.Contains(string(content), "thts thoughts") {
 				// It's our hook, remove it
 				if err := os.Remove(hookPath); err != nil {
 					return fmt.Errorf("failed to remove %s hook: %w", hookName, err)

@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/scottames/tpd/internal/config"
-	"github.com/scottames/tpd/internal/ui"
+	"github.com/scottames/thts/internal/config"
+	"github.com/scottames/thts/internal/ui"
 	"github.com/spf13/cobra"
 )
 

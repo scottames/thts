@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 
 	"github.com/charmbracelet/huh"
-	"github.com/scottames/tpd/internal/config"
-	"github.com/scottames/tpd/internal/ui"
+	"github.com/scottames/thts/internal/config"
+	"github.com/scottames/thts/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -46,7 +46,7 @@ func runCreate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		if err == config.ErrConfigNotFound {
 			fmt.Println(ui.Error("Thoughts not configured."))
-			fmt.Printf("Run %s first to set up the base configuration.\n", ui.Accent("tpd setup"))
+			fmt.Printf("Run %s first to set up the base configuration.\n", ui.Accent("thts setup"))
 			return nil
 		}
 		return fmt.Errorf("failed to load config: %w", err)
@@ -165,7 +165,7 @@ func runCreate(cmd *cobra.Command, args []string) error {
 	fmt.Printf("  Global directory: %s\n", ui.Accent(globalDir))
 	fmt.Println()
 	fmt.Println(ui.Muted("Next steps:"))
-	fmt.Printf("  1. Run %s in a repository\n", ui.Accent(fmt.Sprintf("tpd init --profile %s", sanitizedName)))
+	fmt.Printf("  1. Run %s in a repository\n", ui.Accent(fmt.Sprintf("thts init --profile %s", sanitizedName)))
 	fmt.Println("  2. Your thoughts will sync to the profile's repository")
 
 	return nil

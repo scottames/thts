@@ -1,4 +1,4 @@
-package tpd
+package thts
 
 import (
 	"os"
@@ -11,7 +11,7 @@ import (
 func setupTestDir(t *testing.T) (string, func()) {
 	t.Helper()
 
-	dir, err := os.MkdirTemp("", "tpd-searchable-test-*")
+	dir, err := os.MkdirTemp("", "thts-searchable-test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp directory: %v", err)
 	}

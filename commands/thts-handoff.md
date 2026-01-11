@@ -64,7 +64,7 @@ commit: [current commit hash]
 
 ### 3. Sync
 
-Run `tpd sync` to save the handoff.
+Run `thts sync` to save the handoff.
 
 ### 4. Respond
 
@@ -73,5 +73,5 @@ Tell the user:
 ```text
 Handoff created and synced. Resume with:
 
-/tpd-resume thoughts/shared/handoffs/YYYY-MM-DD_HH-MM-SS_description.md
+/thts-resume thoughts/shared/handoffs/YYYY-MM-DD_HH-MM-SS_description.md
 ```

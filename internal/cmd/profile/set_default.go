@@ -3,8 +3,8 @@ package profile
 import (
 	"fmt"
 
-	"github.com/scottames/tpd/internal/config"
-	"github.com/scottames/tpd/internal/ui"
+	"github.com/scottames/thts/internal/config"
+	"github.com/scottames/thts/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -26,7 +26,7 @@ func runSetDefault(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		if err == config.ErrConfigNotFound {
 			fmt.Println(ui.Error("Thoughts not configured."))
-			fmt.Printf("Run %s first to set up.\n", ui.Accent("tpd setup"))
+			fmt.Printf("Run %s first to set up.\n", ui.Accent("thts setup"))
 			return nil
 		}
 		return fmt.Errorf("failed to load config: %w", err)

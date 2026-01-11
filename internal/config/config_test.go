@@ -13,7 +13,7 @@ import (
 func setupTestXDG(t *testing.T) (string, func()) {
 	t.Helper()
 
-	dir, err := os.MkdirTemp("", "tpd-config-test-*")
+	dir, err := os.MkdirTemp("", "thts-config-test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp directory: %v", err)
 	}
@@ -34,14 +34,14 @@ func setupTestXDG(t *testing.T) (string, func()) {
 }
 
 func TestLoad(t *testing.T) {
-	t.Run("loads from tpd path", func(t *testing.T) {
+	t.Run("loads from thts path", func(t *testing.T) {
 		xdgDir, cleanup := setupTestXDG(t)
 		defer cleanup()
 
-		// Create tpd config directory
-		tpdDir := filepath.Join(xdgDir, "tpd")
-		if err := os.MkdirAll(tpdDir, 0755); err != nil {
-			t.Fatalf("failed to create tpd dir: %v", err)
+		// Create thts config directory
+		thtsDir := filepath.Join(xdgDir, "thts")
+		if err := os.MkdirAll(thtsDir, 0755); err != nil {
+			t.Fatalf("failed to create thts dir: %v", err)
 		}
 
 		cfg := &Config{
@@ -57,7 +57,7 @@ func TestLoad(t *testing.T) {
 		}
 
 		data, _ := yaml.Marshal(cfg)
-		if err := os.WriteFile(filepath.Join(tpdDir, "config.yaml"), data, 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(thtsDir, "config.yaml"), data, 0644); err != nil {
 			t.Fatalf("failed to write config: %v", err)
 		}
 
@@ -85,7 +85,7 @@ func TestLoad(t *testing.T) {
 		xdgDir, cleanup := setupTestXDG(t)
 		defer cleanup()
 
-		// Create HumanLayer config (not tpd)
+		// Create HumanLayer config (not thts)
 		hlDir := filepath.Join(xdgDir, "humanlayer")
 		if err := os.MkdirAll(hlDir, 0755); err != nil {
 			t.Fatalf("failed to create humanlayer dir: %v", err)
@@ -126,14 +126,14 @@ func TestLoad(t *testing.T) {
 		}
 	})
 
-	t.Run("prefers tpd over HumanLayer", func(t *testing.T) {
+	t.Run("prefers thts over HumanLayer", func(t *testing.T) {
 		xdgDir, cleanup := setupTestXDG(t)
 		defer cleanup()
 
 		// Create both configs
-		tpdDir := filepath.Join(xdgDir, "tpd")
-		if err := os.MkdirAll(tpdDir, 0755); err != nil {
-			t.Fatalf("failed to create tpd dir: %v", err)
+		thtsDir := filepath.Join(xdgDir, "thts")
+		if err := os.MkdirAll(thtsDir, 0755); err != nil {
+			t.Fatalf("failed to create thts dir: %v", err)
 		}
 
 		hlDir := filepath.Join(xdgDir, "humanlayer")
@@ -141,20 +141,20 @@ func TestLoad(t *testing.T) {
 			t.Fatalf("failed to create humanlayer dir: %v", err)
 		}
 
-		tpdCfg := &Config{
-			User: "tpduser",
+		thtsCfg := &Config{
+			User: "thtsuser",
 			Profiles: map[string]*ProfileConfig{
 				"personal": {
-					ThoughtsRepo: "~/tpd-thoughts",
+					ThoughtsRepo: "~/thts-thoughts",
 					ReposDir:     "repos",
 					GlobalDir:    "global",
 					Default:      true,
 				},
 			},
 		}
-		data, _ := yaml.Marshal(tpdCfg)
-		if err := os.WriteFile(filepath.Join(tpdDir, "config.yaml"), data, 0644); err != nil {
-			t.Fatalf("failed to write tpd config: %v", err)
+		data, _ := yaml.Marshal(thtsCfg)
+		if err := os.WriteFile(filepath.Join(thtsDir, "config.yaml"), data, 0644); err != nil {
+			t.Fatalf("failed to write thts config: %v", err)
 		}
 
 		hlConfig := map[string]interface{}{
@@ -174,8 +174,8 @@ func TestLoad(t *testing.T) {
 		}
 
 		profile, _ := loaded.GetDefaultProfile()
-		if profile.ThoughtsRepo != "~/tpd-thoughts" {
-			t.Error("should prefer tpd config over HumanLayer")
+		if profile.ThoughtsRepo != "~/thts-thoughts" {
+			t.Error("should prefer thts config over HumanLayer")
 		}
 	})
 
@@ -219,9 +219,9 @@ func TestLoad(t *testing.T) {
 		defer cleanup()
 
 		// Create config with minimal fields
-		tpdDir := filepath.Join(xdgDir, "tpd")
-		if err := os.MkdirAll(tpdDir, 0755); err != nil {
-			t.Fatalf("failed to create tpd dir: %v", err)
+		thtsDir := filepath.Join(xdgDir, "thts")
+		if err := os.MkdirAll(thtsDir, 0755); err != nil {
+			t.Fatalf("failed to create thts dir: %v", err)
 		}
 
 		cfg := `user: test
@@ -230,7 +230,7 @@ profiles:
     thoughtsRepo: ~/thoughts
     default: true
 `
-		if err := os.WriteFile(filepath.Join(tpdDir, "config.yaml"), []byte(cfg), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(thtsDir, "config.yaml"), []byte(cfg), 0644); err != nil {
 			t.Fatalf("failed to write config: %v", err)
 		}
 
@@ -331,13 +331,13 @@ func TestSave(t *testing.T) {
 		}
 
 		// Verify directory was created
-		tpdDir := filepath.Join(xdgDir, "tpd")
-		if _, err := os.Stat(tpdDir); err != nil {
-			t.Error("tpd config directory should be created")
+		thtsDir := filepath.Join(xdgDir, "thts")
+		if _, err := os.Stat(thtsDir); err != nil {
+			t.Error("thts config directory should be created")
 		}
 
 		// Verify file exists
-		configPath := filepath.Join(tpdDir, "config.yaml")
+		configPath := filepath.Join(thtsDir, "config.yaml")
 		if _, err := os.Stat(configPath); err != nil {
 			t.Error("config file should be created")
 		}
@@ -374,7 +374,7 @@ func TestSave(t *testing.T) {
 		}
 
 		// Read and parse
-		configPath := filepath.Join(xdgDir, "tpd", "config.yaml")
+		configPath := filepath.Join(xdgDir, "thts", "config.yaml")
 		data, err := os.ReadFile(configPath)
 		if err != nil {
 			t.Fatalf("failed to read saved config: %v", err)
@@ -462,13 +462,13 @@ func TestSave(t *testing.T) {
 }
 
 func TestExists(t *testing.T) {
-	t.Run("true with tpd config", func(t *testing.T) {
+	t.Run("true with thts config", func(t *testing.T) {
 		xdgDir, cleanup := setupTestXDG(t)
 		defer cleanup()
 
-		tpdDir := filepath.Join(xdgDir, "tpd")
-		if err := os.MkdirAll(tpdDir, 0755); err != nil {
-			t.Fatalf("failed to create tpd dir: %v", err)
+		thtsDir := filepath.Join(xdgDir, "thts")
+		if err := os.MkdirAll(thtsDir, 0755); err != nil {
+			t.Fatalf("failed to create thts dir: %v", err)
 		}
 
 		cfg := &Config{
@@ -477,12 +477,12 @@ func TestExists(t *testing.T) {
 			},
 		}
 		data, _ := yaml.Marshal(cfg)
-		if err := os.WriteFile(filepath.Join(tpdDir, "config.yaml"), data, 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(thtsDir, "config.yaml"), data, 0644); err != nil {
 			t.Fatalf("failed to write config: %v", err)
 		}
 
 		if !Exists() {
-			t.Error("Exists() should return true with tpd config")
+			t.Error("Exists() should return true with thts config")
 		}
 	})
 
@@ -547,9 +547,9 @@ func TestLoadOrDefault(t *testing.T) {
 		xdgDir, cleanup := setupTestXDG(t)
 		defer cleanup()
 
-		tpdDir := filepath.Join(xdgDir, "tpd")
-		if err := os.MkdirAll(tpdDir, 0755); err != nil {
-			t.Fatalf("failed to create tpd dir: %v", err)
+		thtsDir := filepath.Join(xdgDir, "thts")
+		if err := os.MkdirAll(thtsDir, 0755); err != nil {
+			t.Fatalf("failed to create thts dir: %v", err)
 		}
 
 		cfg := &Config{
@@ -564,7 +564,7 @@ func TestLoadOrDefault(t *testing.T) {
 			},
 		}
 		data, _ := yaml.Marshal(cfg)
-		if err := os.WriteFile(filepath.Join(tpdDir, "config.yaml"), data, 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(thtsDir, "config.yaml"), data, 0644); err != nil {
 			t.Fatalf("failed to write config: %v", err)
 		}
 

@@ -14,13 +14,13 @@ func TestWriteAndLoadManifest(t *testing.T) {
 
 	original := &Manifest{
 		IntegrationLevel: IntegrationAlwaysOn,
-		Files:            []string{"tpd-instructions.md", "skills/tpd-integrate.md"},
+		Files:            []string{"thts-instructions.md", "skills/thts-integrate.md"},
 		SettingsCreated:  true,
 		Modifications: ManifestModifications{
 			ClaudeMD: &ClaudeMDModification{
 				Path:    "/path/to/CLAUDE.md",
 				Action:  "appended",
-				Pattern: "@.claude/tpd-instructions.md",
+				Pattern: "@.claude/thts-instructions.md",
 			},
 			Gitignore: &GitignoreModification{
 				Patterns: []string{".claude/CLAUDE.local.md"},
@@ -76,8 +76,8 @@ func TestDetectInstallation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create some tpd files
-	if err := os.WriteFile(filepath.Join(claudeDir, "tpd-instructions.md"), []byte("# Instructions"), 0644); err != nil {
+	// Create some thts files
+	if err := os.WriteFile(filepath.Join(claudeDir, "thts-instructions.md"), []byte("# Instructions"), 0644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -85,7 +85,7 @@ func TestDetectInstallation(t *testing.T) {
 	if err := os.MkdirAll(skillsDir, 0755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(skillsDir, "tpd-integrate.md"), []byte("# Skill"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(skillsDir, "thts-integrate.md"), []byte("# Skill"), 0644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -99,16 +99,16 @@ func TestDetectInstallation(t *testing.T) {
 		t.Errorf("expected 2 files detected, got %d: %v", len(manifest.Files), manifest.Files)
 	}
 
-	// Verify tpd-instructions.md is detected
+	// Verify thts-instructions.md is detected
 	found := false
 	for _, f := range manifest.Files {
-		if f == "tpd-instructions.md" {
+		if f == "thts-instructions.md" {
 			found = true
 			break
 		}
 	}
 	if !found {
-		t.Error("expected tpd-instructions.md to be detected")
+		t.Error("expected thts-instructions.md to be detected")
 	}
 }
 
@@ -119,7 +119,7 @@ func TestDetectInstallationNoFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create a non-tpd file
+	// Create a non-thts file
 	if err := os.WriteFile(filepath.Join(claudeDir, "other.md"), []byte("# Other"), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -127,7 +127,7 @@ func TestDetectInstallationNoFiles(t *testing.T) {
 	// Test detection
 	manifest := detectInstallation(claudeDir, tmpDir)
 	if manifest != nil {
-		t.Error("expected no manifest when no tpd files present")
+		t.Error("expected no manifest when no thts files present")
 	}
 }
 
@@ -142,22 +142,22 @@ func TestRemoveFromClaudeMD(t *testing.T) {
 	}{
 		{
 			name:     "include at end with newlines",
-			content:  "# Instructions\n\nSome content.\n@.claude/tpd-instructions.md\n",
+			content:  "# Instructions\n\nSome content.\n@.claude/thts-instructions.md\n",
 			expected: "# Instructions\n\nSome content.\n",
 		},
 		{
 			name:     "include in middle",
-			content:  "# Instructions\n@.claude/tpd-instructions.md\nMore content.",
+			content:  "# Instructions\n@.claude/thts-instructions.md\nMore content.",
 			expected: "# Instructions\nMore content.",
 		},
 		{
 			name:     "include at start",
-			content:  "@.claude/tpd-instructions.md\n# Instructions",
+			content:  "@.claude/thts-instructions.md\n# Instructions",
 			expected: "# Instructions",
 		},
 		{
 			name:     "include only",
-			content:  "@.claude/tpd-instructions.md\n",
+			content:  "@.claude/thts-instructions.md\n",
 			expected: "",
 		},
 	}
@@ -170,7 +170,7 @@ func TestRemoveFromClaudeMD(t *testing.T) {
 
 			mod := &ClaudeMDModification{
 				Path:    claudeMDPath,
-				Pattern: "@.claude/tpd-instructions.md",
+				Pattern: "@.claude/thts-instructions.md",
 			}
 
 			if err := removeFromClaudeMD(mod); err != nil {
@@ -231,8 +231,8 @@ func TestUninitWithManifest(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create tpd files
-	if err := os.WriteFile(filepath.Join(claudeDir, "tpd-instructions.md"), []byte("# Instructions"), 0644); err != nil {
+	// Create thts files
+	if err := os.WriteFile(filepath.Join(claudeDir, "thts-instructions.md"), []byte("# Instructions"), 0644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -240,7 +240,7 @@ func TestUninitWithManifest(t *testing.T) {
 	if err := os.MkdirAll(skillsDir, 0755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(skillsDir, "tpd-integrate.md"), []byte("# Skill"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(skillsDir, "thts-integrate.md"), []byte("# Skill"), 0644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -249,7 +249,7 @@ func TestUninitWithManifest(t *testing.T) {
 		Version:          1,
 		CreatedAt:        time.Now().UTC().Format(time.RFC3339),
 		IntegrationLevel: IntegrationOnDemand,
-		Files:            []string{"tpd-instructions.md", "skills/tpd-integrate.md"},
+		Files:            []string{"thts-instructions.md", "skills/thts-integrate.md"},
 	}
 	data, _ := json.MarshalIndent(manifest, "", "  ")
 	if err := os.WriteFile(filepath.Join(claudeDir, ManifestFile), data, 0644); err != nil {
@@ -262,11 +262,11 @@ func TestUninitWithManifest(t *testing.T) {
 	}
 
 	// Verify files are removed
-	if _, err := os.Stat(filepath.Join(claudeDir, "tpd-instructions.md")); !os.IsNotExist(err) {
-		t.Error("expected tpd-instructions.md to be removed")
+	if _, err := os.Stat(filepath.Join(claudeDir, "thts-instructions.md")); !os.IsNotExist(err) {
+		t.Error("expected thts-instructions.md to be removed")
 	}
-	if _, err := os.Stat(filepath.Join(skillsDir, "tpd-integrate.md")); !os.IsNotExist(err) {
-		t.Error("expected tpd-integrate.md to be removed")
+	if _, err := os.Stat(filepath.Join(skillsDir, "thts-integrate.md")); !os.IsNotExist(err) {
+		t.Error("expected thts-integrate.md to be removed")
 	}
 	if _, err := os.Stat(filepath.Join(claudeDir, ManifestFile)); !os.IsNotExist(err) {
 		t.Error("expected manifest to be removed")
@@ -289,8 +289,8 @@ func TestUninitDetection(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create tpd files without manifest (simulate old installation)
-	if err := os.WriteFile(filepath.Join(claudeDir, "tpd-instructions.md"), []byte("# Instructions"), 0644); err != nil {
+	// Create thts files without manifest (simulate old installation)
+	if err := os.WriteFile(filepath.Join(claudeDir, "thts-instructions.md"), []byte("# Instructions"), 0644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -300,8 +300,8 @@ func TestUninitDetection(t *testing.T) {
 	}
 
 	// Verify file is removed
-	if _, err := os.Stat(filepath.Join(claudeDir, "tpd-instructions.md")); !os.IsNotExist(err) {
-		t.Error("expected tpd-instructions.md to be removed via detection")
+	if _, err := os.Stat(filepath.Join(claudeDir, "thts-instructions.md")); !os.IsNotExist(err) {
+		t.Error("expected thts-instructions.md to be removed via detection")
 	}
 }
 
@@ -314,13 +314,13 @@ func TestUninitWithClaudeMDModification(t *testing.T) {
 
 	// Create CLAUDE.md with @include
 	claudeMDPath := filepath.Join(tmpDir, "CLAUDE.md")
-	claudeMDContent := "# Instructions\n\nSome content.\n@.claude/tpd-instructions.md\n"
+	claudeMDContent := "# Instructions\n\nSome content.\n@.claude/thts-instructions.md\n"
 	if err := os.WriteFile(claudeMDPath, []byte(claudeMDContent), 0644); err != nil {
 		t.Fatal(err)
 	}
 
-	// Create tpd files
-	if err := os.WriteFile(filepath.Join(claudeDir, "tpd-instructions.md"), []byte("# Instructions"), 0644); err != nil {
+	// Create thts files
+	if err := os.WriteFile(filepath.Join(claudeDir, "thts-instructions.md"), []byte("# Instructions"), 0644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -329,12 +329,12 @@ func TestUninitWithClaudeMDModification(t *testing.T) {
 		Version:          1,
 		CreatedAt:        time.Now().UTC().Format(time.RFC3339),
 		IntegrationLevel: IntegrationAlwaysOn,
-		Files:            []string{"tpd-instructions.md"},
+		Files:            []string{"thts-instructions.md"},
 		Modifications: ManifestModifications{
 			ClaudeMD: &ClaudeMDModification{
 				Path:    claudeMDPath,
 				Action:  "appended",
-				Pattern: "@.claude/tpd-instructions.md",
+				Pattern: "@.claude/thts-instructions.md",
 			},
 		},
 	}
@@ -353,7 +353,7 @@ func TestUninitWithClaudeMDModification(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CLAUDE.md should still exist: %v", err)
 	}
-	if strings.Contains(string(content), "@.claude/tpd-instructions.md") {
+	if strings.Contains(string(content), "@.claude/thts-instructions.md") {
 		t.Error("expected @include to be removed from CLAUDE.md")
 	}
 	if !strings.Contains(string(content), "# Instructions") {

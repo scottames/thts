@@ -46,9 +46,9 @@ func XDGConfigHome() string {
 	return filepath.Join(home, ".config")
 }
 
-// TPDConfigPath returns the path to the tpd config file.
-func TPDConfigPath() string {
-	return filepath.Join(XDGConfigHome(), "tpd", "config.yaml")
+// ThtsConfigPath returns the path to the thts config file.
+func ThtsConfigPath() string {
+	return filepath.Join(XDGConfigHome(), "thts", "config.yaml")
 }
 
 // HumanLayerConfigPath returns the path to the HumanLayer config file.

@@ -1,4 +1,4 @@
-// Package ui provides consistent terminal output styling for the tpd CLI.
+// Package ui provides consistent terminal output styling for the thts CLI.
 package ui
 
 import "github.com/charmbracelet/lipgloss"

@@ -3,26 +3,26 @@
 package cmd
 
 import (
-	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/scottames/tpd/internal/config"
+	"github.com/scottames/thts/internal/config"
+	"gopkg.in/yaml.v3"
 )
 
 var binaryPath string
 
 func TestMain(m *testing.M) {
 	// Build binary once for all tests
-	tmp, err := os.MkdirTemp("", "tpd-test-bin-*")
+	tmp, err := os.MkdirTemp("", "thts-test-bin-*")
 	if err != nil {
 		os.Exit(1)
 	}
 
-	binaryPath = filepath.Join(tmp, "tpd")
+	binaryPath = filepath.Join(tmp, "thts")
 
 	// Find project root by looking for go.mod
 	projectRoot := findProjectRoot()
@@ -32,11 +32,11 @@ func TestMain(m *testing.M) {
 	}
 
 	// Build from the project root
-	cmd := exec.Command("go", "build", "-o", binaryPath, "./cmd/tpd")
+	cmd := exec.Command("go", "build", "-o", binaryPath, "./cmd/thts")
 	cmd.Dir = projectRoot
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		os.Stderr.WriteString("Failed to build tpd binary: " + err.Error() + "\n")
+		os.Stderr.WriteString("Failed to build thts binary: " + err.Error() + "\n")
 		os.Stderr.Write(output)
 		os.Exit(1)
 	}
@@ -89,7 +89,7 @@ type testEnv struct {
 func setupTestEnv(t *testing.T) *testEnv {
 	t.Helper()
 
-	root, err := os.MkdirTemp("", "tpd-integration-*")
+	root, err := os.MkdirTemp("", "thts-integration-*")
 	if err != nil {
 		t.Fatalf("failed to create temp root: %v", err)
 	}
@@ -106,7 +106,7 @@ func setupTestEnv(t *testing.T) *testEnv {
 	}
 
 	// Create config directory
-	if err := os.MkdirAll(filepath.Join(env.configHome, "tpd"), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Join(env.configHome, "thts"), 0755); err != nil {
 		env.cleanup()
 		t.Fatalf("failed to create config dir: %v", err)
 	}
@@ -133,17 +133,22 @@ func setupTestEnv(t *testing.T) *testEnv {
 
 	// Create initial config
 	cfg := &config.Config{
-		ThoughtsRepo:        env.thoughtsRepo,
-		ReposDir:            "repos",
-		GlobalDir:           "global",
 		User:                "testuser",
 		GitIgnore:           config.GitIgnoreProject,
 		AutoSyncInWorktrees: true,
 		RepoMappings:        make(map[string]*config.RepoMapping),
+		Profiles: map[string]*config.ProfileConfig{
+			"default": {
+				ThoughtsRepo: env.thoughtsRepo,
+				ReposDir:     "repos",
+				GlobalDir:    "global",
+				Default:      true,
+			},
+		},
 	}
 
-	configPath := filepath.Join(env.configHome, "tpd", "config.json")
-	configData, err := json.MarshalIndent(cfg, "", "  ")
+	configPath := filepath.Join(env.configHome, "thts", "config.yaml")
+	configData, err := yaml.Marshal(cfg)
 	if err != nil {
 		env.cleanup()
 		t.Fatalf("failed to marshal config: %v", err)
@@ -175,8 +180,8 @@ func initGitRepo(dir string) error {
 	return cmd.Run()
 }
 
-// runTpd runs the tpd binary with the given args and environment
-func (e *testEnv) runTpd(args ...string) (string, error) {
+// runThts runs the thts binary with the given args and environment
+func (e *testEnv) runThts(args ...string) (string, error) {
 	cmd := exec.Command(binaryPath, args...)
 	cmd.Dir = e.projectRepo
 	cmd.Env = append(os.Environ(),
@@ -188,8 +193,8 @@ func (e *testEnv) runTpd(args ...string) (string, error) {
 	return string(output), err
 }
 
-// runTpdInDir runs the tpd binary in a specific directory
-func (e *testEnv) runTpdInDir(dir string, args ...string) (string, error) {
+// runThtsInDir runs the thts binary in a specific directory
+func (e *testEnv) runThtsInDir(dir string, args ...string) (string, error) {
 	cmd := exec.Command(binaryPath, args...)
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(),
@@ -210,10 +215,10 @@ func TestInitCommand(t *testing.T) {
 		env := setupTestEnv(t)
 		defer env.cleanup()
 
-		// Run: tpd init --name myproject --force
-		output, err := env.runTpd("init", "--name", "myproject", "--force")
+		// Run: thts init --name myproject --force
+		output, err := env.runThts("init", "--name", "myproject", "--force")
 		if err != nil {
-			t.Fatalf("tpd init failed: %v\nOutput: %s", err, output)
+			t.Fatalf("thts init failed: %v\nOutput: %s", err, output)
 		}
 
 		// Verify success message
@@ -275,14 +280,14 @@ func TestInitCommand(t *testing.T) {
 		}
 
 		// Verify config was updated with mapping
-		configPath := filepath.Join(env.configHome, "tpd", "config.json")
+		configPath := filepath.Join(env.configHome, "thts", "config.yaml")
 		configData, err := os.ReadFile(configPath)
 		if err != nil {
 			t.Fatalf("failed to read config: %v", err)
 		}
 
 		var cfg config.Config
-		if err := json.Unmarshal(configData, &cfg); err != nil {
+		if err := yaml.Unmarshal(configData, &cfg); err != nil {
 			t.Fatalf("failed to parse config: %v", err)
 		}
 
@@ -304,7 +309,7 @@ func TestInitCommand(t *testing.T) {
 			t.Fatalf("failed to create non-git dir: %v", err)
 		}
 
-		output, err := env.runTpdInDir(nonGitDir, "init", "--name", "test", "--force")
+		output, err := env.runThtsInDir(nonGitDir, "init", "--name", "test", "--force")
 		if err == nil {
 			t.Error("expected error when running outside git repo")
 		}
@@ -318,13 +323,13 @@ func TestInitCommand(t *testing.T) {
 		defer env.cleanup()
 
 		// First init
-		_, err := env.runTpd("init", "--name", "myproject", "--force")
+		_, err := env.runThts("init", "--name", "myproject", "--force")
 		if err != nil {
 			t.Fatalf("first init failed: %v", err)
 		}
 
 		// Second init with --force should succeed
-		output, err := env.runTpd("init", "--name", "myproject", "--force")
+		output, err := env.runThts("init", "--name", "myproject", "--force")
 		if err != nil {
 			t.Fatalf("second init failed: %v\nOutput: %s", err, output)
 		}
@@ -341,13 +346,13 @@ func TestStatusCommand(t *testing.T) {
 		defer env.cleanup()
 
 		// Initialize first
-		_, err := env.runTpd("init", "--name", "myproject", "--force")
+		_, err := env.runThts("init", "--name", "myproject", "--force")
 		if err != nil {
 			t.Fatalf("init failed: %v", err)
 		}
 
 		// Run status
-		output, err := env.runTpd("status")
+		output, err := env.runThts("status")
 		if err != nil {
 			t.Fatalf("status failed: %v\nOutput: %s", err, output)
 		}
@@ -355,7 +360,7 @@ func TestStatusCommand(t *testing.T) {
 		// Verify expected content
 		expectedStrings := []string{
 			"Thoughts Repository Status",
-			"Configuration:",
+			"Configuration",
 			"testuser",
 			"Initialized",
 		}
@@ -372,12 +377,12 @@ func TestStatusCommand(t *testing.T) {
 		defer env.cleanup()
 
 		// Remove config
-		configPath := filepath.Join(env.configHome, "tpd", "config.json")
+		configPath := filepath.Join(env.configHome, "thts", "config.yaml")
 		if err := os.Remove(configPath); err != nil {
 			t.Fatalf("failed to remove config: %v", err)
 		}
 
-		output, _ := env.runTpd("status")
+		output, _ := env.runThts("status")
 		if !strings.Contains(output, "not configured") {
 			t.Errorf("expected 'not configured' message, got: %s", output)
 		}
@@ -390,7 +395,7 @@ func TestSyncCommand(t *testing.T) {
 		defer env.cleanup()
 
 		// Initialize
-		_, err := env.runTpd("init", "--name", "myproject", "--force")
+		_, err := env.runThts("init", "--name", "myproject", "--force")
 		if err != nil {
 			t.Fatalf("init failed: %v", err)
 		}
@@ -403,7 +408,7 @@ func TestSyncCommand(t *testing.T) {
 		}
 
 		// Run sync with commit message
-		output, err := env.runTpd("sync", "-m", "Test sync commit")
+		output, err := env.runThts("sync", "-m", "Test sync commit")
 		if err != nil {
 			t.Fatalf("sync failed: %v\nOutput: %s", err, output)
 		}
@@ -430,19 +435,19 @@ func TestSyncCommand(t *testing.T) {
 		defer env.cleanup()
 
 		// Initialize
-		_, err := env.runTpd("init", "--name", "myproject", "--force")
+		_, err := env.runThts("init", "--name", "myproject", "--force")
 		if err != nil {
 			t.Fatalf("init failed: %v", err)
 		}
 
 		// First sync to commit everything
-		_, err = env.runTpd("sync", "-m", "Initial sync")
+		_, err = env.runThts("sync", "-m", "Initial sync")
 		if err != nil {
 			t.Fatalf("first sync failed: %v", err)
 		}
 
 		// Second sync with no changes
-		output, err := env.runTpd("sync", "-m", "No changes")
+		output, err := env.runThts("sync", "-m", "No changes")
 		if err != nil {
 			t.Fatalf("second sync failed: %v\nOutput: %s", err, output)
 		}
@@ -459,7 +464,7 @@ func TestUninitCommand(t *testing.T) {
 		defer env.cleanup()
 
 		// Initialize first
-		_, err := env.runTpd("init", "--name", "myproject", "--force")
+		_, err := env.runThts("init", "--name", "myproject", "--force")
 		if err != nil {
 			t.Fatalf("init failed: %v", err)
 		}
@@ -471,7 +476,7 @@ func TestUninitCommand(t *testing.T) {
 		}
 
 		// Run uninit with --force
-		output, err := env.runTpd("uninit", "--force")
+		output, err := env.runThts("uninit", "--force")
 		if err != nil {
 			t.Fatalf("uninit failed: %v\nOutput: %s", err, output)
 		}
@@ -487,14 +492,14 @@ func TestUninitCommand(t *testing.T) {
 		}
 
 		// Verify config mapping was removed
-		configPath := filepath.Join(env.configHome, "tpd", "config.json")
+		configPath := filepath.Join(env.configHome, "thts", "config.yaml")
 		configData, err := os.ReadFile(configPath)
 		if err != nil {
 			t.Fatalf("failed to read config: %v", err)
 		}
 
 		var cfg config.Config
-		if err := json.Unmarshal(configData, &cfg); err != nil {
+		if err := yaml.Unmarshal(configData, &cfg); err != nil {
 			t.Fatalf("failed to parse config: %v", err)
 		}
 
@@ -508,7 +513,7 @@ func TestUninitCommand(t *testing.T) {
 		defer env.cleanup()
 
 		// Initialize
-		_, err := env.runTpd("init", "--name", "myproject", "--force")
+		_, err := env.runThts("init", "--name", "myproject", "--force")
 		if err != nil {
 			t.Fatalf("init failed: %v", err)
 		}
@@ -521,7 +526,7 @@ func TestUninitCommand(t *testing.T) {
 		}
 
 		// Uninit
-		_, err = env.runTpd("uninit", "--force")
+		_, err = env.runThts("uninit", "--force")
 		if err != nil {
 			t.Fatalf("uninit failed: %v", err)
 		}
@@ -539,7 +544,7 @@ func TestFullWorkflow(t *testing.T) {
 		defer env.cleanup()
 
 		// 1. Initialize
-		output, err := env.runTpd("init", "--name", "workflow-test", "--force")
+		output, err := env.runThts("init", "--name", "workflow-test", "--force")
 		if err != nil {
 			t.Fatalf("init failed: %v\nOutput: %s", err, output)
 		}
@@ -552,7 +557,7 @@ func TestFullWorkflow(t *testing.T) {
 		}
 
 		// 3. Sync
-		output, err = env.runTpd("sync", "-m", "Workflow test sync")
+		output, err = env.runThts("sync", "-m", "Workflow test sync")
 		if err != nil {
 			t.Fatalf("sync failed: %v\nOutput: %s", err, output)
 		}
@@ -564,7 +569,7 @@ func TestFullWorkflow(t *testing.T) {
 		}
 
 		// 4. Check status
-		output, err = env.runTpd("status")
+		output, err = env.runThts("status")
 		if err != nil {
 			t.Fatalf("status failed: %v\nOutput: %s", err, output)
 		}
@@ -573,7 +578,7 @@ func TestFullWorkflow(t *testing.T) {
 		}
 
 		// 5. Uninit
-		output, err = env.runTpd("uninit", "--force")
+		output, err = env.runThts("uninit", "--force")
 		if err != nil {
 			t.Fatalf("uninit failed: %v\nOutput: %s", err, output)
 		}

@@ -8,9 +8,9 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/huh"
-	fsutil "github.com/scottames/tpd/internal/fs"
-	"github.com/scottames/tpd/internal/git"
-	"github.com/scottames/tpd/internal/ui"
+	fsutil "github.com/scottames/thts/internal/fs"
+	"github.com/scottames/thts/internal/git"
+	"github.com/scottames/thts/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -21,15 +21,15 @@ var (
 
 var uninitCmd = &cobra.Command{
 	Use:   "uninit",
-	Short: "Remove Claude Code tpd integration from this project",
-	Long: `Remove all tpd integration files from .claude/ directory.
+	Short: "Remove Claude Code thts integration from this project",
+	Long: `Remove all thts integration files from .claude/ directory.
 
 This removes:
-  - tpd-instructions.md
-  - skills/, commands/, agents/ files installed by tpd
-  - settings.json if created by tpd
+  - thts-instructions.md
+  - skills/, commands/, agents/ files installed by thts
+  - settings.json if created by thts
   - @include directive from CLAUDE.md
-  - gitignore patterns added by tpd
+  - gitignore patterns added by thts
 
 The .claude/ directory itself is preserved if it contains other files.`,
 	RunE: runClaudeUninit,
@@ -41,7 +41,7 @@ func init() {
 }
 
 func runClaudeUninit(cmd *cobra.Command, args []string) error {
-	fmt.Println(ui.Header("Remove Claude Code tpd Integration"))
+	fmt.Println(ui.Header("Remove Claude Code thts Integration"))
 	fmt.Println()
 
 	targetDir, err := os.Getwd()
@@ -63,7 +63,7 @@ func runClaudeUninit(cmd *cobra.Command, args []string) error {
 		// Manifest doesn't exist or is corrupted - fall back to detection
 		manifest = detectInstallation(claudeDir, targetDir)
 		if manifest == nil {
-			fmt.Println(ui.Error("No tpd installation detected."))
+			fmt.Println(ui.Error("No thts installation detected."))
 			return nil
 		}
 		fmt.Println(ui.Warning("No manifest found, using detection."))
@@ -107,18 +107,18 @@ func loadManifest(claudeDir string) (*Manifest, error) {
 	return &manifest, nil
 }
 
-// detectInstallation detects tpd installation without a manifest (backwards compat).
+// detectInstallation detects thts installation without a manifest (backwards compat).
 func detectInstallation(claudeDir, projectDir string) *Manifest {
 	manifest := &Manifest{
 		Files: []string{},
 	}
 
-	// Check for known tpd files
+	// Check for known thts files
 	knownFiles := []string{
-		"tpd-instructions.md",
-		"skills/tpd-integrate.md",
-		"commands/tpd-handoff.md",
-		"commands/tpd-resume.md",
+		"thts-instructions.md",
+		"skills/thts-integrate.md",
+		"commands/thts-handoff.md",
+		"commands/thts-resume.md",
 		"agents/thoughts-locator.md",
 		"agents/thoughts-analyzer.md",
 		"CLAUDE.local.md",
@@ -138,11 +138,11 @@ func detectInstallation(claudeDir, projectDir string) *Manifest {
 	claudeMDPath := filepath.Join(gitRoot, "CLAUDE.md")
 	if fsutil.Exists(claudeMDPath) {
 		content, err := os.ReadFile(claudeMDPath)
-		if err == nil && strings.Contains(string(content), "@.claude/tpd-instructions.md") {
+		if err == nil && strings.Contains(string(content), "@.claude/thts-instructions.md") {
 			manifest.Modifications.ClaudeMD = &ClaudeMDModification{
 				Path:    claudeMDPath,
 				Action:  "appended", // assume appended in detection
-				Pattern: "@.claude/tpd-instructions.md",
+				Pattern: "@.claude/thts-instructions.md",
 			}
 		}
 	}
@@ -205,7 +205,7 @@ func printRemovalPlan(manifest *Manifest, claudeDir string) {
 	}
 }
 
-// performRemoval removes all tpd integration files and reverts modifications.
+// performRemoval removes all thts integration files and reverts modifications.
 func performRemoval(manifest *Manifest, claudeDir, projectDir string) error {
 	var warnings []string
 
@@ -219,7 +219,7 @@ func performRemoval(manifest *Manifest, claudeDir, projectDir string) error {
 		}
 	}
 
-	// 2. Remove settings.json if created by tpd
+	// 2. Remove settings.json if created by thts
 	if manifest.SettingsCreated {
 		settingsPath := filepath.Join(claudeDir, "settings.json")
 		if err := os.Remove(settingsPath); err != nil && !os.IsNotExist(err) {
@@ -270,7 +270,7 @@ func performRemoval(manifest *Manifest, claudeDir, projectDir string) error {
 			fmt.Printf("  %s\n", w)
 		}
 	} else {
-		fmt.Println(ui.Success("Successfully removed tpd integration."))
+		fmt.Println(ui.Success("Successfully removed thts integration."))
 	}
 
 	return nil
@@ -287,7 +287,7 @@ func removeFromClaudeMD(mod *ClaudeMDModification) error {
 	// Split into lines to handle removal cleanly
 	lines := strings.Split(string(content), "\n")
 	var newLines []string
-	pattern := "@.claude/tpd-instructions.md"
+	pattern := "@.claude/thts-instructions.md"
 
 	for _, line := range lines {
 		if strings.TrimSpace(line) != pattern {
@@ -315,7 +315,7 @@ func isDirEmpty(path string) (bool, error) {
 func confirmRemoval() bool {
 	var confirm bool
 	err := huh.NewConfirm().
-		Title("Remove tpd integration from this project?").
+		Title("Remove thts integration from this project?").
 		Description("Files listed above will be deleted.").
 		Affirmative("Yes, remove").
 		Negative("Cancel").
@@ -327,8 +327,8 @@ func confirmRemoval() bool {
 	return confirm
 }
 
-// Uninit removes tpd integration from the given directory.
-// This is exported so that `tpd uninit` can call it to clean up claude files.
+// Uninit removes thts integration from the given directory.
+// This is exported so that `thts uninit` can call it to clean up claude files.
 func Uninit(targetDir string, force bool) error {
 	claudeDir := filepath.Join(targetDir, ".claude")
 
@@ -347,6 +347,6 @@ func Uninit(targetDir string, force bool) error {
 		}
 	}
 
-	// Perform removal (skip confirmation since called from tpd uninit)
+	// Perform removal (skip confirmation since called from thts uninit)
 	return performRemoval(manifest, claudeDir, targetDir)
 }

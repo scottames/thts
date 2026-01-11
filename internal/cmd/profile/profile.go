@@ -7,8 +7,8 @@ import (
 // ProfileCmd represents the profile parent command.
 var ProfileCmd = &cobra.Command{
 	Use:   "profile",
-	Short: "Manage tpd profiles",
-	Long: `Manage tpd profiles for different thoughts repositories.
+	Short: "Manage thts profiles",
+	Long: `Manage thts profiles for different thoughts repositories.
 
 Profiles allow you to have separate thoughts repositories for different contexts
 (e.g., work vs personal projects).`,

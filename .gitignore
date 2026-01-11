@@ -1,7 +1,7 @@
 git-ignored*
 
 # Build artifacts
-/tpd
+/thts
 
 # Test artifacts
 coverage.out

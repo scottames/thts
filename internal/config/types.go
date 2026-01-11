@@ -25,7 +25,7 @@ const (
 	GitIgnoreDisabled GitIgnoreMode = "disabled" // Don't add anywhere
 )
 
-// Config represents the tpd configuration.
+// Config represents the thts configuration.
 type Config struct {
 	User                string                    `yaml:"user"`
 	AutoSyncInWorktrees bool                      `yaml:"autoSyncInWorktrees,omitempty"`

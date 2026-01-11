@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	tpdfiles "github.com/scottames/tpd"
+	thtsfiles "github.com/scottames/thts"
 )
 
 func TestIsValidModel(t *testing.T) {
@@ -58,27 +58,27 @@ func TestContains(t *testing.T) {
 
 func TestListEmbeddedFiles(t *testing.T) {
 	// Test listing command files
-	commands, err := listEmbeddedFiles(tpdfiles.Commands, "commands")
+	commands, err := listEmbeddedFiles(thtsfiles.Commands, "commands")
 	if err != nil {
 		t.Fatalf("listEmbeddedFiles(commands) error: %v", err)
 	}
 	if len(commands) == 0 {
 		t.Error("expected at least one command file, got none")
 	}
-	// Check that tpd-handoff.md is included
+	// Check that thts-handoff.md is included
 	found := false
 	for _, f := range commands {
-		if f == "tpd-handoff.md" {
+		if f == "thts-handoff.md" {
 			found = true
 			break
 		}
 	}
 	if !found {
-		t.Errorf("expected tpd-handoff.md in commands, got: %v", commands)
+		t.Errorf("expected thts-handoff.md in commands, got: %v", commands)
 	}
 
 	// Test listing agent files
-	agents, err := listEmbeddedFiles(tpdfiles.Agents, "agents")
+	agents, err := listEmbeddedFiles(thtsfiles.Agents, "agents")
 	if err != nil {
 		t.Fatalf("listEmbeddedFiles(agents) error: %v", err)
 	}
@@ -189,7 +189,7 @@ func TestCopyEmbeddedCategory(t *testing.T) {
 
 	// Test copying all commands
 	targetDir := filepath.Join(tmpDir, "commands")
-	copied, skipped, copiedFiles, err := copyEmbeddedCategory(tpdfiles.Commands, "commands", targetDir, nil)
+	copied, skipped, copiedFiles, err := copyEmbeddedCategory(thtsfiles.Commands, "commands", targetDir, nil)
 	if err != nil {
 		t.Fatalf("copyEmbeddedCategory() error: %v", err)
 	}
@@ -204,16 +204,16 @@ func TestCopyEmbeddedCategory(t *testing.T) {
 	}
 
 	// Verify the file exists
-	handoffPath := filepath.Join(targetDir, "tpd-handoff.md")
+	handoffPath := filepath.Join(targetDir, "thts-handoff.md")
 	if _, err := os.Stat(handoffPath); os.IsNotExist(err) {
-		t.Error("expected tpd-handoff.md to be copied")
+		t.Error("expected thts-handoff.md to be copied")
 	}
 
 	// Test copying selected files only
 	targetDir2 := filepath.Join(tmpDir, "commands2")
 	copied2, skipped2, copiedFiles2, err := copyEmbeddedCategory(
-		tpdfiles.Commands, "commands", targetDir2,
-		[]string{"tpd-handoff.md"},
+		thtsfiles.Commands, "commands", targetDir2,
+		[]string{"thts-handoff.md"},
 	)
 	if err != nil {
 		t.Fatalf("copyEmbeddedCategory() with selection error: %v", err)
@@ -221,11 +221,11 @@ func TestCopyEmbeddedCategory(t *testing.T) {
 	if copied2 != 1 {
 		t.Errorf("expected 1 file copied, got %d", copied2)
 	}
-	if len(copiedFiles2) != 1 || copiedFiles2[0] != "tpd-handoff.md" {
-		t.Errorf("expected copiedFiles2 to be ['tpd-handoff.md'], got %v", copiedFiles2)
+	if len(copiedFiles2) != 1 || copiedFiles2[0] != "thts-handoff.md" {
+		t.Errorf("expected copiedFiles2 to be ['thts-handoff.md'], got %v", copiedFiles2)
 	}
 	// All others should be skipped
-	allFiles, _ := listEmbeddedFiles(tpdfiles.Commands, "commands")
+	allFiles, _ := listEmbeddedFiles(thtsfiles.Commands, "commands")
 	expectedSkipped := len(allFiles) - 1
 	if skipped2 != expectedSkipped {
 		t.Errorf("expected %d skipped, got %d", expectedSkipped, skipped2)
@@ -234,7 +234,7 @@ func TestCopyEmbeddedCategory(t *testing.T) {
 	// Test with empty selection (skip all)
 	targetDir3 := filepath.Join(tmpDir, "commands3")
 	copied3, skipped3, copiedFiles3, err := copyEmbeddedCategory(
-		tpdfiles.Commands, "commands", targetDir3,
+		thtsfiles.Commands, "commands", targetDir3,
 		[]string{},
 	)
 	if err != nil {

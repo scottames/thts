@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/scottames/tpd/internal/config"
+	"github.com/scottames/thts/internal/config"
 )
 
 func TestAddToGitignore(t *testing.T) {

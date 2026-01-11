@@ -1,8 +1,8 @@
-# tpd User Guide
+# thts User Guide
 
 <!-- mtoc-start -->
 
-- [What tpd Does](#what-tpd-does)
+- [What thts Does](#what-thts-does)
 - [Key Concepts](#key-concepts)
   - [Two Places, One Set of Files](#two-places-one-set-of-files)
   - [Where Files Actually Live](#where-files-actually-live)
@@ -49,13 +49,12 @@
   - [Team Compatibility](#team-compatibility)
   - [Config Compatibility](#config-compatibility)
   - [Command Mapping](#command-mapping)
-  - [Differences](#differences)
 
 <!-- mtoc-end -->
 
-## What tpd Does
+## What thts Does
 
-tpd manages developer notes (architecture decisions, TODOs, investigation logs)
+thts manages developer notes (architecture decisions, TODOs, investigation logs)
 separately from your code repositories while making them accessible in every
 project.
 
@@ -70,13 +69,13 @@ project.
 
 ### Two Places, One Set of Files
 
-tpd uses two locations that can be confusing at first:
+thts uses two locations that can be confusing at first:
 
 |                  | Thoughts Repo             | Thoughts Directory            |
 | ---------------- | ------------------------- | ----------------------------- |
 | **Example**      | `~/thoughts/`             | `~/src/myproject/thoughts/`   |
 | **What it is**   | A real git repo           | Symlinks to the thoughts repo |
-| **Created by**   | `tpd setup`               | `tpd init`                    |
+| **Created by**   | `thts setup`              | `thts init`                   |
 | **Git behavior** | Normal commits, push/pull | Git-ignored, never committed  |
 | **Contains**     | Your actual files         | Only symlinks + hard links    |
 
@@ -116,7 +115,7 @@ editing `~/thoughts/repos/myproject/{user}/notes.md` through the symlink.
 This means:
 
 - Changes appear immediately in both locations (same file)
-- `tpd sync` commits changes to the thoughts repo
+- `thts sync` commits changes to the thoughts repo
 - Your code repo never sees the files (they're git-ignored)
 
 ### The Searchable Directory
@@ -137,7 +136,7 @@ thoughts/searchable/
 - Hard links are the same file (editing one edits both)
 - Always reference files by their canonical path (e.g.,
   `thoughts/{user}/notes.md`)
-- The searchable directory rebuilds on `tpd sync`
+- The searchable directory rebuilds on `thts sync`
 
 ## Getting Started
 
@@ -146,7 +145,7 @@ thoughts/searchable/
 Run once per machine to configure your thoughts repo:
 
 ```bash
-tpd setup
+thts setup
 ```
 
 This prompts for:
@@ -162,7 +161,7 @@ In any git repository:
 
 ```bash
 cd ~/src/myproject
-tpd init
+thts init
 ```
 
 This:
@@ -175,9 +174,9 @@ This:
 **Options:**
 
 ```bash
-tpd init --name custom-name    # Override project name (default: from git remote)
-tpd init --profile work        # Use a specific profile
-tpd init --force               # Reinitialize existing setup
+thts init --name custom-name    # Override project name (default: from git remote)
+thts init --profile work        # Use a specific profile
+thts init --force               # Reinitialize existing setup
 ```
 
 ### Your First Notes
@@ -187,10 +186,10 @@ tpd init --force               # Reinitialize existing setup
 echo "# Project Architecture" > thoughts/{user}/architecture.md
 
 # Check status
-tpd status
+thts status
 
 # Sync to thoughts repo (also happens automatically on commits)
-tpd sync -m "Added architecture notes"
+thts sync -m "Added architecture notes"
 ```
 
 ## Directory Organization
@@ -207,24 +206,24 @@ tpd sync -m "Added architecture notes"
 ### Suggested Structure
 
 ```plaintext
-thoughts/{user}/                    # Personal project notes
-├── todo.md                         # Your task list
+thoughts/{user}/                   # Personal project notes
+├── todo.md                        # Your task list
 ├── investigations/
 │   └── 2024-01-15-auth-bug.md     # Debugging sessions
 └── decisions/
     └── api-design.md              # Your design notes
 
-thoughts/shared/                    # Team project notes
-├── architecture.md                 # System design
-├── onboarding.md                   # Getting started guide
+thoughts/shared/                   # Team project notes
+├── architecture.md                # System design
+├── onboarding.md                  # Getting started guide
 └── decisions/
     └── 2024-01-10-database.md     # Team decisions (ADRs)
 
-thoughts/global/{user}/             # Your cross-project notes
-├── snippets.md                     # Reusable code patterns
-└── tools.md                        # Tool configurations
+thoughts/global/{user}/            # Your cross-project notes
+├── snippets.md                    # Reusable code patterns
+└── tools.md                       # Tool configurations
 
-thoughts/global/shared/             # Team cross-project notes
+thoughts/global/shared/            # Team cross-project notes
 ├── coding-standards.md
 └── review-checklist.md
 ```
@@ -233,7 +232,7 @@ thoughts/global/shared/             # Team cross-project notes
 
 ### Automatic Sync
 
-Git hooks installed by `tpd init` handle syncing:
+Git hooks installed by `thts init` handle syncing:
 
 - **Pre-commit hook** - Prevents accidentally committing `thoughts/` to your
   code repo
@@ -242,8 +241,8 @@ Git hooks installed by `tpd init` handle syncing:
 ### Manual Sync
 
 ```bash
-tpd sync                    # Sync with auto-generated message
-tpd sync -m "Updated docs"  # Sync with custom message
+thts sync                    # Sync with auto-generated message
+thts sync -m "Updated docs"  # Sync with custom message
 ```
 
 Sync does:
@@ -259,12 +258,12 @@ Sync does:
 If sync fails due to conflicts:
 
 ```bash
-# tpd will print instructions like:
+# thts will print instructions like:
 cd ~/thoughts
 git status          # See conflicting files
 # Fix conflicts manually
 git rebase --continue
-tpd sync            # Retry
+thts sync            # Retry
 ```
 
 ## Team Collaboration
@@ -283,7 +282,7 @@ Teammates clone it and point their config to it.
 
 ### Discovering Teammates' Notes
 
-When a teammate syncs their notes and you run `tpd sync`, their directories
+When a teammate syncs their notes and you run `thts sync`, their directories
 automatically appear:
 
 ```plaintext
@@ -306,22 +305,22 @@ vs personal, different clients).
 ### Creating a Profile
 
 ```bash
-tpd profile create work --repo ~/work-thoughts
+thts profile create work --repo ~/work-thoughts
 ```
 
 ### Using a Profile
 
 ```bash
 cd ~/src/work-project
-tpd init --profile work    # Uses work profile's thoughts repo
+thts init --profile work    # Uses work profile's thoughts repo
 ```
 
 ### Managing Profiles
 
 ```bash
-tpd profile list              # List all profiles
-tpd profile show work         # Show profile details
-tpd profile delete work       # Delete a profile
+thts profile list              # List all profiles
+thts profile show work         # Show profile details
+thts profile delete work       # Delete a profile
 ```
 
 ### How Profiles Work
@@ -342,12 +341,12 @@ it maps that project to use the profile's repo.
 
 ## Git Worktrees
 
-tpd supports git worktrees. Each worktree needs its own `tpd init`:
+thts supports git worktrees. Each worktree needs its own `thts init`:
 
 ```bash
 git worktree add ../feature -b feature
 cd ../feature
-tpd init    # Sets up thoughts directory for this worktree
+thts init    # Sets up thoughts directory for this worktree
 ```
 
 **How it works:**
@@ -361,7 +360,7 @@ tpd init    # Sets up thoughts directory for this worktree
 If you don't want post-commit sync in worktrees:
 
 ```bash
-tpd config --edit
+thts config --edit
 # Set "autoSyncInWorktrees": false
 ```
 
@@ -370,14 +369,14 @@ tpd config --edit
 ### Viewing Config
 
 ```bash
-tpd config              # Pretty print
-tpd config --json       # JSON output
+thts config              # Pretty print
+thts config --json       # JSON output
 ```
 
 ### Editing Config
 
 ```bash
-tpd config --edit       # Opens in $EDITOR
+thts config --edit       # Opens in $EDITOR
 ```
 
 ### Config Options
@@ -420,49 +419,50 @@ When working with AI assistants:
 
 - Point them to search in `thoughts/searchable/` for finding content
 - Reference files by canonical path (e.g., `thoughts/{user}/notes.md`)
-- Run `tpd sync` to update searchable directory before AI sessions
+- Run `thts sync` to update searchable directory before AI sessions
 
 ### Claude Code Integration
 
-tpd provides deep integration with Claude Code to give AI assistants awareness
+thts provides deep integration with Claude Code to give AI assistants awareness
 of your thoughts directory and enable session continuity.
 
 #### Installing Integration
 
 ```bash
-tpd claude init              # Install with default options
-tpd claude init -i           # Interactive mode
-tpd claude init --with-settings  # Also create settings.json
+thts claude init              # Install with default options
+thts claude init -i           # Interactive mode
+thts claude init --with-settings  # Also create settings.json
 ```
 
 #### Integration Levels
 
-When you run `tpd claude init`, you'll be asked how to activate the integration:
+When you run `thts claude init`, you'll be asked how to activate the
+integration:
 
-| Level                     | Description                                              | Best For                    |
-| ------------------------- | -------------------------------------------------------- | --------------------------- |
-| **Always-on (CLAUDE.md)** | Adds `@.claude/tpd-instructions.md` to project CLAUDE.md | Teams sharing Claude config |
-| **Always-on (local)**     | Creates `.claude/CLAUDE.local.md` (gitignored)           | Personal always-on          |
-| **On-demand only**        | Just installs skill/commands                             | Manual activation           |
+| Level                     | Description                                               | Best For                    |
+| ------------------------- | --------------------------------------------------------- | --------------------------- |
+| **Always-on (CLAUDE.md)** | Adds `@.claude/thts-instructions.md` to project CLAUDE.md | Teams sharing Claude config |
+| **Always-on (local)**     | Creates `.claude/CLAUDE.local.md` (gitignored)            | Personal always-on          |
+| **On-demand only**        | Just installs skill/commands                              | Manual activation           |
 
 #### What Gets Installed
 
 **Files copied to `.claude/`:**
 
-- `tpd-instructions.md` - Teaches Claude about thoughts/ structure and usage
-- `skills/tpd-integrate.md` - On-demand activation skill
-- `commands/tpd-handoff.md` - Create session handoff documents
-- `commands/tpd-resume.md` - Resume from handoff documents
+- `thts-instructions.md` - Teaches Claude about thoughts/ structure and usage
+- `skills/thts-integrate.md` - On-demand activation skill
+- `commands/thts-handoff.md` - Create session handoff documents
+- `commands/thts-resume.md` - Resume from handoff documents
 - `agents/thoughts-locator.md` - Find documents in thoughts/
 - `agents/thoughts-analyzer.md` - Extract insights from documents
 
 #### Using the Commands
 
-| Command              | Purpose                                         |
-| -------------------- | ----------------------------------------------- |
-| `/tpd-integrate`     | Activate thoughts/ awareness for current task   |
-| `/tpd-handoff`       | Create a handoff document when ending a session |
-| `/tpd-resume <path>` | Resume work from a handoff document             |
+| Command               | Purpose                                         |
+| --------------------- | ----------------------------------------------- |
+| `/thts-integrate`     | Activate thoughts/ awareness for current task   |
+| `/thts-handoff`       | Create a handoff document when ending a session |
+| `/thts-resume <path>` | Resume work from a handoff document             |
 
 #### Session Handoffs
 
@@ -470,10 +470,10 @@ Handoffs preserve context across Claude Code sessions:
 
 ```bash
 # At end of session
-/tpd-handoff
+/thts-handoff
 
 # Next session (or different person)
-/tpd-resume thoughts/shared/handoffs/2024-01-15_10-30-00_feature-work.md
+/thts-resume thoughts/shared/handoffs/2024-01-15_10-30-00_feature-work.md
 ```
 
 The handoff document captures:
@@ -488,25 +488,25 @@ The handoff document captures:
 To remove Claude Code integration from a project:
 
 ```bash
-tpd claude uninit              # Interactive confirmation
-tpd claude uninit --force      # Skip confirmation
-tpd claude uninit --dry-run    # Preview what would be removed
+thts claude uninit              # Interactive confirmation
+thts claude uninit --force      # Skip confirmation
+thts claude uninit --dry-run    # Preview what would be removed
 ```
 
 This removes:
 
-- All tpd files from `.claude/` (instructions, skills, commands, agents)
-- The `@.claude/tpd-instructions.md` include from CLAUDE.md (if present)
+- All thts files from `.claude/` (instructions, skills, commands, agents)
+- The `@.claude/thts-instructions.md` include from CLAUDE.md (if present)
 - Gitignore patterns added by init
 
 The `.claude/` directory itself is preserved if it contains other files.
 
-**Note:** Running `tpd uninit` (to remove thoughts/ integration) also removes
+**Note:** Running `thts uninit` (to remove thoughts/ integration) also removes
 Claude integration automatically, ensuring a clean teardown.
 
 ## Compatibility with HumanLayer
 
-`tpd` is a Go reimplementation of the `thoughts` subcommand from
+`thts` is a Go reimplementation of the `thoughts` subcommand from
 [HumanLayer's CLI](https://github.com/humanlayer/humanlayer) (`humanlayer`). The
 two tools are fully interoperable.
 
@@ -514,7 +514,7 @@ two tools are fully interoperable.
 
 | Tool                  | Best For                                                                    |
 | --------------------- | --------------------------------------------------------------------------- |
-| `tpd`                 | Standalone binary, no runtime dependencies, Go ecosystem                    |
+| `thts`                | Standalone binary, no runtime dependencies, Go ecosystem                    |
 | `humanlayer thoughts` | Already using HumanLayer, Node.js ecosystem, additional humanlayer features |
 
 ### What's Shared
@@ -534,54 +534,44 @@ Both tools use identical:
 You can switch tools at any time without migration:
 
 ```bash
-# Using tpd
-tpd init
-tpd sync -m "Some notes"
+# Using thts
+thts init
+thts sync -m "Some notes"
 
 # Later, using humanlayer (same project, same notes)
 humanlayer thoughts sync -m "More notes"
 
-# Back to tpd
-tpd status
+# Back to thts
+thts status
 ```
 
 ### Team Compatibility
 
 Team members can use different tools:
 
-- Alice uses `tpd` (prefers Go binaries)
+- Alice uses `thts` (prefers Go binaries)
 - Bob uses `humanlayer thoughts` (already has HumanLayer installed)
 - Both share the same thoughts repo
 - Notes sync correctly regardless of which tool created them
 
 ### Config Compatibility
 
-`tpd` reads from HumanLayer's config location for compatibility:
+`thts` reads from HumanLayer's config location for compatibility:
 
 ```plaintext
 ~/.config/humanlayer/humanlayer.json  # Read by both tools
-~/.config/tpd/config.json             # tpd also writes here
+~/.config/thts/config.json             # thts also writes here
 ```
 
-When you run `tpd setup`, it checks for existing HumanLayer config and uses
+When you run `thts setup`, it checks for existing HumanLayer config and uses
 those settings if found.
 
 ### Command Mapping
 
-| tpd          | humanlayer thoughts          | Description              |
-| ------------ | ---------------------------- | ------------------------ |
-| `tpd setup`  | `humanlayer thoughts setup`  | First-time configuration |
-| `tpd init`   | `humanlayer thoughts init`   | Initialize in a project  |
-| `tpd sync`   | `humanlayer thoughts sync`   | Sync to thoughts repo    |
-| `tpd status` | `humanlayer thoughts status` | Show status              |
-| `tpd uninit` | `humanlayer thoughts uninit` | Remove from project      |
-
-### Differences
-
-`tpd` adds some features not in `humanlayer thoughts`:
-
-- Profile management (`tpd profile create/list/show/delete`)
-- Claude Code integration (`tpd claude init/uninit`)
-- Cross-platform binaries via goreleaser
-
-The core thoughts workflow is identical.
+| thts          | humanlayer thoughts          | Description              |
+| ------------- | ---------------------------- | ------------------------ |
+| `thts setup`  | `humanlayer thoughts setup`  | First-time configuration |
+| `thts init`   | `humanlayer thoughts init`   | Initialize in a project  |
+| `thts sync`   | `humanlayer thoughts sync`   | Sync to thoughts repo    |
+| `thts status` | `humanlayer thoughts status` | Show status              |
+| `thts uninit` | `humanlayer thoughts uninit` | Remove from project      |

@@ -8,9 +8,9 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/scottames/tpd/internal/config"
-	"github.com/scottames/tpd/internal/fs"
-	"github.com/scottames/tpd/internal/ui"
+	"github.com/scottames/thts/internal/config"
+	"github.com/scottames/thts/internal/fs"
+	"github.com/scottames/thts/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -36,7 +36,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	cfg, err := config.Load()
 	if err != nil {
 		fmt.Println(ui.Error("Thoughts not configured."))
-		fmt.Printf("Run %s first to set up.\n", ui.Accent("tpd setup"))
+		fmt.Printf("Run %s first to set up.\n", ui.Accent("thts setup"))
 		return nil
 	}
 
@@ -60,7 +60,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		fmt.Println(tbl)
 	} else {
 		fmt.Println(ui.Error("No profiles configured"))
-		fmt.Printf("  Run %s to create a profile\n", ui.Accent("tpd setup"))
+		fmt.Printf("  Run %s to create a profile\n", ui.Accent("thts setup"))
 	}
 	fmt.Println()
 
@@ -126,7 +126,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 			fmt.Println(change)
 		}
 		fmt.Println()
-		fmt.Printf("%s Run %s to commit these changes\n", ui.Muted("Tip:"), ui.Accent("tpd sync"))
+		fmt.Printf("%s Run %s to commit these changes\n", ui.Muted("Tip:"), ui.Accent("thts sync"))
 	} else {
 		fmt.Println(ui.Success("No uncommitted changes"))
 	}

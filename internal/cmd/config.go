@@ -6,8 +6,8 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/scottames/tpd/internal/config"
-	"github.com/scottames/tpd/internal/ui"
+	"github.com/scottames/thts/internal/config"
+	"github.com/scottames/thts/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -18,8 +18,8 @@ var (
 
 var configCmd = &cobra.Command{
 	Use:   "config",
-	Short: "View or edit tpd configuration",
-	Long: `View or edit the tpd configuration.
+	Short: "View or edit thts configuration",
+	Long: `View or edit the thts configuration.
 
 By default, displays the current configuration in a human-readable format.
 
@@ -43,7 +43,7 @@ func runConfig(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		if err == config.ErrConfigNotFound {
 			fmt.Println(ui.Warning("No configuration found."))
-			fmt.Printf("Run %s to create one.\n", ui.Accent("tpd setup"))
+			fmt.Printf("Run %s to create one.\n", ui.Accent("thts setup"))
 			return nil
 		}
 		return fmt.Errorf("failed to load config: %w", err)
@@ -57,12 +57,12 @@ func runConfig(cmd *cobra.Command, args []string) error {
 }
 
 func editConfig() error {
-	configPath := config.TPDConfigPath()
+	configPath := config.ThtsConfigPath()
 
 	// Check if config exists
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		fmt.Println(ui.Warning("No configuration file found."))
-		fmt.Printf("Run %s to create one first.\n", ui.Accent("tpd setup"))
+		fmt.Printf("Run %s to create one first.\n", ui.Accent("thts setup"))
 		return nil
 	}
 
@@ -98,7 +98,7 @@ func outputJSON(cfg *config.Config) error {
 }
 
 func displayConfig(cfg *config.Config) error {
-	fmt.Println(ui.Header("tpd Configuration"))
+	fmt.Println(ui.Header("thts Configuration"))
 	fmt.Println()
 
 	// General settings table
@@ -116,7 +116,7 @@ func displayConfig(cfg *config.Config) error {
 	fmt.Println(ui.SubHeader("Profiles"))
 	if len(cfg.Profiles) == 0 {
 		fmt.Println(ui.Muted("  No profiles configured."))
-		fmt.Printf("  Run %s to create one.\n", ui.Accent("tpd setup"))
+		fmt.Printf("  Run %s to create one.\n", ui.Accent("thts setup"))
 	} else {
 		for name, profile := range cfg.Profiles {
 			nameDisplay := name
@@ -150,7 +150,7 @@ func displayConfig(cfg *config.Config) error {
 	}
 
 	fmt.Println()
-	fmt.Printf("Config file: %s\n", ui.Muted(config.TPDConfigPath()))
+	fmt.Printf("Config file: %s\n", ui.Muted(config.ThtsConfigPath()))
 
 	return nil
 }

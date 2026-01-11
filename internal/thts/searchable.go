@@ -1,4 +1,4 @@
-package tpd
+package thts
 
 import (
 	"errors"
@@ -9,7 +9,7 @@ import (
 	"strings"
 	"syscall"
 
-	tpdfs "github.com/scottames/tpd/internal/fs"
+	thtsfs "github.com/scottames/thts/internal/fs"
 )
 
 // SearchableResult holds statistics from creating the searchable directory.
@@ -28,8 +28,8 @@ func CreateSearchableDir(thoughtsDir string) (*SearchableResult, error) {
 	result := &SearchableResult{}
 
 	// Remove existing searchable directory if it exists
-	if tpdfs.Exists(searchDir) {
-		if err := tpdfs.RemoveAll(searchDir); err != nil {
+	if thtsfs.Exists(searchDir) {
+		if err := thtsfs.RemoveAll(searchDir); err != nil {
 			return nil, fmt.Errorf("failed to remove existing searchable directory: %w", err)
 		}
 	}

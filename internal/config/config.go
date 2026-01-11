@@ -29,13 +29,13 @@ type humanLayerConfigFile struct {
 	Thoughts *humanLayerThoughtsConfig `json:"thoughts,omitempty"`
 }
 
-// Load loads the tpd configuration.
-// It first tries to load from ~/.config/tpd/config.yaml,
+// Load loads the thts configuration.
+// It first tries to load from ~/.config/thts/config.yaml,
 // then falls back to ~/.config/humanlayer/humanlayer.json (translated to profiles).
 func Load() (*Config, error) {
-	// Try tpd config first
-	tpdPath := TPDConfigPath()
-	if cfg, err := loadFromPath(tpdPath); err == nil {
+	// Try thts config first
+	thtsPath := ThtsConfigPath()
+	if cfg, err := loadFromPath(thtsPath); err == nil {
 		return cfg, nil
 	}
 
@@ -48,7 +48,7 @@ func Load() (*Config, error) {
 	return nil, ErrConfigNotFound
 }
 
-// loadFromPath loads config directly from a path (tpd YAML format).
+// loadFromPath loads config directly from a path (thts YAML format).
 func loadFromPath(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -122,9 +122,9 @@ func loadFromHumanLayerPath(path string) (*Config, error) {
 	return cfg, nil
 }
 
-// Save saves the configuration to ~/.config/tpd/config.yaml.
+// Save saves the configuration to ~/.config/thts/config.yaml.
 func Save(cfg *Config) error {
-	path := TPDConfigPath()
+	path := ThtsConfigPath()
 
 	// Ensure directory exists
 	dir := filepath.Dir(path)
@@ -144,9 +144,9 @@ func Save(cfg *Config) error {
 	return nil
 }
 
-// Exists checks if a config file exists (either tpd or HumanLayer).
+// Exists checks if a config file exists (either thts or HumanLayer).
 func Exists() bool {
-	if _, err := os.Stat(TPDConfigPath()); err == nil {
+	if _, err := os.Stat(ThtsConfigPath()); err == nil {
 		return true
 	}
 	if _, err := os.Stat(HumanLayerConfigPath()); err == nil {

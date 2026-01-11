@@ -8,15 +8,15 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/huh"
-	"github.com/scottames/tpd/internal/config"
-	"github.com/scottames/tpd/internal/ui"
+	"github.com/scottames/thts/internal/config"
+	"github.com/scottames/thts/internal/ui"
 	"github.com/spf13/cobra"
 )
 
 var setupCmd = &cobra.Command{
 	Use:   "setup",
-	Short: "First-time setup for tpd",
-	Long: `Configure tpd for first-time use.
+	Short: "First-time setup for thts",
+	Long: `Configure thts for first-time use.
 
 This command will prompt you for:
 - A name for your default profile
@@ -58,7 +58,7 @@ func runSetup(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	fmt.Println(ui.Header("tpd Setup"))
+	fmt.Println(ui.Header("thts Setup"))
 	fmt.Println()
 	fmt.Println("Let's configure your thoughts system.")
 	fmt.Println()
@@ -169,13 +169,13 @@ func runSetup(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
 
-	fmt.Println(ui.Success("Configuration saved to " + ui.Muted(config.TPDConfigPath())))
+	fmt.Println(ui.Success("Configuration saved to " + ui.Muted(config.ThtsConfigPath())))
 	fmt.Println()
 	fmt.Println(ui.Success("Setup complete!"))
 	fmt.Println()
 	fmt.Println("Next steps:")
 	fmt.Printf("  1. Navigate to a git repository\n")
-	fmt.Printf("  2. Run %s to initialize thoughts for that project\n", ui.Accent("tpd init"))
+	fmt.Printf("  2. Run %s to initialize thoughts for that project\n", ui.Accent("thts init"))
 	fmt.Println()
 
 	return nil

@@ -1,7 +1,7 @@
-// Package tpdfiles provides embedded Claude Code integration files for tpd.
+// Package thtsfiles provides embedded Claude Code integration files for thts.
 // This package exists at the repo root to enable go:embed access to
 // instructions/, skills/, commands/, and agents/ directories.
-package tpdfiles
+package thtsfiles
 
 import "embed"
 

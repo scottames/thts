@@ -35,8 +35,8 @@ func TestSetupHooks(t *testing.T) {
 
 		// Verify content
 		content, _ := os.ReadFile(preCommit)
-		if !strings.Contains(string(content), "tpd thoughts protection") {
-			t.Error("pre-commit hook should contain tpd thoughts protection marker")
+		if !strings.Contains(string(content), "thts thoughts protection") {
+			t.Error("pre-commit hook should contain thts thoughts protection marker")
 		}
 		if !strings.Contains(string(content), "Version: "+HookVersion) {
 			t.Error("pre-commit hook should contain version marker")
@@ -54,12 +54,12 @@ func TestSetupHooks(t *testing.T) {
 
 		// Verify content
 		content, _ = os.ReadFile(postCommit)
-		if !strings.Contains(string(content), "tpd thoughts auto-sync") {
-			t.Error("post-commit hook should contain tpd thoughts auto-sync marker")
+		if !strings.Contains(string(content), "thts thoughts auto-sync") {
+			t.Error("post-commit hook should contain thts thoughts auto-sync marker")
 		}
 	})
 
-	t.Run("backs up existing non-tpd hooks", func(t *testing.T) {
+	t.Run("backs up existing non-thts hooks", func(t *testing.T) {
 		repoDir, cleanup := setupTestGitRepo(t)
 		defer cleanup()
 
@@ -99,18 +99,18 @@ func TestSetupHooks(t *testing.T) {
 		}
 	})
 
-	t.Run("updates outdated tpd hooks", func(t *testing.T) {
+	t.Run("updates outdated thts hooks", func(t *testing.T) {
 		repoDir, cleanup := setupTestGitRepo(t)
 		defer cleanup()
 
-		// Create an old version tpd hook
+		// Create an old version thts hook
 		hooksDir := filepath.Join(repoDir, ".git", "hooks")
 		if err := os.MkdirAll(hooksDir, 0755); err != nil {
 			t.Fatalf("failed to create hooks dir: %v", err)
 		}
 
 		oldHook := filepath.Join(hooksDir, "pre-commit")
-		oldContent := "#!/bin/bash\n# tpd thoughts protection\n# Version: 0\necho 'old'\n"
+		oldContent := "#!/bin/bash\n# thts thoughts protection\n# Version: 0\necho 'old'\n"
 		if err := os.WriteFile(oldHook, []byte(oldContent), 0755); err != nil {
 			t.Fatalf("failed to create old hook: %v", err)
 		}
@@ -214,7 +214,7 @@ func TestSetupHooks(t *testing.T) {
 }
 
 func TestRemoveHooks(t *testing.T) {
-	t.Run("removes tpd hooks", func(t *testing.T) {
+	t.Run("removes thts hooks", func(t *testing.T) {
 		repoDir, cleanup := setupTestGitRepo(t)
 		defer cleanup()
 
@@ -244,7 +244,7 @@ func TestRemoveHooks(t *testing.T) {
 		repoDir, cleanup := setupTestGitRepo(t)
 		defer cleanup()
 
-		// Create existing non-tpd hook
+		// Create existing non-thts hook
 		hooksDir := filepath.Join(repoDir, ".git", "hooks")
 		if err := os.MkdirAll(hooksDir, 0755); err != nil {
 			t.Fatalf("failed to create hooks dir: %v", err)
@@ -256,14 +256,14 @@ func TestRemoveHooks(t *testing.T) {
 			t.Fatalf("failed to create existing hook: %v", err)
 		}
 
-		// Install tpd hooks (will backup existing)
+		// Install thts hooks (will backup existing)
 		opts := HookOptions{AutoSyncInWorktrees: true}
 		_, err := SetupHooks(repoDir, opts)
 		if err != nil {
 			t.Fatalf("SetupHooks() error: %v", err)
 		}
 
-		// Remove tpd hooks
+		// Remove thts hooks
 		if err := RemoveHooks(repoDir); err != nil {
 			t.Fatalf("RemoveHooks() error: %v", err)
 		}
@@ -285,11 +285,11 @@ func TestRemoveHooks(t *testing.T) {
 		}
 	})
 
-	t.Run("no-op for non-tpd hooks", func(t *testing.T) {
+	t.Run("no-op for non-thts hooks", func(t *testing.T) {
 		repoDir, cleanup := setupTestGitRepo(t)
 		defer cleanup()
 
-		// Create a non-tpd hook
+		// Create a non-thts hook
 		hooksDir := filepath.Join(repoDir, ".git", "hooks")
 		if err := os.MkdirAll(hooksDir, 0755); err != nil {
 			t.Fatalf("failed to create hooks dir: %v", err)
@@ -333,7 +333,7 @@ func TestRemoveHooks(t *testing.T) {
 }
 
 func TestHookNeedsUpdate(t *testing.T) {
-	dir, err := os.MkdirTemp("", "tpd-hooks-test-*")
+	dir, err := os.MkdirTemp("", "thts-hooks-test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp directory: %v", err)
 	}
@@ -341,56 +341,56 @@ func TestHookNeedsUpdate(t *testing.T) {
 
 	t.Run("missing hook needs update", func(t *testing.T) {
 		hookPath := filepath.Join(dir, "missing")
-		if !hookNeedsUpdate(hookPath, "tpd thoughts") {
+		if !hookNeedsUpdate(hookPath, "thts thoughts") {
 			t.Error("missing hook should need update")
 		}
 	})
 
-	t.Run("non-tpd hook needs update (to install over)", func(t *testing.T) {
-		hookPath := filepath.Join(dir, "non-tpd")
+	t.Run("non-thts hook needs update (to install over)", func(t *testing.T) {
+		hookPath := filepath.Join(dir, "non-thts")
 		content := "#!/bin/bash\necho 'custom'\n"
 		if err := os.WriteFile(hookPath, []byte(content), 0755); err != nil {
 			t.Fatalf("failed to create hook: %v", err)
 		}
 
-		if !hookNeedsUpdate(hookPath, "tpd thoughts") {
-			t.Error("non-tpd hook should need update")
+		if !hookNeedsUpdate(hookPath, "thts thoughts") {
+			t.Error("non-thts hook should need update")
 		}
 	})
 
-	t.Run("outdated tpd hook needs update", func(t *testing.T) {
+	t.Run("outdated thts hook needs update", func(t *testing.T) {
 		hookPath := filepath.Join(dir, "outdated")
-		content := "#!/bin/bash\n# tpd thoughts protection\n# Version: 0\necho 'old'\n"
+		content := "#!/bin/bash\n# thts thoughts protection\n# Version: 0\necho 'old'\n"
 		if err := os.WriteFile(hookPath, []byte(content), 0755); err != nil {
 			t.Fatalf("failed to create hook: %v", err)
 		}
 
-		if !hookNeedsUpdate(hookPath, "tpd thoughts") {
-			t.Error("outdated tpd hook should need update")
+		if !hookNeedsUpdate(hookPath, "thts thoughts") {
+			t.Error("outdated thts hook should need update")
 		}
 	})
 
-	t.Run("current tpd hook does not need update", func(t *testing.T) {
+	t.Run("current thts hook does not need update", func(t *testing.T) {
 		hookPath := filepath.Join(dir, "current")
-		content := "#!/bin/bash\n# tpd thoughts protection\n# Version: " + HookVersion + "\necho 'current'\n"
+		content := "#!/bin/bash\n# thts thoughts protection\n# Version: " + HookVersion + "\necho 'current'\n"
 		if err := os.WriteFile(hookPath, []byte(content), 0755); err != nil {
 			t.Fatalf("failed to create hook: %v", err)
 		}
 
-		if hookNeedsUpdate(hookPath, "tpd thoughts") {
-			t.Error("current tpd hook should not need update")
+		if hookNeedsUpdate(hookPath, "thts thoughts") {
+			t.Error("current thts hook should not need update")
 		}
 	})
 
-	t.Run("tpd hook without version needs update", func(t *testing.T) {
+	t.Run("thts hook without version needs update", func(t *testing.T) {
 		hookPath := filepath.Join(dir, "no-version")
-		content := "#!/bin/bash\n# tpd thoughts protection\necho 'no version'\n"
+		content := "#!/bin/bash\n# thts thoughts protection\necho 'no version'\n"
 		if err := os.WriteFile(hookPath, []byte(content), 0755); err != nil {
 			t.Fatalf("failed to create hook: %v", err)
 		}
 
-		if !hookNeedsUpdate(hookPath, "tpd thoughts") {
-			t.Error("tpd hook without version should need update")
+		if !hookNeedsUpdate(hookPath, "thts thoughts") {
+			t.Error("thts hook without version should need update")
 		}
 	})
 }

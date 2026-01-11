@@ -1,4 +1,4 @@
-package tpd
+package thts
 
 import (
 	"os"
@@ -30,15 +30,15 @@ func TestGenerateClaudeMD(t *testing.T) {
 		}
 	})
 
-	t.Run("includes tpd commands", func(t *testing.T) {
+	t.Run("includes thts commands", func(t *testing.T) {
 		content := GenerateClaudeMD("my-project", "testuser")
 
-		if !strings.Contains(content, "`tpd sync`") {
-			t.Error("content should mention tpd sync command")
+		if !strings.Contains(content, "`thts sync`") {
+			t.Error("content should mention thts sync command")
 		}
 
-		if !strings.Contains(content, "`tpd status`") {
-			t.Error("content should mention tpd status command")
+		if !strings.Contains(content, "`thts status`") {
+			t.Error("content should mention thts status command")
 		}
 	})
 
@@ -61,7 +61,7 @@ func TestGenerateClaudeMD(t *testing.T) {
 
 func TestWriteClaudeMD(t *testing.T) {
 	t.Run("creates file when it does not exist", func(t *testing.T) {
-		dir, err := os.MkdirTemp("", "tpd-claude-test-*")
+		dir, err := os.MkdirTemp("", "thts-claude-test-*")
 		if err != nil {
 			t.Fatalf("failed to create temp directory: %v", err)
 		}
@@ -94,7 +94,7 @@ func TestWriteClaudeMD(t *testing.T) {
 	})
 
 	t.Run("does not overwrite existing file", func(t *testing.T) {
-		dir, err := os.MkdirTemp("", "tpd-claude-test-*")
+		dir, err := os.MkdirTemp("", "thts-claude-test-*")
 		if err != nil {
 			t.Fatalf("failed to create temp directory: %v", err)
 		}

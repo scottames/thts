@@ -10,7 +10,7 @@ import (
 func setupTestDir(t *testing.T) (string, func()) {
 	t.Helper()
 
-	dir, err := os.MkdirTemp("", "tpd-fs-test-*")
+	dir, err := os.MkdirTemp("", "thts-fs-test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp directory: %v", err)
 	}

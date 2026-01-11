@@ -1,8 +1,8 @@
-# tpd Integration Instructions
+# thts Integration Instructions
 
 ## thoughts/ Directory Integration
 
-This project uses `tpd` to manage a `thoughts/` directory for persistent notes,
+This project uses `thts` to manage a `thoughts/` directory for persistent notes,
 research, plans, and context across sessions.
 
 ### Directory Structure
@@ -70,20 +70,20 @@ Write to thoughts/ when:
 - Ending a session that someone will resume (use handoff)
 - Making decisions that should be documented
 
-**Always run `tpd sync` after writing to thoughts/.**
+**Always run `thts sync` after writing to thoughts/.**
 
 ---
 
 ## Where to Write
 
-| Content Type            | Location                     | When to Use                |
-| ----------------------- | ---------------------------- | -------------------------- |
-| Quick notes, scratchpad | `thoughts/{user}/notes/`     | Personal, informal notes   |
-| Research findings       | `thoughts/shared/research/`  | Findings others should see |
-| Implementation plans    | `thoughts/shared/plans/`     | Plans guiding future work  |
-| Session handoffs        | `thoughts/shared/handoffs/`  | Use `/tpd-handoff` command |
-| Decisions/ADRs          | `thoughts/shared/decisions/` | Architectural decisions    |
-| Ticket context          | `thoughts/{user}/tickets/`   | Personal ticket notes      |
+| Content Type            | Location                     | When to Use                 |
+| ----------------------- | ---------------------------- | --------------------------- |
+| Quick notes, scratchpad | `thoughts/{user}/notes/`     | Personal, informal notes    |
+| Research findings       | `thoughts/shared/research/`  | Findings others should see  |
+| Implementation plans    | `thoughts/shared/plans/`     | Plans guiding future work   |
+| Session handoffs        | `thoughts/shared/handoffs/`  | Use `/thts-handoff` command |
+| Decisions/ADRs          | `thoughts/shared/decisions/` | Architectural decisions     |
+| Ticket context          | `thoughts/{user}/tickets/`   | Personal ticket notes       |
 
 ---
 
@@ -227,7 +227,7 @@ status: proposed|accepted|deprecated
 After writing to thoughts/, always sync:
 
 ```bash
-tpd sync
+thts sync
 ```
 
 This commits and pushes your changes to the central thoughts repository.
@@ -264,8 +264,8 @@ Pattern: Locate first, then analyze the most relevant results.
 
 These commands are available for the user to invoke:
 
-- `/tpd-handoff` - Create a handoff document when ending a session
-- `/tpd-resume` - Resume from a handoff document
-- `/tpd-integrate` - Explicitly activate thoughts/ integration for current task
+- `/thts-handoff` - Create a handoff document when ending a session
+- `/thts-resume` - Resume from a handoff document
+- `/thts-integrate` - Explicitly activate thoughts/ integration for current task
 
-Suggest `/tpd-handoff` when the user is ending a session with work to continue.
+Suggest `/thts-handoff` when the user is ending a session with work to continue.

@@ -1,35 +1,35 @@
-# tpd - Thoughts, Plans, and Dreams
+# thts - Thoughts, Plans, and Dreams
 
 Go CLI for managing developer thoughts/notes across repositories. Replicates
 HumanLayer's `thoughts` subcommand with full feature compatibility.
 
 ## Commands
 
-| Command             | Description                                      |
-| ------------------- | ------------------------------------------------ |
-| `tpd setup`         | Initial setup - configure thoughts repo location |
-| `tpd init`          | Initialize thoughts in current git repo          |
-| `tpd sync`          | Sync thoughts to central repo                    |
-| `tpd status`        | Show thoughts status                             |
-| `tpd uninit`        | Remove thoughts from current repo                |
-| `tpd config`        | View/edit configuration                          |
-| `tpd profile`       | Manage profiles (create/list/show/delete)        |
-| `tpd claude init`   | Install Claude Code integration to `.claude/`    |
-| `tpd claude uninit` | Remove Claude Code integration from `.claude/`   |
+| Command              | Description                                      |
+| -------------------- | ------------------------------------------------ |
+| `thts setup`         | Initial setup - configure thoughts repo location |
+| `thts init`          | Initialize thoughts in current git repo          |
+| `thts sync`          | Sync thoughts to central repo                    |
+| `thts status`        | Show thoughts status                             |
+| `thts uninit`        | Remove thoughts from current repo                |
+| `thts config`        | View/edit configuration                          |
+| `thts profile`       | Manage profiles (create/list/show/delete)        |
+| `thts claude init`   | Install Claude Code integration to `.claude/`    |
+| `thts claude uninit` | Remove Claude Code integration from `.claude/`   |
 
 ## Project Structure
 
 ```plaintext
-cmd/tpd/           # Entry point
+cmd/thts/          # Entry point
 internal/
   cmd/             # Cobra commands
   config/          # Config loading/saving, paths, types
   fs/              # Filesystem utilities (symlinks, gitignore)
   git/             # Git operations, hooks
-  tpd/             # Searchable directory (hard links)
-instructions/      # Embedded: tpd-instructions.md
-skills/            # Embedded: tpd-integrate.md
-commands/          # Embedded: tpd-handoff.md, tpd-resume.md
+  thts/            # Searchable directory (hard links)
+instructions/      # Embedded: thts-instructions.md
+skills/            # Embedded: thts-integrate.md
+commands/          # Embedded: thts-handoff.md, thts-resume.md
 agents/            # Embedded: thoughts-locator.md, thoughts-analyzer.md
 embed.go           # Go embed declarations for above
 ```
@@ -66,23 +66,23 @@ Terminal output uses the `internal/ui` package for consistency.
 ## Claude Integration Files
 
 Files in `instructions/`, `skills/`, `commands/`, `agents/` are embedded in the
-binary and copied to `.claude/` by `tpd claude init`.
+binary and copied to `.claude/` by `thts claude init`.
 
-| File                   | Purpose                        | Invocation       |
-| ---------------------- | ------------------------------ | ---------------- |
-| `tpd-instructions.md`  | Teaches Claude about thoughts/ | @include         |
-| `tpd-integrate.md`     | On-demand activation           | `/tpd-integrate` |
-| `tpd-handoff.md`       | Session handoff                | `/tpd-handoff`   |
-| `tpd-resume.md`        | Resume from handoff            | `/tpd-resume`    |
-| `thoughts-locator.md`  | Find documents                 | Task tool agent  |
-| `thoughts-analyzer.md` | Analyze documents              | Task tool agent  |
+| File                   | Purpose                        | Invocation        |
+| ---------------------- | ------------------------------ | ----------------- |
+| `thts-instructions.md` | Teaches Claude about thoughts/ | @include          |
+| `thts-integrate.md`    | On-demand activation           | `/thts-integrate` |
+| `thts-handoff.md`      | Session handoff                | `/thts-handoff`   |
+| `thts-resume.md`       | Resume from handoff            | `/thts-resume`    |
+| `thoughts-locator.md`  | Find documents                 | Task tool agent   |
+| `thoughts-analyzer.md` | Analyze documents              | Task tool agent   |
 
 ## Reference
 
 Based on [HumanLayer CLI](https://github.com/humanlayer/humanlayer)'s `thoughts`
 subcommand.
 
-**IMPORTANT**: `tpd` should always be feature-compatible with humanlayer's
+**IMPORTANT**: `thts` should always be feature-compatible with humanlayer's
 `thoughts` subcommand so users can switch between them.
 
 ## Development
@@ -101,7 +101,7 @@ trunk check --fix  # Auto-fix where possible
 ### Building
 
 ```bash
-go build -o tpd ./cmd/tpd
+go build -o thts ./cmd/thts
 ```
 
 ### Testing
@@ -114,7 +114,7 @@ go test -tags=integration ./internal/cmd/...     # Integration tests
 go test -tags=integration ./...                  # All tests
 ```
 
-**Coverage targets:** config/git >70%, fs/tpd >60% (all met)
+**Coverage targets:** config/git >70%, fs/thts >60% (all met)
 
 ## Documentation
 
@@ -145,7 +145,7 @@ easily confused. Always be explicit:
 | ---------- | ------------------------------- | ---------------------------------- |
 | Location   | `~/thoughts/`                   | `~/src/project/thoughts/`          |
 | What it is | Real git repo with actual files | Symlinks pointing to thoughts repo |
-| Created by | `tpd setup`                     | `tpd init`                         |
+| Created by | `thts setup`                    | `thts init`                        |
 
 Editing a file in the thoughts directory actually edits the file in the thoughts
 repo through the symlink. This should be called out when relevant.

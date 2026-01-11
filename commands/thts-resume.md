@@ -16,7 +16,7 @@ If no path provided:
 I'll help you resume from a handoff. Please provide the path to the handoff
 document, or I can list recent handoffs:
 
-Tip: /tpd-resume thoughts/shared/handoffs/YYYY-MM-DD_HH-MM-SS_description.md
+Tip: /thts-resume thoughts/shared/handoffs/YYYY-MM-DD_HH-MM-SS_description.md
 ```
 
 ## Process

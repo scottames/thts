@@ -4,8 +4,8 @@ import (
 	"fmt"
 
 	"github.com/charmbracelet/huh"
-	"github.com/scottames/tpd/internal/config"
-	"github.com/scottames/tpd/internal/ui"
+	"github.com/scottames/thts/internal/config"
+	"github.com/scottames/thts/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -50,7 +50,7 @@ func runDelete(cmd *cobra.Command, args []string) error {
 		fmt.Println(ui.ErrorF("Cannot delete the default profile %q.", profileName))
 		fmt.Println()
 		fmt.Println(ui.Muted("Options:"))
-		fmt.Printf("  1. Set another profile as default first: %s\n", ui.Accent("tpd profile set-default <other-profile>"))
+		fmt.Printf("  1. Set another profile as default first: %s\n", ui.Accent("thts profile set-default <other-profile>"))
 		fmt.Println("  2. Then delete this profile")
 		return nil
 	}
@@ -67,7 +67,7 @@ func runDelete(cmd *cobra.Command, args []string) error {
 		}
 		fmt.Println()
 		fmt.Println(ui.Warning("Options:"))
-		fmt.Printf("  1. Run %s in each repository\n", ui.Accent("tpd uninit"))
+		fmt.Printf("  1. Run %s in each repository\n", ui.Accent("thts uninit"))
 		fmt.Printf("  2. Use %s to delete anyway (repos will fall back to default config)\n", ui.Accent("--force"))
 		return nil
 	}
@@ -109,7 +109,7 @@ func runDelete(cmd *cobra.Command, args []string) error {
 	if len(usingRepos) > 0 {
 		fmt.Println()
 		fmt.Println(ui.Warning("Repositories using this profile will need to be re-initialized"))
-		fmt.Printf("Run %s in each affected repository.\n", ui.Accent("tpd init"))
+		fmt.Printf("Run %s in each affected repository.\n", ui.Accent("thts init"))
 	}
 
 	return nil

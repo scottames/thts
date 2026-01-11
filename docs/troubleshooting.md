@@ -2,24 +2,24 @@
 
 ## Common Issues
 
-### "Run `tpd setup` first"
+### "Run `thts setup` first"
 
-You need to configure tpd before using it in any project.
+You need to configure thts before using it in any project.
 
 ```bash
-tpd setup
+thts setup
 ```
 
-This creates `~/.config/tpd/config.json` with your thoughts repo location and
+This creates `~/.config/thts/config.json` with your thoughts repo location and
 username.
 
 ### "Not in a git repository"
 
-tpd requires your code to be in a git repository.
+thts requires your code to be in a git repository.
 
 ```bash
 git init
-tpd init
+thts init
 ```
 
 ### Symlinks Not Working
@@ -35,13 +35,13 @@ ls -la thoughts/
 
 **Common causes:**
 
-1. Thoughts repo moved or deleted - update config with `tpd config --edit`
-2. Project not initialized - run `tpd init`
-3. Central directories don't exist - `tpd sync` creates them
+1. Thoughts repo moved or deleted - update config with `thts config --edit`
+2. Project not initialized - run `thts init`
+3. Central directories don't exist - `thts sync` creates them
 
 ### Sync Conflicts
 
-**Symptoms:** `tpd sync` fails with rebase errors.
+**Symptoms:** `thts sync` fails with rebase errors.
 
 **Resolution:**
 
@@ -52,7 +52,7 @@ git status                 # See conflicting files
 git add .
 git rebase --continue
 cd -                       # Return to project
-tpd sync                   # Retry
+thts sync                   # Retry
 ```
 
 ### Auto-Sync Not Working
@@ -69,13 +69,13 @@ cat .git/hooks/post-commit
 **Reinstall hooks:**
 
 ```bash
-tpd init --force
+thts init --force
 ```
 
 **Check config:**
 
 ```bash
-tpd config
+thts config
 # Verify autoSyncInWorktrees is true (if in a worktree)
 ```
 
@@ -86,11 +86,11 @@ tpd config
 **Rebuild it:**
 
 ```bash
-tpd sync
+thts sync
 ```
 
 **Cross-filesystem warning:** If your thoughts repo and project are on different
-filesystems, hard links won't work. tpd will warn about this. Consider moving
+filesystems, hard links won't work. thts will warn about this. Consider moving
 your thoughts repo to the same filesystem.
 
 ### Permission Denied
@@ -133,41 +133,41 @@ grep thoughts .gitignore
 **Fix the mapping:**
 
 ```bash
-tpd config --edit
+thts config --edit
 # Edit repoMappings to fix the path
 ```
 
 **Or reinitialize:**
 
 ```bash
-tpd uninit --force
-tpd init --name correct-name
+thts uninit --force
+thts init --name correct-name
 ```
 
 ### Profile Not Found
 
-**Symptoms:** `tpd init --profile foo` fails.
+**Symptoms:** `thts init --profile foo` fails.
 
 **List available profiles:**
 
 ```bash
-tpd profile list
+thts profile list
 ```
 
 **Create the profile:**
 
 ```bash
-tpd profile create foo --repo ~/foo-thoughts
+thts profile create foo --repo ~/foo-thoughts
 ```
 
 ## Diagnostic Commands
 
 ```bash
 # Check current configuration
-tpd config --json
+thts config --json
 
 # Check status and mappings
-tpd status
+thts status
 
 # Verify symlinks
 ls -la thoughts/
@@ -186,7 +186,7 @@ stat thoughts/{user}/file.md thoughts/searchable/{user}/file.md
 
 If you're still stuck:
 
-1. Check `tpd status` output for clues
-2. Verify config with `tpd config --json`
-3. Try `tpd init --force` to reinitialize
+1. Check `thts status` output for clues
+2. Verify config with `thts config --json`
+3. Try `thts init --force` to reinitialize
 4. Check the [User Guide](guide.md) for correct usage

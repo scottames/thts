@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/scottames/tpd/internal/config"
-	"github.com/scottames/tpd/internal/fs"
-	"github.com/scottames/tpd/internal/tpd"
-	"github.com/scottames/tpd/internal/ui"
+	"github.com/scottames/thts/internal/config"
+	"github.com/scottames/thts/internal/fs"
+	"github.com/scottames/thts/internal/thts"
+	"github.com/scottames/thts/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -41,8 +41,8 @@ func runSync(cmd *cobra.Command, args []string) error {
 	// Check if config exists
 	cfg, err := config.Load()
 	if err != nil {
-		fmt.Println(ui.Error("tpd not configured."))
-		fmt.Printf("Run %s first to set up.\n", ui.Accent("tpd setup"))
+		fmt.Println(ui.Error("thts not configured."))
+		fmt.Printf("Run %s first to set up.\n", ui.Accent("thts setup"))
 		return nil
 	}
 
@@ -56,7 +56,7 @@ func runSync(cmd *cobra.Command, args []string) error {
 	thoughtsDir := filepath.Join(currentRepo, "thoughts")
 	if !fs.Exists(thoughtsDir) {
 		fmt.Println(ui.Error("Thoughts not initialized for this repository."))
-		fmt.Printf("Run %s to set up thoughts.\n", ui.Accent("tpd init"))
+		fmt.Printf("Run %s to set up thoughts.\n", ui.Accent("thts init"))
 		return nil
 	}
 
@@ -64,7 +64,7 @@ func runSync(cmd *cobra.Command, args []string) error {
 	mapping := cfg.RepoMappings[currentRepo]
 	if mapping == nil {
 		fmt.Println(ui.Error("This repository is not registered."))
-		fmt.Printf("Run %s to set up thoughts.\n", ui.Accent("tpd init"))
+		fmt.Printf("Run %s to set up thoughts.\n", ui.Accent("thts init"))
 		return nil
 	}
 
@@ -86,7 +86,7 @@ func runSync(cmd *cobra.Command, args []string) error {
 
 	// 2. Create searchable directory with hard links
 	fmt.Println(ui.Info("Creating searchable index..."))
-	result, err := tpd.CreateSearchableDir(thoughtsDir)
+	result, err := thts.CreateSearchableDir(thoughtsDir)
 	if err != nil {
 		fmt.Println(ui.WarningF("Could not create searchable directory: %v", err))
 	} else {
@@ -194,7 +194,7 @@ func pullWithRebase(repoPath string) error {
 			fmt.Printf("  %s        # See conflicting files\n", ui.Accent("git status"))
 			fmt.Println("  # Fix conflicts manually")
 			fmt.Printf("  %s\n", ui.Accent("git rebase --continue"))
-			fmt.Printf("  %s          # Retry sync\n", ui.Accent("tpd sync"))
+			fmt.Printf("  %s          # Retry sync\n", ui.Accent("thts sync"))
 			fmt.Println()
 			return fmt.Errorf("merge conflict - manual resolution required")
 		}

@@ -3,8 +3,8 @@ package cmd
 import (
 	"os"
 
-	"github.com/scottames/tpd/internal/cmd/claude"
-	"github.com/scottames/tpd/internal/cmd/profile"
+	"github.com/scottames/thts/internal/cmd/claude"
+	"github.com/scottames/thts/internal/cmd/profile"
 	"github.com/spf13/cobra"
 )
 
@@ -13,9 +13,9 @@ var Version = "dev"
 
 // rootCmd represents the base command when called without any subcommands.
 var rootCmd = &cobra.Command{
-	Use:   "tpd",
+	Use:   "thts",
 	Short: "Thoughts, plans, and dreams - manage developer thoughts across repositories",
-	Long: `tpd (thoughts, plans, and dreams) is a CLI tool for managing developer
+	Long: `thts (thoughts, plans, and dreams) is a CLI tool for managing developer
 thoughts and notes across multiple repositories.
 
 It synchronizes thoughts to a central git repository and provides easy access

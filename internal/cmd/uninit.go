@@ -6,10 +6,10 @@ import (
 	"path/filepath"
 
 	"github.com/charmbracelet/huh"
-	"github.com/scottames/tpd/internal/cmd/claude"
-	"github.com/scottames/tpd/internal/config"
-	"github.com/scottames/tpd/internal/fs"
-	"github.com/scottames/tpd/internal/ui"
+	"github.com/scottames/thts/internal/cmd/claude"
+	"github.com/scottames/thts/internal/config"
+	"github.com/scottames/thts/internal/fs"
+	"github.com/scottames/thts/internal/ui"
 	"github.com/spf13/cobra"
 )
 

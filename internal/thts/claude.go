@@ -1,4 +1,4 @@
-package tpd
+package thts
 
 import (
 	"fmt"
@@ -12,7 +12,7 @@ func GenerateClaudeMD(projectName, user string) string {
 	return fmt.Sprintf(`# Thoughts Directory Structure
 
 This directory contains developer thoughts and notes for the %s repository.
-Managed by `+"`tpd`"+` - do not commit to the code repository.
+Managed by `+"`thts`"+` - do not commit to the code repository.
 
 ## Structure
 
@@ -35,7 +35,7 @@ allows search tools to find content without following symlinks.
 
 - Files in `+"`searchable/`"+` are hard links (editing either updates both)
 - Always reference files by canonical path (e.g., `+"`thoughts/%s/todo.md`"+`)
-- The `+"`searchable/`"+` directory is rebuilt on `+"`tpd sync`"+`
+- The `+"`searchable/`"+` directory is rebuilt on `+"`thts sync`"+`
 
 ## Usage
 
@@ -54,8 +54,8 @@ Quick access:
 
 ## Commands
 
-- `+"`tpd sync`"+` - Manually sync changes to thoughts repository
-- `+"`tpd status`"+` - Show sync status
+- `+"`thts sync`"+` - Manually sync changes to thoughts repository
+- `+"`thts status`"+` - Show sync status
 `, projectName, projectName, user, user, user, user, user)
 }
 

@@ -2,7 +2,7 @@
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
   "packages": {
     ".": {
-      "package-name": "tpd",
+      "package-name": "thts",
       "changelog-path": "CHANGELOG.md",
       "release-type": "go",
       "bump-minor-pre-major": false,

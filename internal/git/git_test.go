@@ -146,7 +146,7 @@ func setupTestGitRepo(t *testing.T) (string, func()) {
 	t.Helper()
 
 	// Create temp directory
-	dir, err := os.MkdirTemp("", "tpd-git-test-*")
+	dir, err := os.MkdirTemp("", "thts-git-test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp directory: %v", err)
 	}
@@ -198,7 +198,7 @@ func setupTestWorktree(t *testing.T, mainRepo string) (string, func()) {
 	}
 
 	// Create worktree directory
-	worktreeDir, err := os.MkdirTemp("", "tpd-worktree-test-*")
+	worktreeDir, err := os.MkdirTemp("", "thts-worktree-test-*")
 	if err != nil {
 		t.Fatalf("failed to create worktree directory: %v", err)
 	}
@@ -244,7 +244,7 @@ func TestIsInGitRepo(t *testing.T) {
 
 	t.Run("outside git repo", func(t *testing.T) {
 		// Create a non-git temp directory
-		dir, err := os.MkdirTemp("", "tpd-non-git-test-*")
+		dir, err := os.MkdirTemp("", "thts-non-git-test-*")
 		if err != nil {
 			t.Fatalf("failed to create temp directory: %v", err)
 		}
@@ -275,7 +275,7 @@ func TestIsInGitRepoAt(t *testing.T) {
 	})
 
 	t.Run("outside git repo", func(t *testing.T) {
-		dir, err := os.MkdirTemp("", "tpd-non-git-test-*")
+		dir, err := os.MkdirTemp("", "thts-non-git-test-*")
 		if err != nil {
 			t.Fatalf("failed to create temp directory: %v", err)
 		}
@@ -304,7 +304,7 @@ func TestGetGitDirAt(t *testing.T) {
 	})
 
 	t.Run("non-git directory", func(t *testing.T) {
-		dir, err := os.MkdirTemp("", "tpd-non-git-test-*")
+		dir, err := os.MkdirTemp("", "thts-non-git-test-*")
 		if err != nil {
 			t.Fatalf("failed to create temp directory: %v", err)
 		}
@@ -446,7 +446,7 @@ func TestGetRepoTopLevelAt(t *testing.T) {
 	})
 
 	t.Run("non-git directory", func(t *testing.T) {
-		dir, err := os.MkdirTemp("", "tpd-non-git-test-*")
+		dir, err := os.MkdirTemp("", "thts-non-git-test-*")
 		if err != nil {
 			t.Fatalf("failed to create temp directory: %v", err)
 		}

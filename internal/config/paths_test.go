@@ -171,7 +171,7 @@ func TestXDGConfigHome(t *testing.T) {
 	})
 }
 
-func TestTPDConfigPath(t *testing.T) {
+func TestThtsConfigPath(t *testing.T) {
 	// Save and restore XDG_CONFIG_HOME
 	originalXDG := os.Getenv("XDG_CONFIG_HOME")
 	defer func() {
@@ -185,11 +185,11 @@ func TestTPDConfigPath(t *testing.T) {
 	if err := os.Setenv("XDG_CONFIG_HOME", "/test/config"); err != nil {
 		t.Fatalf("failed to set XDG_CONFIG_HOME: %v", err)
 	}
-	got := TPDConfigPath()
-	want := "/test/config/tpd/config.yaml"
+	got := ThtsConfigPath()
+	want := "/test/config/thts/config.yaml"
 
 	if got != want {
-		t.Errorf("TPDConfigPath() = %q, want %q", got, want)
+		t.Errorf("ThtsConfigPath() = %q, want %q", got, want)
 	}
 }
 
