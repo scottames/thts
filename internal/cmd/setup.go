@@ -8,18 +8,9 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/huh"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/scottames/tpd/internal/config"
+	"github.com/scottames/tpd/internal/ui"
 	"github.com/spf13/cobra"
-)
-
-var (
-	styleSuccess = lipgloss.NewStyle().Foreground(lipgloss.Color("2")) // green
-	styleInfo    = lipgloss.NewStyle().Foreground(lipgloss.Color("4")) // blue
-	styleWarning = lipgloss.NewStyle().Foreground(lipgloss.Color("3")) // yellow
-	styleError   = lipgloss.NewStyle().Foreground(lipgloss.Color("1")) // red
-	styleMuted   = lipgloss.NewStyle().Foreground(lipgloss.Color("8")) // gray
-	styleCyan    = lipgloss.NewStyle().Foreground(lipgloss.Color("6")) // cyan
 )
 
 var setupCmd = &cobra.Command{
@@ -45,12 +36,12 @@ func runSetup(cmd *cobra.Command, args []string) error {
 	if config.Exists() {
 		cfg, _ := config.Load()
 		defaultProfile, defaultName := cfg.GetDefaultProfile()
-		fmt.Println(styleWarning.Render("Configuration already exists:"))
+		fmt.Println(ui.Warning("Configuration already exists:"))
 		if defaultProfile != nil {
-			fmt.Printf("  Default profile: %s\n", styleCyan.Render(defaultName))
-			fmt.Printf("  Thoughts repo: %s\n", styleCyan.Render(defaultProfile.ThoughtsRepo))
+			fmt.Printf("  Default profile: %s\n", ui.Accent(defaultName))
+			fmt.Printf("  Thoughts repo: %s\n", ui.Accent(defaultProfile.ThoughtsRepo))
 		}
-		fmt.Printf("  User: %s\n", styleCyan.Render(cfg.User))
+		fmt.Printf("  User: %s\n", ui.Accent(cfg.User))
 		fmt.Println()
 
 		var reconfigure bool
@@ -67,7 +58,7 @@ func runSetup(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	fmt.Println(styleInfo.Render("=== tpd Setup ==="))
+	fmt.Println(ui.Header("tpd Setup"))
 	fmt.Println()
 	fmt.Println("Let's configure your thoughts system.")
 	fmt.Println()
@@ -125,20 +116,12 @@ func runSetup(cmd *cobra.Command, args []string) error {
 
 		// Validate username
 		if strings.ToLower(user) == "global" {
-			fmt.Println(
-				styleError.Render(
-					"Username cannot be \"global\" - it's reserved for cross-project thoughts.",
-				),
-			)
+			fmt.Println(ui.Error("Username cannot be \"global\" - it's reserved for cross-project thoughts."))
 			user = ""
 			continue
 		}
 		if strings.ToLower(user) == "shared" {
-			fmt.Println(
-				styleError.Render(
-					"Username cannot be \"shared\" - it's reserved for team-shared notes.",
-				),
-			)
+			fmt.Println(ui.Error("Username cannot be \"shared\" - it's reserved for team-shared notes."))
 			user = ""
 			continue
 		}
@@ -159,19 +142,19 @@ func runSetup(cmd *cobra.Command, args []string) error {
 
 	// Show what will be created
 	fmt.Println()
-	fmt.Println(styleWarning.Render("Creating thoughts structure:"))
+	fmt.Println(ui.SubHeader("Creating thoughts structure:"))
 	displayRepo := config.ContractPath(config.ExpandPath(thoughtsRepo))
-	fmt.Printf("  Profile: %s\n", styleCyan.Render(profileName))
-	fmt.Printf("  %s/\n", styleCyan.Render(displayRepo))
+	fmt.Printf("  Profile: %s\n", ui.Accent(profileName))
+	fmt.Printf("  %s/\n", ui.Accent(displayRepo))
 	fmt.Printf(
 		"    ├── %s/     %s\n",
-		styleCyan.Render(profile.ReposDir),
-		styleMuted.Render("(project-specific thoughts)"),
+		ui.Accent(profile.ReposDir),
+		ui.Muted("(project-specific thoughts)"),
 	)
 	fmt.Printf(
 		"    └── %s/    %s\n",
-		styleCyan.Render(profile.GlobalDir),
-		styleMuted.Render("(cross-project thoughts)"),
+		ui.Accent(profile.GlobalDir),
+		ui.Muted("(cross-project thoughts)"),
 	)
 	fmt.Println()
 
@@ -185,22 +168,13 @@ func runSetup(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
 
-	fmt.Println(
-		styleSuccess.Render(
-			"✓ Configuration saved to ",
-		) + styleMuted.Render(
-			config.TPDConfigPath(),
-		),
-	)
+	fmt.Println(ui.Success("Configuration saved to " + ui.Muted(config.TPDConfigPath())))
 	fmt.Println()
-	fmt.Println(styleSuccess.Render("✓ Setup complete!"))
+	fmt.Println(ui.Success("Setup complete!"))
 	fmt.Println()
 	fmt.Println("Next steps:")
 	fmt.Printf("  1. Navigate to a git repository\n")
-	fmt.Printf(
-		"  2. Run %s to initialize thoughts for that project\n",
-		styleCyan.Render("tpd init"),
-	)
+	fmt.Printf("  2. Run %s to initialize thoughts for that project\n", ui.Accent("tpd init"))
 	fmt.Println()
 
 	return nil
@@ -232,12 +206,12 @@ func ensureThoughtsRepoExistsForProfile(profile *config.ProfileConfig) error {
 	info, err := os.Stat(gitPath)
 	if err == nil && (info.IsDir() || info.Mode().IsRegular()) {
 		// Already a git repo (either .git dir or .git file for worktree)
-		fmt.Println(styleSuccess.Render("✓ Thoughts repository exists"))
+		fmt.Println(ui.Success("Thoughts repository exists"))
 		return nil
 	}
 
 	// Initialize as git repo
-	fmt.Println(styleInfo.Render("Initializing thoughts repository as git repo..."))
+	fmt.Println(ui.Info("Initializing thoughts repository as git repo..."))
 
 	gitInit := exec.Command("git", "init")
 	gitInit.Dir = expandedRepo
@@ -279,6 +253,6 @@ Thumbs.db
 		return fmt.Errorf("failed to create initial commit: %w", err)
 	}
 
-	fmt.Println(styleSuccess.Render("✓ Thoughts repository initialized"))
+	fmt.Println(ui.Success("Thoughts repository initialized"))
 	return nil
 }

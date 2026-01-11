@@ -14,6 +14,7 @@ import (
 	tpdfiles "github.com/scottames/tpd"
 	fsutil "github.com/scottames/tpd/internal/fs"
 	"github.com/scottames/tpd/internal/git"
+	"github.com/scottames/tpd/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -112,12 +113,12 @@ func init() {
 }
 
 func runClaudeInit(cmd *cobra.Command, args []string) error {
-	fmt.Println(styleInfo.Render("Initialize Claude Code Configuration"))
+	fmt.Println(ui.Header("Initialize Claude Code Configuration"))
 	fmt.Println()
 
 	// Check for interactive terminal if interactive mode requested
 	if initInteractive && !isTerminal() {
-		fmt.Println(styleError.Render("Error: --interactive requires a terminal."))
+		fmt.Println(ui.Error("--interactive requires a terminal."))
 		return nil
 	}
 
@@ -184,11 +185,11 @@ func runClaudeInit(cmd *cobra.Command, args []string) error {
 
 	// Always copy instructions file first
 	if err := copyInstructionsFile(claudeTargetDir); err != nil {
-		fmt.Printf("%s Could not copy instructions: %v\n", styleWarning.Render("Warning:"), err)
+		fmt.Println(ui.WarningF("Could not copy instructions: %v", err))
 	} else {
 		filesCopied++
 		manifest.Files = append(manifest.Files, "tpd-instructions.md")
-		fmt.Printf("%s Copied tpd-instructions.md\n", styleSuccess.Render("✓"))
+		fmt.Println(ui.Success("Copied tpd-instructions.md"))
 	}
 
 	// Copy selected categories
@@ -203,7 +204,7 @@ func runClaudeInit(cmd *cobra.Command, args []string) error {
 			filesToCopyByCategory[category],
 		)
 		if err != nil {
-			fmt.Printf("%s Could not copy %s: %v\n", styleWarning.Render("Warning:"), category, err)
+			fmt.Println(ui.WarningF("Could not copy %s: %v", category, err))
 			continue
 		}
 		filesCopied += copied
@@ -213,14 +214,14 @@ func runClaudeInit(cmd *cobra.Command, args []string) error {
 			manifest.Files = append(manifest.Files, filepath.Join(category, f))
 		}
 		if copied > 0 {
-			fmt.Printf("%s Copied %d %s file(s)\n", styleSuccess.Render("✓"), copied, category)
+			fmt.Println(ui.SuccessF("Copied %d %s file(s)", copied, category))
 		}
 	}
 
 	// Handle integration level setup
 	claudeMDMod, gitignorePatterns, err := setupIntegrationLevel(targetDir, claudeTargetDir, integrationLevel)
 	if err != nil {
-		fmt.Printf("%s Could not setup integration: %v\n", styleWarning.Render("Warning:"), err)
+		fmt.Println(ui.WarningF("Could not setup integration: %v", err))
 	} else {
 		if claudeMDMod != nil {
 			manifest.Modifications.ClaudeMD = claudeMDMod
@@ -237,19 +238,19 @@ func runClaudeInit(cmd *cobra.Command, args []string) error {
 			return err
 		}
 		if err := writeSettings(claudeTargetDir, alwaysThinking, maxThinkingTokens, model); err != nil {
-			fmt.Printf("%s Could not write settings: %v\n", styleWarning.Render("Warning:"), err)
+			fmt.Println(ui.WarningF("Could not write settings: %v", err))
 		} else {
 			filesCopied++
 			manifest.SettingsCreated = true
 			manifest.Files = append(manifest.Files, "settings.json")
-			fmt.Printf("%s Created settings.json (model: %s, alwaysThinking: %v, maxTokens: %d)\n",
-				styleSuccess.Render("✓"), model, alwaysThinking, maxThinkingTokens)
+			fmt.Println(ui.SuccessF("Created settings.json (model: %s, alwaysThinking: %v, maxTokens: %d)",
+				model, alwaysThinking, maxThinkingTokens))
 		}
 
 		// Update .gitignore for settings.local.json
 		added, err := fsutil.AddToGitignore(targetDir, ".claude/settings.local.json", "project")
 		if err != nil {
-			fmt.Printf("%s Could not update .gitignore: %v\n", styleWarning.Render("Warning:"), err)
+			fmt.Println(ui.WarningF("Could not update .gitignore: %v", err))
 		} else if added {
 			// Track gitignore pattern
 			if manifest.Modifications.Gitignore == nil {
@@ -257,23 +258,22 @@ func runClaudeInit(cmd *cobra.Command, args []string) error {
 			}
 			manifest.Modifications.Gitignore.Patterns = append(
 				manifest.Modifications.Gitignore.Patterns, ".claude/settings.local.json")
-			fmt.Printf("%s Updated .gitignore to exclude settings.local.json\n", styleInfo.Render("i"))
+			fmt.Println(ui.Info("Updated .gitignore to exclude settings.local.json"))
 		}
 	}
 
 	// Write manifest to track what we created
 	if err := writeManifest(claudeTargetDir, manifest); err != nil {
-		fmt.Printf("%s Could not write manifest: %v\n", styleWarning.Render("Warning:"), err)
+		fmt.Println(ui.WarningF("Could not write manifest: %v", err))
 	}
 
 	// Summary
 	fmt.Println()
-	msg := fmt.Sprintf("Successfully copied %d file(s) to %s", filesCopied, claudeTargetDir)
+	fmt.Println(ui.SuccessF("Successfully copied %d file(s) to %s", filesCopied, claudeTargetDir))
 	if filesSkipped > 0 {
-		msg += styleMuted.Render(fmt.Sprintf("\n   Skipped %d file(s)", filesSkipped))
+		fmt.Println(ui.Muted(fmt.Sprintf("   Skipped %d file(s)", filesSkipped)))
 	}
-	msg += styleMuted.Render("\n   You can now use /tpd-integrate, /tpd-handoff, /tpd-resume in Claude Code.")
-	fmt.Println(styleSuccess.Render(msg))
+	fmt.Println(ui.Muted("   You can now use /tpd-integrate, /tpd-handoff, /tpd-resume in Claude Code."))
 
 	return nil
 }
@@ -377,14 +377,14 @@ func setupIntegrationLevel(projectDir, claudeDir string, level IntegrationLevel)
 		}
 		if added {
 			gitignorePatterns = append(gitignorePatterns, ".claude/CLAUDE.local.md")
-			fmt.Printf("%s Updated .gitignore to exclude CLAUDE.local.md\n", styleInfo.Render("i"))
+			fmt.Println(ui.Info("Updated .gitignore to exclude CLAUDE.local.md"))
 		}
-		fmt.Printf("%s Created .claude/CLAUDE.local.md with @include\n", styleSuccess.Render("✓"))
+		fmt.Println(ui.Success("Created .claude/CLAUDE.local.md with @include"))
 		return nil, gitignorePatterns, nil
 
 	case IntegrationOnDemand:
 		// Nothing to do - files are already copied
-		fmt.Printf("%s On-demand mode: use /tpd-integrate to activate\n", styleInfo.Render("i"))
+		fmt.Println(ui.Info("On-demand mode: use /tpd-integrate to activate"))
 		return nil, nil, nil
 	}
 	return nil, nil, nil
@@ -404,7 +404,7 @@ func appendToClaudeMD(gitRoot string) (*ClaudeMDModification, error) {
 			return nil, fmt.Errorf("failed to read CLAUDE.md: %w", err)
 		}
 		if strings.Contains(string(content), pattern) {
-			fmt.Printf("%s CLAUDE.md already includes tpd-instructions.md\n", styleInfo.Render("i"))
+			fmt.Println(ui.Info("CLAUDE.md already includes tpd-instructions.md"))
 			return nil, nil
 		}
 		// Append to existing file
@@ -419,7 +419,7 @@ func appendToClaudeMD(gitRoot string) (*ClaudeMDModification, error) {
 		if err := f.Close(); err != nil {
 			return nil, fmt.Errorf("failed to close CLAUDE.md: %w", err)
 		}
-		fmt.Printf("%s Appended @include to existing CLAUDE.md\n", styleSuccess.Render("✓"))
+		fmt.Println(ui.Success("Appended @include to existing CLAUDE.md"))
 		return &ClaudeMDModification{
 			Path:    claudeMDPath,
 			Action:  "appended",
@@ -430,7 +430,7 @@ func appendToClaudeMD(gitRoot string) (*ClaudeMDModification, error) {
 	if err := os.WriteFile(claudeMDPath, []byte("# Claude Code Instructions\n"+includeDirective), 0644); err != nil {
 		return nil, fmt.Errorf("failed to create CLAUDE.md: %w", err)
 	}
-	fmt.Printf("%s Created CLAUDE.md with @include\n", styleSuccess.Render("✓"))
+	fmt.Println(ui.Success("Created CLAUDE.md with @include"))
 	return &ClaudeMDModification{
 		Path:    claudeMDPath,
 		Action:  "created",

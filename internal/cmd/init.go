@@ -11,6 +11,7 @@ import (
 	"github.com/scottames/tpd/internal/fs"
 	"github.com/scottames/tpd/internal/git"
 	"github.com/scottames/tpd/internal/tpd"
+	"github.com/scottames/tpd/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -63,10 +64,10 @@ func runInit(cmd *cobra.Command, args []string) error {
 	// Check if config exists
 	cfg, err := config.Load()
 	if err != nil {
-		fmt.Println(styleError.Render("Error: tpd not configured."))
+		fmt.Println(ui.Error("tpd not configured."))
 		fmt.Printf(
 			"Run %s first to set up your thoughts repository.\n",
-			styleCyan.Render("tpd setup"),
+			ui.Accent("tpd setup"),
 		)
 		return nil
 	}
@@ -74,22 +75,20 @@ func runInit(cmd *cobra.Command, args []string) error {
 	// Validate profile if specified
 	if initProfile != "" {
 		if !cfg.ValidateProfile(initProfile) {
-			fmt.Println(
-				styleError.Render(fmt.Sprintf("Error: Profile %q does not exist.", initProfile)),
-			)
+			fmt.Println(ui.ErrorF("Profile %q does not exist.", initProfile))
 			fmt.Println()
-			fmt.Println(styleMuted.Render("Available profiles:"))
+			fmt.Println(ui.Muted("Available profiles:"))
 			if len(cfg.Profiles) > 0 {
 				for name := range cfg.Profiles {
 					fmt.Printf("  - %s\n", name)
 				}
 			} else {
-				fmt.Println(styleMuted.Render("  (none)"))
+				fmt.Println(ui.Muted("  (none)"))
 			}
 			fmt.Println()
 			fmt.Printf(
 				"Create a profile first: %s\n",
-				styleCyan.Render(fmt.Sprintf("tpd profile create %s", initProfile)),
+				ui.Accent(fmt.Sprintf("tpd profile create %s", initProfile)),
 			)
 			return nil
 		}
@@ -98,10 +97,10 @@ func runInit(cmd *cobra.Command, args []string) error {
 	// Resolve profile config
 	profileConfig := resolveInitProfile(cfg, currentRepo)
 	if profileConfig == nil {
-		fmt.Println(styleError.Render("Error: No profiles configured."))
+		fmt.Println(ui.Error("No profiles configured."))
 		fmt.Printf(
 			"Run %s first to create a profile.\n",
-			styleCyan.Render("tpd setup"),
+			ui.Accent("tpd setup"),
 		)
 		return nil
 	}
@@ -111,9 +110,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	if fs.Exists(thoughtsDir) && !initForce {
 		// Check if it's a valid setup
 		if isValidThoughtsSetup(thoughtsDir, cfg.User) {
-			fmt.Println(
-				styleWarning.Render("Thoughts directory already configured for this repository."),
-			)
+			fmt.Println(ui.Warning("Thoughts directory already configured for this repository."))
 			var reconfigure bool
 			err := huh.NewConfirm().
 				Title("Do you want to reconfigure?").
@@ -127,7 +124,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 				return nil
 			}
 		} else {
-			fmt.Println(styleWarning.Render("Thoughts directory exists but setup is incomplete."))
+			fmt.Println(ui.Warning("Thoughts directory exists but setup is incomplete."))
 			var fix bool
 			err := huh.NewConfirm().
 				Title("Do you want to fix the setup?").
@@ -152,13 +149,13 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 
 	if projectName == "" {
-		fmt.Println(styleError.Render("Error: Could not determine project name."))
+		fmt.Println(ui.Error("Could not determine project name."))
 		return nil
 	}
 
 	fmt.Println()
-	fmt.Printf("Setting up thoughts for: %s\n", styleCyan.Render(currentRepo))
-	fmt.Printf("Project name: %s\n", styleCyan.Render(projectName))
+	fmt.Printf("Setting up thoughts for: %s\n", ui.Accent(currentRepo))
+	fmt.Printf("Project name: %s\n", ui.Accent(projectName))
 	fmt.Println()
 
 	// Create directory structure in central thoughts repo
@@ -181,9 +178,9 @@ func runInit(cmd *cobra.Command, args []string) error {
 	// Generate CLAUDE.md for Claude Code integration
 	created, err := tpd.WriteClaudeMD(thoughtsDir, projectName, cfg.User)
 	if err != nil {
-		fmt.Printf("%s Could not create CLAUDE.md: %v\n", styleWarning.Render("Warning:"), err)
+		fmt.Println(ui.WarningF("Could not create CLAUDE.md: %v", err))
 	} else if created {
-		fmt.Println(styleSuccess.Render("✓ Created thoughts/CLAUDE.md"))
+		fmt.Println(ui.Success("Created thoughts/CLAUDE.md"))
 	}
 
 	// Add to gitignore
@@ -193,9 +190,9 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 	added, err := fs.AddToGitignore(currentRepo, "thoughts/", gitIgnoreMode)
 	if err != nil {
-		fmt.Printf("%s Could not add to gitignore: %v\n", styleWarning.Render("Warning:"), err)
+		fmt.Println(ui.WarningF("Could not add to gitignore: %v", err))
 	} else if added {
-		fmt.Printf("%s Added 'thoughts/' to %s\n", styleSuccess.Render("✓"), gitignoreLocationName(gitIgnoreMode))
+		fmt.Println(ui.SuccessF("Added 'thoughts/' to %s", gitignoreLocationName(gitIgnoreMode)))
 	}
 
 	// Update config with repo mapping
@@ -219,26 +216,24 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 	hookResult, err := git.SetupHooks(currentRepo, hookOpts)
 	if err != nil {
-		fmt.Printf("%s Could not install git hooks: %v\n", styleWarning.Render("Warning:"), err)
+		fmt.Println(ui.WarningF("Could not install git hooks: %v", err))
 	} else if len(hookResult.Updated) > 0 {
-		fmt.Printf("%s Installed git hooks: %s\n",
-			styleSuccess.Render("✓"),
-			strings.Join(hookResult.Updated, ", "))
+		fmt.Println(ui.SuccessF("Installed git hooks: %s", strings.Join(hookResult.Updated, ", ")))
 	}
 
 	// Print success summary
 	fmt.Println()
-	fmt.Println(styleSuccess.Render("Thoughts setup complete!"))
+	fmt.Println(ui.Success("Thoughts setup complete!"))
 	fmt.Println()
-	fmt.Println(styleInfo.Render("=== Summary ==="))
+	fmt.Println(ui.Header("Summary"))
 	fmt.Println()
 	fmt.Println("Repository structure created:")
-	fmt.Printf("  %s/\n", styleCyan.Render(config.ContractPath(currentRepo)))
+	fmt.Printf("  %s/\n", ui.Accent(config.ContractPath(currentRepo)))
 	fmt.Printf("    └── thoughts/\n")
 	fmt.Printf(
 		"         ├── %s/     %s\n",
 		cfg.User,
-		styleMuted.Render(
+		ui.Muted(
 			fmt.Sprintf(
 				"→ %s/%s/%s/%s/",
 				config.ContractPath(profileConfig.ThoughtsRepo),
@@ -250,7 +245,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	)
 	fmt.Printf(
 		"         ├── shared/      %s\n",
-		styleMuted.Render(
+		ui.Muted(
 			fmt.Sprintf(
 				"→ %s/%s/%s/shared/",
 				config.ContractPath(profileConfig.ThoughtsRepo),
@@ -261,7 +256,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	)
 	fmt.Printf(
 		"         ├── global/      %s\n",
-		styleMuted.Render(
+		ui.Muted(
 			fmt.Sprintf(
 				"→ %s/%s/",
 				config.ContractPath(profileConfig.ThoughtsRepo),
@@ -269,24 +264,15 @@ func runInit(cmd *cobra.Command, args []string) error {
 			),
 		),
 	)
-	fmt.Printf("         └── CLAUDE.md    %s\n", styleMuted.Render("(Claude Code documentation)"))
+	fmt.Printf("         └── CLAUDE.md    %s\n", ui.Muted("(Claude Code documentation)"))
 	fmt.Println()
 	fmt.Println("Protection enabled:")
-	fmt.Printf("  %s Pre-commit hook: Prevents committing thoughts/\n", styleSuccess.Render("✓"))
-	fmt.Printf(
-		"  %s Post-commit hook: Auto-syncs thoughts after commits\n",
-		styleSuccess.Render("✓"),
-	)
+	fmt.Println(ui.Success("Pre-commit hook: Prevents committing thoughts/"))
+	fmt.Println(ui.Success("Post-commit hook: Auto-syncs thoughts after commits"))
 	fmt.Println()
 	fmt.Println("Next steps:")
-	fmt.Printf(
-		"  1. Run %s to sync and create the searchable index\n",
-		styleCyan.Render("tpd sync"),
-	)
-	fmt.Printf(
-		"  2. Create markdown files in %s for your notes\n",
-		styleCyan.Render(fmt.Sprintf("thoughts/%s/", cfg.User)),
-	)
+	fmt.Printf("  1. Run %s to sync and create the searchable index\n", ui.Accent("tpd sync"))
+	fmt.Printf("  2. Create markdown files in %s for your notes\n", ui.Accent(fmt.Sprintf("thoughts/%s/", cfg.User)))
 	fmt.Println()
 
 	return nil
@@ -381,12 +367,12 @@ func interactiveProjectName(profile *config.ResolvedProfile, repoPath string) (s
 	// Add "Custom name" option
 	options = append(options, huh.NewOption("Enter custom name...", "custom"))
 
-	fmt.Println(styleInfo.Render("=== Project Name Selection ==="))
+	fmt.Println(ui.Header("Project Name Selection"))
 	fmt.Println()
-	fmt.Printf("Setting up thoughts for: %s\n", styleCyan.Render(repoPath))
+	fmt.Printf("Setting up thoughts for: %s\n", ui.Accent(repoPath))
 	fmt.Printf("Thoughts will be stored in: %s/%s/\n",
-		styleCyan.Render(config.ContractPath(expandedRepo)),
-		styleCyan.Render(profile.ReposDir))
+		ui.Accent(config.ContractPath(expandedRepo)),
+		ui.Accent(profile.ReposDir))
 	fmt.Println()
 
 	var selection string
@@ -486,7 +472,7 @@ This directory contains thoughts and notes that apply across all repositories.
 		}
 	}
 
-	fmt.Println(styleSuccess.Render("✓ Thoughts structure created in central repository"))
+	fmt.Println(ui.Success("Thoughts structure created in central repository"))
 	return nil
 }
 
@@ -518,7 +504,7 @@ func createThoughtsSymlinks(
 		}
 	}
 
-	fmt.Println(styleSuccess.Render("✓ Symlinks created"))
+	fmt.Println(ui.Success("Symlinks created"))
 	return nil
 }
 

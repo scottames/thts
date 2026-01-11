@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/scottames/tpd/internal/config"
+	"github.com/scottames/tpd/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -24,17 +25,17 @@ func runSetDefault(cmd *cobra.Command, args []string) error {
 	cfg, err := config.Load()
 	if err != nil {
 		if err == config.ErrConfigNotFound {
-			fmt.Println(styleError.Render("Error: Thoughts not configured."))
-			fmt.Printf("Run %s first to set up.\n", styleCyan.Render("tpd setup"))
+			fmt.Println(ui.Error("Thoughts not configured."))
+			fmt.Printf("Run %s first to set up.\n", ui.Accent("tpd setup"))
 			return nil
 		}
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
 	if !cfg.ValidateProfile(profileName) {
-		fmt.Println(styleError.Render(fmt.Sprintf("Error: Profile \"%s\" not found.", profileName)))
+		fmt.Println(ui.ErrorF("Profile %q not found.", profileName))
 		fmt.Println()
-		fmt.Println(styleMuted.Render("Available profiles:"))
+		fmt.Println(ui.Muted("Available profiles:"))
 		for name := range cfg.Profiles {
 			fmt.Printf("  - %s\n", name)
 		}
@@ -44,7 +45,7 @@ func runSetDefault(cmd *cobra.Command, args []string) error {
 	// Check if it's already the default
 	profile := cfg.Profiles[profileName]
 	if profile.Default {
-		fmt.Println(styleMuted.Render(fmt.Sprintf("Profile \"%s\" is already the default.", profileName)))
+		fmt.Println(ui.Info(fmt.Sprintf("Profile %q is already the default.", profileName)))
 		return nil
 	}
 
@@ -58,6 +59,6 @@ func runSetDefault(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
 
-	fmt.Println(styleSuccess.Render(fmt.Sprintf("Profile \"%s\" is now the default.", profileName)))
+	fmt.Println(ui.SuccessF("Profile %q is now the default.", profileName))
 	return nil
 }

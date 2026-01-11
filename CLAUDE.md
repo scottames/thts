@@ -34,6 +34,35 @@ agents/            # Embedded: thoughts-locator.md, thoughts-analyzer.md
 embed.go           # Go embed declarations for above
 ```
 
+## UI Standards
+
+Terminal output uses the `internal/ui` package for consistency.
+
+### Message Types
+
+| Function       | Symbol | Color  | Usage               |
+| -------------- | ------ | ------ | ------------------- |
+| `ui.Success()` | `✓`    | Green  | Operation completed |
+| `ui.Info()`    | `ℹ`    | Blue   | Informational       |
+| `ui.Warning()` | `⚠`    | Yellow | Non-fatal issues    |
+| `ui.Error()`   | `✗`    | Red    | Fatal errors        |
+
+### Headers and Sections
+
+- `ui.Header("Title")` - Bordered box for major sections
+- `ui.SubHeader("Section:")` - Bold text for subsections
+
+### Tables
+
+- `ui.NewTable("Col1", "Col2")` - For structured data display
+- `ui.KeyValueTable(rows)` - For key-value pairs
+
+### Text Styling
+
+- `ui.Accent(text)` - Cyan, for paths and commands
+- `ui.Muted(text)` - Gray, for secondary info
+- `ui.Bullet(text)` - Indented bullet point
+
 ## Claude Integration Files
 
 Files in `instructions/`, `skills/`, `commands/`, `agents/` are embedded in the

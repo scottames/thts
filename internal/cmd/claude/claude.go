@@ -1,16 +1,7 @@
 package claude
 
 import (
-	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
-)
-
-var (
-	styleSuccess = lipgloss.NewStyle().Foreground(lipgloss.Color("2")) // green
-	styleInfo    = lipgloss.NewStyle().Foreground(lipgloss.Color("4")) // blue
-	styleWarning = lipgloss.NewStyle().Foreground(lipgloss.Color("3")) // yellow
-	styleError   = lipgloss.NewStyle().Foreground(lipgloss.Color("1")) // red
-	styleMuted   = lipgloss.NewStyle().Foreground(lipgloss.Color("8")) // gray
 )
 
 // ClaudeCmd represents the claude parent command.

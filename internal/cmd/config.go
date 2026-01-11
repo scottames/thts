@@ -7,6 +7,7 @@ import (
 	"os/exec"
 
 	"github.com/scottames/tpd/internal/config"
+	"github.com/scottames/tpd/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -41,8 +42,8 @@ func runConfig(cmd *cobra.Command, args []string) error {
 	cfg, err := config.Load()
 	if err != nil {
 		if err == config.ErrConfigNotFound {
-			fmt.Println(styleWarning.Render("No configuration found."))
-			fmt.Printf("Run %s to create one.\n", styleCyan.Render("tpd setup"))
+			fmt.Println(ui.Warning("No configuration found."))
+			fmt.Printf("Run %s to create one.\n", ui.Accent("tpd setup"))
 			return nil
 		}
 		return fmt.Errorf("failed to load config: %w", err)
@@ -60,8 +61,8 @@ func editConfig() error {
 
 	// Check if config exists
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		fmt.Println(styleWarning.Render("No configuration file found."))
-		fmt.Printf("Run %s to create one first.\n", styleCyan.Render("tpd setup"))
+		fmt.Println(ui.Warning("No configuration file found."))
+		fmt.Printf("Run %s to create one first.\n", ui.Accent("tpd setup"))
 		return nil
 	}
 
@@ -97,57 +98,59 @@ func outputJSON(cfg *config.Config) error {
 }
 
 func displayConfig(cfg *config.Config) error {
-	fmt.Println(styleInfo.Render("=== tpd Configuration ==="))
+	fmt.Println(ui.Header("tpd Configuration"))
 	fmt.Println()
 
-	fmt.Printf("  %s           %s\n", styleMuted.Render("User:"), styleSuccess.Render(cfg.User))
-
-	// Optional settings
-	if cfg.GitIgnore != "" {
-		fmt.Printf("  %s     %s\n", styleMuted.Render("Git ignore:"), string(cfg.GitIgnore))
+	// General settings table
+	generalRows := [][]string{
+		{"User", cfg.User},
 	}
-	fmt.Printf("  %s %v\n", styleMuted.Render("Auto-sync in worktrees:"), cfg.AutoSyncInWorktrees)
+	if cfg.GitIgnore != "" {
+		generalRows = append(generalRows, []string{"Git ignore", string(cfg.GitIgnore)})
+	}
+	generalRows = append(generalRows, []string{"Auto-sync in worktrees", fmt.Sprintf("%v", cfg.AutoSyncInWorktrees)})
+	fmt.Println(ui.KeyValueTable(generalRows))
 
 	// Profiles
 	fmt.Println()
-	fmt.Println(styleInfo.Render("Profiles:"))
+	fmt.Println(ui.SubHeader("Profiles"))
 	if len(cfg.Profiles) == 0 {
-		fmt.Println(styleMuted.Render("  No profiles configured."))
-		fmt.Printf("  Run %s to create one.\n", styleCyan.Render("tpd setup"))
+		fmt.Println(ui.Muted("  No profiles configured."))
+		fmt.Printf("  Run %s to create one.\n", ui.Accent("tpd setup"))
 	} else {
 		for name, profile := range cfg.Profiles {
 			nameDisplay := name
 			if profile.Default {
 				nameDisplay = name + " *"
 			}
-			fmt.Printf("  %s:\n", styleCyan.Render(nameDisplay))
+			fmt.Printf("  %s:\n", ui.Accent(nameDisplay))
 			fmt.Printf("    Thoughts repo: %s\n", profile.ThoughtsRepo)
 			fmt.Printf("    Repos dir: %s\n", profile.ReposDir)
 			fmt.Printf("    Global dir: %s\n", profile.GlobalDir)
 		}
 		fmt.Println()
-		fmt.Println(styleMuted.Render("  * = default profile"))
+		fmt.Println(ui.Muted("  * = default profile"))
 	}
 
 	// Repo mappings
 	if len(cfg.RepoMappings) > 0 {
 		fmt.Println()
-		fmt.Println(styleInfo.Render("Repository Mappings:"))
+		fmt.Println(ui.SubHeader("Repository Mappings"))
 		for repoPath, mapping := range cfg.RepoMappings {
 			displayPath := config.ContractPath(repoPath)
 			if mapping.Profile != "" {
 				fmt.Printf("  %s → %s %s\n",
-					styleMuted.Render(displayPath),
+					ui.Muted(displayPath),
 					mapping.Repo,
-					styleMuted.Render(fmt.Sprintf("(profile: %s)", mapping.Profile)))
+					ui.Muted(fmt.Sprintf("(profile: %s)", mapping.Profile)))
 			} else {
-				fmt.Printf("  %s → %s\n", styleMuted.Render(displayPath), mapping.Repo)
+				fmt.Printf("  %s → %s\n", ui.Muted(displayPath), mapping.Repo)
 			}
 		}
 	}
 
 	fmt.Println()
-	fmt.Printf("Config file: %s\n", styleMuted.Render(config.TPDConfigPath()))
+	fmt.Printf("Config file: %s\n", ui.Muted(config.TPDConfigPath()))
 
 	return nil
 }

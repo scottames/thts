@@ -11,6 +11,7 @@ import (
 	"github.com/scottames/tpd/internal/config"
 	"github.com/scottames/tpd/internal/fs"
 	"github.com/scottames/tpd/internal/tpd"
+	"github.com/scottames/tpd/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -40,8 +41,8 @@ func runSync(cmd *cobra.Command, args []string) error {
 	// Check if config exists
 	cfg, err := config.Load()
 	if err != nil {
-		fmt.Println(styleError.Render("Error: tpd not configured."))
-		fmt.Printf("Run %s first to set up.\n", styleCyan.Render("tpd setup"))
+		fmt.Println(ui.Error("tpd not configured."))
+		fmt.Printf("Run %s first to set up.\n", ui.Accent("tpd setup"))
 		return nil
 	}
 
@@ -54,22 +55,22 @@ func runSync(cmd *cobra.Command, args []string) error {
 	// Check if thoughts directory exists
 	thoughtsDir := filepath.Join(currentRepo, "thoughts")
 	if !fs.Exists(thoughtsDir) {
-		fmt.Println(styleError.Render("Error: Thoughts not initialized for this repository."))
-		fmt.Printf("Run %s to set up thoughts.\n", styleCyan.Render("tpd init"))
+		fmt.Println(ui.Error("Thoughts not initialized for this repository."))
+		fmt.Printf("Run %s to set up thoughts.\n", ui.Accent("tpd init"))
 		return nil
 	}
 
 	// Get mapping for current repo
 	mapping := cfg.RepoMappings[currentRepo]
 	if mapping == nil {
-		fmt.Println(styleError.Render("Error: This repository is not registered."))
-		fmt.Printf("Run %s to set up thoughts.\n", styleCyan.Render("tpd init"))
+		fmt.Println(ui.Error("This repository is not registered."))
+		fmt.Printf("Run %s to set up thoughts.\n", ui.Accent("tpd init"))
 		return nil
 	}
 
 	projectName := mapping.GetRepoName()
 	if projectName == "" {
-		fmt.Println(styleError.Render("Error: Invalid repository mapping."))
+		fmt.Println(ui.Error("Invalid repository mapping."))
 		return nil
 	}
 
@@ -80,27 +81,23 @@ func runSync(cmd *cobra.Command, args []string) error {
 	// 1. Update symlinks for any new users
 	newUsers := updateSymlinksForNewUsers(thoughtsDir, profileConfig, projectName, cfg.User)
 	if len(newUsers) > 0 {
-		fmt.Printf("%s Added symlinks for new users: %s\n",
-			styleSuccess.Render("✓"),
-			strings.Join(newUsers, ", "))
+		fmt.Println(ui.SuccessF("Added symlinks for new users: %s", strings.Join(newUsers, ", ")))
 	}
 
 	// 2. Create searchable directory with hard links
-	fmt.Println(styleInfo.Render("Creating searchable index..."))
+	fmt.Println(ui.Info("Creating searchable index..."))
 	result, err := tpd.CreateSearchableDir(thoughtsDir)
 	if err != nil {
-		fmt.Printf("%s Could not create searchable directory: %v\n", styleWarning.Render("Warning:"), err)
+		fmt.Println(ui.WarningF("Could not create searchable directory: %v", err))
 	} else {
 		if result.CrossFilesystem {
-			fmt.Printf("%s Some files skipped (cross-filesystem - hard links not supported)\n",
-				styleWarning.Render("Warning:"))
+			fmt.Println(ui.Warning("Some files skipped (cross-filesystem - hard links not supported)"))
 		}
-		fmt.Printf("%s Created %d hard links in searchable directory\n",
-			styleMuted.Render("•"), result.LinkedCount)
+		fmt.Println(ui.Bullet(fmt.Sprintf("Created %d hard links in searchable directory", result.LinkedCount)))
 	}
 
 	// 3. Sync the thoughts repository
-	fmt.Println(styleInfo.Render("Syncing thoughts..."))
+	fmt.Println(ui.Info("Syncing thoughts..."))
 	if err := syncThoughtsRepo(expandedRepo, syncMessage); err != nil {
 		return err
 	}
@@ -131,9 +128,9 @@ func syncThoughtsRepo(repoPath, message string) error {
 		if err := runGitCommand(repoPath, "commit", "-m", commitMessage); err != nil {
 			return fmt.Errorf("failed to commit: %w", err)
 		}
-		fmt.Println(styleSuccess.Render("✓ Thoughts committed"))
+		fmt.Println(ui.Success("Thoughts committed"))
 	} else {
-		fmt.Println(styleMuted.Render("No changes to commit"))
+		fmt.Println(ui.Muted("No changes to commit"))
 	}
 
 	// Pull latest changes (after committing to avoid conflicts with staged changes)
@@ -144,7 +141,7 @@ func syncThoughtsRepo(repoPath, message string) error {
 	// Push if remote exists
 	if err := pushToRemote(repoPath); err != nil {
 		// Push errors are warnings, not fatal
-		fmt.Printf("%s %v\n", styleWarning.Render("Warning:"), err)
+		fmt.Println(ui.WarningF("%v", err))
 	}
 
 	return nil
@@ -190,21 +187,20 @@ func pullWithRebase(repoPath string) error {
 		// Check for merge conflict indicators
 		if isConflictError(outputStr) {
 			fmt.Println()
-			fmt.Println(styleError.Render("Sync conflict detected in thoughts repository."))
+			fmt.Println(ui.Error("Sync conflict detected in thoughts repository."))
 			fmt.Println()
 			fmt.Println("To resolve:")
-			fmt.Printf("  %s\n", styleCyan.Render(fmt.Sprintf("cd %s", repoPath)))
-			fmt.Printf("  %s        # See conflicting files\n", styleCyan.Render("git status"))
+			fmt.Printf("  %s\n", ui.Accent(fmt.Sprintf("cd %s", repoPath)))
+			fmt.Printf("  %s        # See conflicting files\n", ui.Accent("git status"))
 			fmt.Println("  # Fix conflicts manually")
-			fmt.Printf("  %s\n", styleCyan.Render("git rebase --continue"))
-			fmt.Printf("  %s          # Retry sync\n", styleCyan.Render("tpd sync"))
+			fmt.Printf("  %s\n", ui.Accent("git rebase --continue"))
+			fmt.Printf("  %s          # Retry sync\n", ui.Accent("tpd sync"))
 			fmt.Println()
 			return fmt.Errorf("merge conflict - manual resolution required")
 		}
 
 		// Other pull errors are warnings
-		fmt.Printf("%s Could not pull latest changes: %s\n",
-			styleWarning.Render("Warning:"), strings.TrimSpace(outputStr))
+		fmt.Println(ui.WarningF("Could not pull latest changes: %s", strings.TrimSpace(outputStr)))
 	}
 
 	return nil
@@ -233,19 +229,19 @@ func pushToRemote(repoPath string) error {
 	cmd := exec.Command("git", "remote", "get-url", "origin")
 	cmd.Dir = repoPath
 	if err := cmd.Run(); err != nil {
-		fmt.Println(styleMuted.Render("No remote configured for thoughts repository"))
+		fmt.Println(ui.Muted("No remote configured for thoughts repository"))
 		return nil
 	}
 
 	// Try to push
-	fmt.Println(styleMuted.Render("Pushing to remote..."))
+	fmt.Println(ui.Muted("Pushing to remote..."))
 	cmd = exec.Command("git", "push")
 	cmd.Dir = repoPath
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("could not push to remote - you may need to push manually")
 	}
 
-	fmt.Println(styleSuccess.Render("✓ Pushed to remote"))
+	fmt.Println(ui.Success("Pushed to remote"))
 	return nil
 }
 

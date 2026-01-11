@@ -10,6 +10,7 @@ import (
 
 	"github.com/scottames/tpd/internal/config"
 	"github.com/scottames/tpd/internal/fs"
+	"github.com/scottames/tpd/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -34,32 +35,33 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	// Load config
 	cfg, err := config.Load()
 	if err != nil {
-		fmt.Println(styleError.Render("Error: Thoughts not configured."))
-		fmt.Printf("Run %s first to set up.\n", styleCyan.Render("tpd setup"))
+		fmt.Println(ui.Error("Thoughts not configured."))
+		fmt.Printf("Run %s first to set up.\n", ui.Accent("tpd setup"))
 		return nil
 	}
 
-	fmt.Println(styleInfo.Render("Thoughts Repository Status"))
-	fmt.Println(styleMuted.Render(strings.Repeat("=", 50)))
+	fmt.Println(ui.Header("Thoughts Repository Status"))
 	fmt.Println()
 
 	// Get default profile for config display
 	defaultProfile, defaultProfileName := cfg.GetDefaultProfile()
 
 	// Show configuration
-	fmt.Println(styleWarning.Render("Configuration:"))
+	fmt.Println(ui.SubHeader("Configuration"))
 	if defaultProfile != nil {
-		fmt.Printf("  Default profile: %s\n", styleCyan.Render(defaultProfileName))
-		fmt.Printf("  Repository: %s\n", styleCyan.Render(defaultProfile.ThoughtsRepo))
-		fmt.Printf("  Repos directory: %s\n", styleCyan.Render(defaultProfile.ReposDir))
-		fmt.Printf("  Global directory: %s\n", styleCyan.Render(defaultProfile.GlobalDir))
+		tbl := ui.NewTable("Setting", "Value")
+		tbl.Row("Default profile", defaultProfileName)
+		tbl.Row("Repository", defaultProfile.ThoughtsRepo)
+		tbl.Row("Repos directory", defaultProfile.ReposDir)
+		tbl.Row("Global directory", defaultProfile.GlobalDir)
+		tbl.Row("User", cfg.User)
+		tbl.Row("Profiles", fmt.Sprintf("%d", len(cfg.Profiles)))
+		tbl.Row("Mapped repos", fmt.Sprintf("%d", len(cfg.RepoMappings)))
+		fmt.Println(tbl)
 	} else {
-		fmt.Printf("  %s\n", styleError.Render("No profiles configured"))
-		fmt.Printf("  Run %s to create a profile\n", styleCyan.Render("tpd setup"))
+		fmt.Println(ui.Error("No profiles configured"))
+		fmt.Printf("  Run %s to create a profile\n", ui.Accent("tpd setup"))
 	}
-	fmt.Printf("  User: %s\n", styleCyan.Render(cfg.User))
-	fmt.Printf("  Profiles: %s\n", styleCyan.Render(fmt.Sprintf("%d", len(cfg.Profiles))))
-	fmt.Printf("  Mapped repos: %s\n", styleCyan.Render(fmt.Sprintf("%d", len(cfg.RepoMappings))))
 	fmt.Println()
 
 	// Get current repo path
@@ -73,35 +75,35 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	profileConfig := cfg.ResolveProfileForRepo(currentRepo)
 
 	if mapping != nil && profileConfig != nil {
-		fmt.Println(styleWarning.Render("Current Repository:"))
-		fmt.Printf("  Path: %s\n", styleCyan.Render(currentRepo))
-		fmt.Printf("  Thoughts directory: %s\n", styleCyan.Render(fmt.Sprintf("%s/%s", profileConfig.ReposDir, mapping.GetRepoName())))
-
-		// Show profile info (always show the resolved profile name)
-		fmt.Printf("  Profile: %s\n", styleCyan.Render(profileConfig.ProfileName))
+		fmt.Println(ui.SubHeader("Current Repository"))
+		tbl := ui.NewTable("Setting", "Value")
+		tbl.Row("Path", currentRepo)
+		tbl.Row("Thoughts directory", fmt.Sprintf("%s/%s", profileConfig.ReposDir, mapping.GetRepoName()))
+		tbl.Row("Profile", profileConfig.ProfileName)
 
 		// Check if thoughts directory exists
 		thoughtsDir := filepath.Join(currentRepo, "thoughts")
 		if fs.Exists(thoughtsDir) {
-			fmt.Printf("  Status: %s\n", styleSuccess.Render("✓ Initialized"))
+			tbl.Row("Status", ui.StyleSuccess.Render(ui.SymbolSuccess+" Initialized"))
 		} else {
-			fmt.Printf("  Status: %s\n", styleError.Render("✗ Not initialized"))
+			tbl.Row("Status", ui.StyleError.Render(ui.SymbolError+" Not initialized"))
 		}
+		fmt.Println(tbl)
 	} else {
-		fmt.Println(styleWarning.Render("Current repository not mapped to thoughts"))
+		fmt.Println(ui.Warning("Current repository not mapped to thoughts"))
 	}
 	fmt.Println()
 
 	// Show thoughts repository git status (use default profile if available)
 	if profileConfig == nil {
-		fmt.Println(styleMuted.Render("No profile available for git status"))
+		fmt.Println(ui.Muted("No profile available for git status"))
 		return nil
 	}
 
 	expandedRepo := config.ExpandPath(profileConfig.ThoughtsRepo)
 
-	fmt.Println(styleWarning.Render("Thoughts Repository Git Status:"))
-	fmt.Printf("  %s\n", styleMuted.Render(fmt.Sprintf("(profile: %s)", profileConfig.ProfileName)))
+	fmt.Println(ui.SubHeader("Thoughts Repository Git Status"))
+	fmt.Printf("  %s\n", ui.Muted(fmt.Sprintf("(profile: %s)", profileConfig.ProfileName)))
 
 	// Git branch status
 	branchStatus := getGitBranchStatus(expandedRepo)
@@ -119,14 +121,14 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	// Show uncommitted changes
 	changes := getUncommittedChanges(expandedRepo)
 	if len(changes) > 0 {
-		fmt.Println(styleWarning.Render("Uncommitted changes:"))
+		fmt.Println(ui.SubHeader("Uncommitted changes"))
 		for _, change := range changes {
 			fmt.Println(change)
 		}
 		fmt.Println()
-		fmt.Printf("%s Run %s to commit these changes\n", styleMuted.Render("Tip:"), styleCyan.Render("tpd sync"))
+		fmt.Printf("%s Run %s to commit these changes\n", ui.Muted("Tip:"), ui.Accent("tpd sync"))
 	} else {
-		fmt.Println(styleSuccess.Render("✓ No uncommitted changes"))
+		fmt.Println(ui.Success("No uncommitted changes"))
 	}
 
 	return nil
@@ -138,14 +140,14 @@ func getGitBranchStatus(repoPath string) string {
 	cmd.Dir = repoPath
 	output, err := cmd.Output()
 	if err != nil {
-		return styleMuted.Render("Not a git repository")
+		return ui.Muted("Not a git repository")
 	}
 
 	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
 	if len(lines) > 0 {
 		return lines[0]
 	}
-	return styleMuted.Render("Unknown status")
+	return ui.Muted("Unknown status")
 }
 
 // getGitRemoteStatus returns the remote sync status.
@@ -154,7 +156,7 @@ func getGitRemoteStatus(repoPath string) string {
 	cmd := exec.Command("git", "remote", "get-url", "origin")
 	cmd.Dir = repoPath
 	if err := cmd.Run(); err != nil {
-		return styleMuted.Render("No remote configured")
+		return ui.Muted("No remote configured")
 	}
 
 	// Try to fetch (silently)
@@ -167,7 +169,7 @@ func getGitRemoteStatus(repoPath string) string {
 	statusCmd.Dir = repoPath
 	output, err := statusCmd.Output()
 	if err != nil {
-		return styleMuted.Render("Unknown")
+		return ui.Muted("Unknown")
 	}
 
 	status := string(output)
@@ -180,14 +182,14 @@ func getGitRemoteStatus(repoPath string) string {
 	behindMatch := behindRe.FindStringSubmatch(status)
 
 	if aheadMatch != nil && behindMatch != nil {
-		return styleWarning.Render(fmt.Sprintf("%s ahead, %s behind remote", aheadMatch[1], behindMatch[1]))
+		return ui.StyleWarning.Render(fmt.Sprintf("%s ahead, %s behind remote", aheadMatch[1], behindMatch[1]))
 	} else if aheadMatch != nil {
-		return styleWarning.Render(fmt.Sprintf("%s commits ahead of remote", aheadMatch[1]))
+		return ui.StyleWarning.Render(fmt.Sprintf("%s commits ahead of remote", aheadMatch[1]))
 	} else if behindMatch != nil {
-		return styleWarning.Render(fmt.Sprintf("%s commits behind remote", behindMatch[1]))
+		return ui.StyleWarning.Render(fmt.Sprintf("%s commits behind remote", behindMatch[1]))
 	}
 
-	return styleSuccess.Render("Up to date with remote")
+	return ui.StyleSuccess.Render("Up to date with remote")
 }
 
 // getLastCommit returns the last commit info.
@@ -196,7 +198,7 @@ func getLastCommit(repoPath string) string {
 	cmd.Dir = repoPath
 	output, err := cmd.Output()
 	if err != nil {
-		return styleMuted.Render("No commits yet")
+		return ui.Muted("No commits yet")
 	}
 	return strings.TrimSpace(string(output))
 }
@@ -242,7 +244,7 @@ func getUncommittedChanges(repoPath string) []string {
 			statusText = "changed"
 		}
 
-		changes = append(changes, fmt.Sprintf("  %s %s", styleWarning.Render(padRight(statusText, 10)), file))
+		changes = append(changes, fmt.Sprintf("  %s %s", ui.StyleWarning.Render(padRight(statusText, 10)), file))
 	}
 
 	return changes

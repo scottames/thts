@@ -9,6 +9,7 @@ import (
 	"github.com/scottames/tpd/internal/cmd/claude"
 	"github.com/scottames/tpd/internal/config"
 	"github.com/scottames/tpd/internal/fs"
+	"github.com/scottames/tpd/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -40,14 +41,14 @@ func runUninit(cmd *cobra.Command, args []string) error {
 
 	// Check if thoughts directory exists
 	if !fs.Exists(thoughtsDir) {
-		fmt.Println(styleError.Render("Error: Thoughts not initialized for this repository."))
+		fmt.Println(ui.Error("Thoughts not initialized for this repository."))
 		return nil
 	}
 
 	// Load config
 	cfg, err := config.Load()
 	if err != nil {
-		fmt.Println(styleError.Render("Error: Thoughts configuration not found."))
+		fmt.Println(ui.Error("Thoughts configuration not found."))
 		return nil
 	}
 
@@ -62,16 +63,16 @@ func runUninit(cmd *cobra.Command, args []string) error {
 	}
 
 	if mappedName == "" && !uninitForce {
-		fmt.Println(styleError.Render("Error: This repository is not in the thoughts configuration."))
-		fmt.Printf("Use %s to remove the thoughts directory anyway.\n", styleCyan.Render("--force"))
+		fmt.Println(ui.Error("This repository is not in the thoughts configuration."))
+		fmt.Printf("Use %s to remove the thoughts directory anyway.\n", ui.Accent("--force"))
 		return nil
 	}
 
 	// Confirm unless --force
 	if !uninitForce {
-		fmt.Println(styleInfo.Render("Removing thoughts setup from current repository..."))
+		fmt.Println(ui.Info("Removing thoughts setup from current repository..."))
 		fmt.Println()
-		fmt.Printf("This will remove: %s\n", styleCyan.Render(thoughtsDir))
+		fmt.Printf("This will remove: %s\n", ui.Accent(thoughtsDir))
 		fmt.Println()
 
 		var confirm bool
@@ -91,47 +92,47 @@ func runUninit(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	fmt.Println(styleInfo.Render("Removing thoughts setup from current repository..."))
+	fmt.Println(ui.Info("Removing thoughts setup from current repository..."))
 
 	// Handle searchable directory if it exists
 	searchableDir := filepath.Join(thoughtsDir, "searchable")
 	if fs.Exists(searchableDir) {
-		fmt.Println(styleMuted.Render("Removing searchable directory..."))
+		fmt.Println(ui.Muted("Removing searchable directory..."))
 		if err := fs.RemoveAll(searchableDir); err != nil {
-			fmt.Printf("%s Could not remove searchable directory: %v\n", styleWarning.Render("Warning:"), err)
+			fmt.Println(ui.WarningF("Could not remove searchable directory: %v", err))
 		}
 	}
 
 	// Remove the entire thoughts directory
-	fmt.Println(styleMuted.Render("Removing thoughts directory (symlinks only)..."))
+	fmt.Println(ui.Muted("Removing thoughts directory (symlinks only)..."))
 	if err := fs.RemoveAll(thoughtsDir); err != nil {
-		fmt.Printf("%s Could not remove thoughts directory: %v\n", styleError.Render("Error:"), err)
+		fmt.Println(ui.ErrorF("Could not remove thoughts directory: %v", err))
 		fmt.Printf("You may need to manually remove: %s\n", thoughtsDir)
 		return nil
 	}
 
 	// Remove from config if mapped
 	if mappedName != "" {
-		fmt.Println(styleMuted.Render("Removing repository from thoughts configuration..."))
+		fmt.Println(ui.Muted("Removing repository from thoughts configuration..."))
 		delete(cfg.RepoMappings, currentRepo)
 		if err := config.Save(cfg); err != nil {
-			fmt.Printf("%s Could not update configuration: %v\n", styleWarning.Render("Warning:"), err)
+			fmt.Println(ui.WarningF("Could not update configuration: %v", err))
 		}
 	}
 
 	// Also remove Claude integration if present (leave no trace)
-	fmt.Println(styleMuted.Render("Checking for Claude integration..."))
+	fmt.Println(ui.Muted("Checking for Claude integration..."))
 	if err := claude.Uninit(currentRepo, true); err != nil {
-		fmt.Printf("%s Could not remove Claude integration: %v\n", styleWarning.Render("Warning:"), err)
+		fmt.Println(ui.WarningF("Could not remove Claude integration: %v", err))
 	}
 
 	fmt.Println()
-	fmt.Println(styleSuccess.Render("Thoughts removed from repository"))
+	fmt.Println(ui.Success("Thoughts removed from repository"))
 
 	// Provide info about what was preserved
 	if mappedName != "" {
 		fmt.Println()
-		fmt.Println(styleMuted.Render("Note: Your thoughts content remains safe in:"))
+		fmt.Println(ui.Muted("Note: Your thoughts content remains safe in:"))
 
 		// Look up the profile that was used
 		var profile *config.ProfileConfig
@@ -149,11 +150,11 @@ func runUninit(cmd *cobra.Command, args []string) error {
 		}
 
 		if profile != nil {
-			fmt.Printf("  %s\n", styleMuted.Render(fmt.Sprintf("%s/%s/%s", profile.ThoughtsRepo, profile.ReposDir, mappedName)))
-			fmt.Printf("  %s\n", styleMuted.Render(fmt.Sprintf("(profile: %s)", displayProfileName)))
+			fmt.Printf("  %s\n", ui.Muted(fmt.Sprintf("%s/%s/%s", profile.ThoughtsRepo, profile.ReposDir, mappedName)))
+			fmt.Printf("  %s\n", ui.Muted(fmt.Sprintf("(profile: %s)", displayProfileName)))
 		}
 
-		fmt.Println(styleMuted.Render("Only the local symlinks and configuration were removed."))
+		fmt.Println(ui.Muted("Only the local symlinks and configuration were removed."))
 	}
 
 	return nil

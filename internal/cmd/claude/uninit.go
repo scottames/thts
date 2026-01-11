@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/huh"
 	fsutil "github.com/scottames/tpd/internal/fs"
 	"github.com/scottames/tpd/internal/git"
+	"github.com/scottames/tpd/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -40,7 +41,7 @@ func init() {
 }
 
 func runClaudeUninit(cmd *cobra.Command, args []string) error {
-	fmt.Println(styleInfo.Render("Remove Claude Code tpd Integration"))
+	fmt.Println(ui.Header("Remove Claude Code tpd Integration"))
 	fmt.Println()
 
 	targetDir, err := os.Getwd()
@@ -52,7 +53,7 @@ func runClaudeUninit(cmd *cobra.Command, args []string) error {
 
 	// Check if .claude exists
 	if !fsutil.Exists(claudeDir) {
-		fmt.Println(styleError.Render("Error: No .claude/ directory found."))
+		fmt.Println(ui.Error("No .claude/ directory found."))
 		return nil
 	}
 
@@ -62,10 +63,10 @@ func runClaudeUninit(cmd *cobra.Command, args []string) error {
 		// Manifest doesn't exist or is corrupted - fall back to detection
 		manifest = detectInstallation(claudeDir, targetDir)
 		if manifest == nil {
-			fmt.Println(styleError.Render("Error: No tpd installation detected."))
+			fmt.Println(ui.Error("No tpd installation detected."))
 			return nil
 		}
-		fmt.Println(styleWarning.Render("Warning: No manifest found, using detection."))
+		fmt.Println(ui.Warning("No manifest found, using detection."))
 		fmt.Println()
 	}
 
@@ -74,7 +75,7 @@ func runClaudeUninit(cmd *cobra.Command, args []string) error {
 
 	if uninitDryRun {
 		fmt.Println()
-		fmt.Println(styleInfo.Render("Dry run complete. No files were removed."))
+		fmt.Println(ui.Info("Dry run complete. No files were removed."))
 		return nil
 	}
 
@@ -180,7 +181,7 @@ func detectInstallation(claudeDir, projectDir string) *Manifest {
 
 // printRemovalPlan shows what will be removed.
 func printRemovalPlan(manifest *Manifest, claudeDir string) {
-	fmt.Println(styleInfo.Render("Files to remove:"))
+	fmt.Println(ui.SubHeader("Files to remove:"))
 	for _, f := range manifest.Files {
 		fmt.Printf("  %s\n", filepath.Join(claudeDir, f))
 	}
@@ -191,13 +192,13 @@ func printRemovalPlan(manifest *Manifest, claudeDir string) {
 
 	if manifest.Modifications.ClaudeMD != nil {
 		fmt.Println()
-		fmt.Println(styleInfo.Render("Modifications to revert:"))
+		fmt.Println(ui.SubHeader("Modifications to revert:"))
 		fmt.Printf("  Remove @include from: %s\n", manifest.Modifications.ClaudeMD.Path)
 	}
 
 	if manifest.Modifications.Gitignore != nil && len(manifest.Modifications.Gitignore.Patterns) > 0 {
 		fmt.Println()
-		fmt.Println(styleInfo.Render("Gitignore patterns to remove:"))
+		fmt.Println(ui.SubHeader("Gitignore patterns to remove:"))
 		for _, p := range manifest.Modifications.Gitignore.Patterns {
 			fmt.Printf("  %s\n", p)
 		}
@@ -214,7 +215,7 @@ func performRemoval(manifest *Manifest, claudeDir, projectDir string) error {
 		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 			warnings = append(warnings, fmt.Sprintf("failed to remove %s: %v", f, err))
 		} else if err == nil {
-			fmt.Printf("%s Removed %s\n", styleSuccess.Render("+"), f)
+			fmt.Println(ui.SuccessF("Removed %s", f))
 		}
 	}
 
@@ -224,7 +225,7 @@ func performRemoval(manifest *Manifest, claudeDir, projectDir string) error {
 		if err := os.Remove(settingsPath); err != nil && !os.IsNotExist(err) {
 			warnings = append(warnings, fmt.Sprintf("failed to remove settings.json: %v", err))
 		} else if err == nil {
-			fmt.Printf("%s Removed settings.json\n", styleSuccess.Render("+"))
+			fmt.Println(ui.Success("Removed settings.json"))
 		}
 	}
 
@@ -241,7 +242,7 @@ func performRemoval(manifest *Manifest, claudeDir, projectDir string) error {
 		if err := removeFromClaudeMD(manifest.Modifications.ClaudeMD); err != nil {
 			warnings = append(warnings, fmt.Sprintf("failed to clean CLAUDE.md: %v", err))
 		} else {
-			fmt.Printf("%s Removed @include from CLAUDE.md\n", styleSuccess.Render("+"))
+			fmt.Println(ui.Success("Removed @include from CLAUDE.md"))
 		}
 	}
 
@@ -252,7 +253,7 @@ func performRemoval(manifest *Manifest, claudeDir, projectDir string) error {
 			if err != nil {
 				warnings = append(warnings, fmt.Sprintf("failed to remove gitignore pattern %s: %v", pattern, err))
 			} else if removed {
-				fmt.Printf("%s Removed %s from .gitignore\n", styleSuccess.Render("+"), pattern)
+				fmt.Println(ui.SuccessF("Removed %s from .gitignore", pattern))
 			}
 		}
 	}
@@ -264,12 +265,12 @@ func performRemoval(manifest *Manifest, claudeDir, projectDir string) error {
 	// Summary
 	fmt.Println()
 	if len(warnings) > 0 {
-		fmt.Println(styleWarning.Render("Completed with warnings:"))
+		fmt.Println(ui.Warning("Completed with warnings:"))
 		for _, w := range warnings {
 			fmt.Printf("  %s\n", w)
 		}
 	} else {
-		fmt.Println(styleSuccess.Render("Successfully removed tpd integration."))
+		fmt.Println(ui.Success("Successfully removed tpd integration."))
 	}
 
 	return nil

@@ -3,9 +3,9 @@ package profile
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"github.com/scottames/tpd/internal/config"
+	"github.com/scottames/tpd/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -26,8 +26,8 @@ func runList(cmd *cobra.Command, args []string) error {
 	cfg, err := config.Load()
 	if err != nil {
 		if err == config.ErrConfigNotFound {
-			fmt.Println(styleError.Render("Error: Thoughts not configured."))
-			fmt.Printf("Run %s first to set up the base configuration.\n", styleCyan.Render("tpd setup"))
+			fmt.Println(ui.Error("Thoughts not configured."))
+			fmt.Printf("Run %s first to set up the base configuration.\n", ui.Accent("tpd setup"))
 			return nil
 		}
 		return fmt.Errorf("failed to load config: %w", err)
@@ -46,17 +46,16 @@ func runList(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	fmt.Println(styleInfo.Render("Thoughts Profiles"))
-	fmt.Println(styleMuted.Render(strings.Repeat("=", 50)))
+	fmt.Println(ui.Header("Thoughts Profiles"))
 	fmt.Println()
 
 	// Show profiles
 	if len(cfg.Profiles) == 0 {
-		fmt.Println(styleMuted.Render("No profiles configured."))
+		fmt.Println(ui.Muted("No profiles configured."))
 		fmt.Println()
-		fmt.Printf("Run %s to create your first profile.\n", styleCyan.Render("tpd setup"))
+		fmt.Printf("Run %s to create your first profile.\n", ui.Accent("tpd setup"))
 	} else {
-		fmt.Println(styleWarning.Render(fmt.Sprintf("Profiles (%d):", len(cfg.Profiles))))
+		fmt.Println(ui.SubHeader(fmt.Sprintf("Profiles (%d)", len(cfg.Profiles))))
 		fmt.Println()
 
 		for name, profile := range cfg.Profiles {
@@ -65,14 +64,14 @@ func runList(cmd *cobra.Command, args []string) error {
 			if profile.Default {
 				nameDisplay = name + " *"
 			}
-			fmt.Printf("  %s:\n", styleCyan.Render(nameDisplay))
+			fmt.Printf("  %s:\n", ui.Accent(nameDisplay))
 			fmt.Printf("    Thoughts repository: %s\n", profile.ThoughtsRepo)
 			fmt.Printf("    Repos directory: %s\n", profile.ReposDir)
 			fmt.Printf("    Global directory: %s\n", profile.GlobalDir)
 			fmt.Println()
 		}
 
-		fmt.Println(styleMuted.Render("* = default profile"))
+		fmt.Println(ui.Muted("* = default profile"))
 	}
 
 	return nil

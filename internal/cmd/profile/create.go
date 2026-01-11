@@ -8,6 +8,7 @@ import (
 
 	"github.com/charmbracelet/huh"
 	"github.com/scottames/tpd/internal/config"
+	"github.com/scottames/tpd/internal/ui"
 	"github.com/spf13/cobra"
 )
 
@@ -44,8 +45,8 @@ func runCreate(cmd *cobra.Command, args []string) error {
 	cfg, err := config.Load()
 	if err != nil {
 		if err == config.ErrConfigNotFound {
-			fmt.Println(styleError.Render("Error: Thoughts not configured."))
-			fmt.Printf("Run %s first to set up the base configuration.\n", styleCyan.Render("tpd setup"))
+			fmt.Println(ui.Error("Thoughts not configured."))
+			fmt.Printf("Run %s first to set up the base configuration.\n", ui.Accent("tpd setup"))
 			return nil
 		}
 		return fmt.Errorf("failed to load config: %w", err)
@@ -54,12 +55,12 @@ func runCreate(cmd *cobra.Command, args []string) error {
 	// Sanitize profile name
 	sanitizedName := config.SanitizeProfileName(profileName)
 	if sanitizedName != profileName {
-		fmt.Println(styleWarning.Render(fmt.Sprintf("Profile name sanitized: \"%s\" → \"%s\"", profileName, sanitizedName)))
+		fmt.Println(ui.WarningF("Profile name sanitized: %q → %q", profileName, sanitizedName))
 	}
 
 	// Check if profile already exists
 	if cfg.ValidateProfile(sanitizedName) {
-		fmt.Println(styleError.Render(fmt.Sprintf("Error: Profile \"%s\" already exists.", sanitizedName)))
+		fmt.Println(ui.ErrorF("Profile %q already exists.", sanitizedName))
 		fmt.Println("Use a different name or delete the existing profile first.")
 		return nil
 	}
@@ -81,12 +82,12 @@ func runCreate(cmd *cobra.Command, args []string) error {
 	} else {
 		// Interactive mode
 		fmt.Println()
-		fmt.Println(styleInfo.Render(fmt.Sprintf("=== Creating Profile: %s ===", sanitizedName)))
+		fmt.Println(ui.Header(fmt.Sprintf("Creating Profile: %s", sanitizedName)))
 		fmt.Println()
 
 		defaultRepo := config.DefaultThoughtsRepo() + "-" + sanitizedName
 
-		fmt.Println(styleMuted.Render("Specify the thoughts repository location for this profile."))
+		fmt.Println(ui.Muted("Specify the thoughts repository location for this profile."))
 
 		err = huh.NewInput().
 			Title("Thoughts repository").
@@ -149,22 +150,22 @@ func runCreate(cmd *cobra.Command, args []string) error {
 
 	// Create the profile's thoughts repository structure
 	fmt.Println()
-	fmt.Println(styleMuted.Render("Initializing profile thoughts repository..."))
+	fmt.Println(ui.Muted("Initializing profile thoughts repository..."))
 	if err := ensureProfileRepoExists(profileConfig); err != nil {
 		return fmt.Errorf("failed to create profile repository: %w", err)
 	}
 
 	fmt.Println()
-	fmt.Println(styleSuccess.Render(fmt.Sprintf("✅ Profile \"%s\" created successfully!", sanitizedName)))
+	fmt.Println(ui.SuccessF("Profile %q created successfully!", sanitizedName))
 	fmt.Println()
-	fmt.Println(styleInfo.Render("=== Profile Configuration ==="))
-	fmt.Printf("  Name: %s\n", styleCyan.Render(sanitizedName))
-	fmt.Printf("  Thoughts repository: %s\n", styleCyan.Render(thoughtsRepo))
-	fmt.Printf("  Repos directory: %s\n", styleCyan.Render(reposDir))
-	fmt.Printf("  Global directory: %s\n", styleCyan.Render(globalDir))
+	fmt.Println(ui.Header("Profile Configuration"))
+	fmt.Printf("  Name: %s\n", ui.Accent(sanitizedName))
+	fmt.Printf("  Thoughts repository: %s\n", ui.Accent(thoughtsRepo))
+	fmt.Printf("  Repos directory: %s\n", ui.Accent(reposDir))
+	fmt.Printf("  Global directory: %s\n", ui.Accent(globalDir))
 	fmt.Println()
-	fmt.Println(styleMuted.Render("Next steps:"))
-	fmt.Printf("  1. Run %s in a repository\n", styleCyan.Render(fmt.Sprintf("tpd init --profile %s", sanitizedName)))
+	fmt.Println(ui.Muted("Next steps:"))
+	fmt.Printf("  1. Run %s in a repository\n", ui.Accent(fmt.Sprintf("tpd init --profile %s", sanitizedName)))
 	fmt.Println("  2. Your thoughts will sync to the profile's repository")
 
 	return nil
@@ -196,12 +197,12 @@ func ensureProfileRepoExists(profile *config.ProfileConfig) error {
 	info, err := os.Stat(gitPath)
 	if err == nil && (info.IsDir() || info.Mode().IsRegular()) {
 		// Already a git repo
-		fmt.Println(styleSuccess.Render("✓ Profile thoughts repository exists"))
+		fmt.Println(ui.Success("Profile thoughts repository exists"))
 		return nil
 	}
 
 	// Initialize as git repo
-	fmt.Println(styleInfo.Render("Initializing profile thoughts repository as git repo..."))
+	fmt.Println(ui.Info("Initializing profile thoughts repository as git repo..."))
 
 	gitInit := exec.Command("git", "init")
 	gitInit.Dir = expandedRepo
@@ -243,6 +244,6 @@ Thumbs.db
 		return fmt.Errorf("failed to create initial commit: %w", err)
 	}
 
-	fmt.Println(styleSuccess.Render("✓ Profile thoughts repository initialized"))
+	fmt.Println(ui.Success("Profile thoughts repository initialized"))
 	return nil
 }
