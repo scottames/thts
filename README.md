@@ -1,7 +1,9 @@
-# thts - Thoughts, Plans, and Dreams
+# thts
 
-A CLI for managing developer notes separately from code repositories while
-keeping them accessible in every project.
+A CLI for storing developer thoughts, plans, and dreams in a central repo while
+keeping them accessible in any project. Integrates with AI coding agents like
+Claude Code, giving them persistent memory for research, plans, and context
+across sessions.
 
 <!-- mtoc-start -->
 
@@ -50,7 +52,7 @@ teams without versioning them in every repo independently.
     `thts` to keep track of research, notes, plans, etc.
 
 <!-- prettier-ignore-start -->
->[!INFO]
+> [!NOTE]
 > `thts` is a Go reimplementation of the `thoughts` subcommand from
 > [HumanLayer's CLI](https://github.com/humanlayer/humanlayer) (`humanlayer`).
 > See [Compatibility with HumanLayer](#compatibility-with-humanlayer) for more
@@ -100,8 +102,8 @@ thts sync -m "Added architecture notes"
 
 ## Claude Code Integration
 
-thts integrates with Claude Code to give AI assistants awareness of your thoughts
-directory:
+thts integrates with Claude Code to give AI assistants awareness of your
+thoughts directory:
 
 ```bash
 thts claude init              # Install integration files
