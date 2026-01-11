@@ -16,7 +16,10 @@ Managed by `+"`tpd`"+` - do not commit to the code repository.
 
 ## Structure
 
-- `+"`%s/`"+` - Your personal notes for this repository
+Directories are named by **user**, not by repository. The repository name (%s)
+determines where files are stored in the central thoughts repo.
+
+- `+"`%s/`"+` - Your personal notes (named after your username)
 - `+"`shared/`"+` - Team-shared notes for this repository
 - `+"`global/`"+` - Cross-repository thoughts
   - `+"`%s/`"+` - Your personal cross-repo notes
@@ -53,7 +56,7 @@ Quick access:
 
 - `+"`tpd sync`"+` - Manually sync changes to thoughts repository
 - `+"`tpd status`"+` - Show sync status
-`, projectName, user, user, user, user, user)
+`, projectName, projectName, user, user, user, user, user)
 }
 
 // WriteClaudeMD writes the CLAUDE.md file to the thoughts directory.
