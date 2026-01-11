@@ -34,7 +34,7 @@ your central thoughts repo. Changes sync automatically on commits.
 
 ## Why tpd?
 
-`tdp` stores thoughts, plans, dreams, research, etc. in one central repo and
+`tpd` stores thoughts, plans, dreams, research, etc. in one central repo and
 links it to existing repos so that they can be shared across projects and with
 teams without versioning them in every repo independently.
 
@@ -47,11 +47,11 @@ teams without versioning them in every repo independently.
   - By design notes can be given a personal, project, or team scope
 - Automatic LLM integration
   - Claude will automatically, if [configured](#claude-code-integration) use
-    `tdp` to keep track of research, notes, plans, etc.
+    `tpd` to keep track of research, notes, plans, etc.
 
 <!-- prettier-ignore-start -->
 >[!INFO]
-> `tbd` is a Go reimplementation of the `thoughts` subcommand from
+> `tpd` is a Go reimplementation of the `thoughts` subcommand from
 > [HumanLayer's CLI](https://github.com/humanlayer/humanlayer) (`humanlayer`).
 > See [Compatibility with HumanLayer](#compatibility-with-humanlayer) for more
 > information.
