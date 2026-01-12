@@ -1,0 +1,69 @@
+---
+description: Resume work from a handoff document
+---
+
+# Resume from Handoff
+
+Resume work from a handoff document with context analysis and validation.
+
+## Initial Response
+
+If a handoff path was provided, read it immediately.
+
+If no path provided:
+
+```text
+I'll help you resume from a handoff. Please provide the path to the handoff
+document, or I can list recent handoffs:
+
+Tip: /prompts:thts-resume thoughts/shared/handoffs/YYYY-MM-DD_HH-MM-SS_description.md
+```
+
+## Process
+
+### 1. Read and Analyze Handoff
+
+1. Read the handoff document completely
+2. Read all critical references mentioned
+3. Check current git state vs handoff state:
+   - Same branch?
+   - New commits since handoff?
+   - Uncommitted changes?
+
+### 2. Validate Current State
+
+Spawn research tasks to verify:
+
+- Do recent changes from handoff still exist?
+- Have referenced files changed?
+- Are next steps still relevant?
+
+### 3. Present Analysis
+
+```text
+I've analyzed the handoff from [date] by [author].
+
+**Original Tasks:**
+- [Task 1]: [status] -> [current state]
+- [Task 2]: [status] -> [current state]
+
+**State Changes Since Handoff:**
+- [Any divergence from expected state]
+
+**Key Learnings to Apply:**
+- [Important points from handoff]
+
+**Recommended Next Actions:**
+1. [First priority based on handoff + current state]
+2. [Second priority]
+
+Shall I proceed with [action 1], or would you like to adjust?
+```
+
+### 4. Create Task List
+
+Use your task tracking to track the next steps from the handoff.
+
+### 5. Begin Work
+
+After confirmation, proceed with the first task.

@@ -283,9 +283,9 @@ func detectInstallation(agentDir, projectDir string, agentType agents.AgentType)
 		}
 	}
 
-	if cfg.SupportsCommands {
-		knownFiles = append(knownFiles, "commands/thts-handoff.md")
-		knownFiles = append(knownFiles, "commands/thts-resume.md")
+	if cfg.SupportsCommands && cfg.CommandsDir != "" {
+		knownFiles = append(knownFiles, filepath.Join(cfg.CommandsDir, "thts-handoff.md"))
+		knownFiles = append(knownFiles, filepath.Join(cfg.CommandsDir, "thts-resume.md"))
 	}
 
 	agentFiles := []string{
@@ -467,8 +467,8 @@ func performRemoval(plan *removalPlan) error {
 
 	// 3. Clean up empty subdirectories
 	subdirs := []string{cfg.SkillsDir, cfg.AgentsDir}
-	if cfg.SupportsCommands {
-		subdirs = append(subdirs, "commands")
+	if cfg.SupportsCommands && cfg.CommandsDir != "" {
+		subdirs = append(subdirs, cfg.CommandsDir)
 	}
 	for _, subdir := range subdirs {
 		dir := filepath.Join(plan.agentDir, subdir)

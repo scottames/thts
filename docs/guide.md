@@ -35,8 +35,10 @@
   - [Config Options](#config-options)
   - [gitIgnore Options](#gitignore-options)
 - [Working with AI Assistants](#working-with-ai-assistants)
-  - [Claude Code Integration](#claude-code-integration)
+  - [AI Agent Integration](#ai-agent-integration)
+    - [Supported Agents](#supported-agents)
     - [Installing Integration](#installing-integration)
+    - [Global vs Project Configuration](#global-vs-project-configuration)
     - [Integration Levels](#integration-levels)
     - [What Gets Installed](#what-gets-installed)
     - [Using the Commands](#using-the-commands)
@@ -416,40 +418,82 @@ When working with AI assistants:
 - Reference files by canonical path (e.g., `thoughts/{user}/notes.md`)
 - Run `thts sync` to update searchable directory before AI sessions
 
-### Claude Code Integration
+### AI Agent Integration
 
-thts provides deep integration with Claude Code to give AI assistants awareness
-of your thoughts directory and enable session continuity.
+thts provides deep integration with AI coding agents to give them awareness of
+your thoughts directory and enable session continuity.
+
+#### Supported Agents
+
+| Agent       | Project Dir  | Skills Dir          | Commands Dir      | Global Path           |
+| ----------- | ------------ | ------------------- | ----------------- | --------------------- |
+| Claude Code | `.claude/`   | `skills/`           | `commands/`       | `~/.claude/`          |
+| Codex CLI   | `.codex/`    | `skills/*/SKILL.md` | `prompts/` (glob) | `~/.codex/`           |
+| OpenCode    | `.opencode/` | `skill/*/SKILL.md`  | `command/`        | `~/.config/opencode/` |
+
+**Key differences:**
+
+- **Codex "prompts"**: Codex calls commands "prompts". They are global-only and
+  invoked as `/prompts:<name>` (e.g., `/prompts:thts-handoff`).
+- **OpenCode XDG**: OpenCode uses XDG for global config (`~/.config/opencode/`)
+  rather than a dot-folder in home.
 
 #### Installing Integration
 
 ```bash
-thts claude init              # Install with default options
-thts claude init -i           # Interactive mode
-thts claude init --with-settings  # Also create settings.json
+thts agents init              # Install for detected agents
+thts agents init -i           # Interactive mode
+thts agents init --agents claude,codex  # Specify agents
+thts agents init --with-settings  # Also create settings files
 ```
+
+#### Global vs Project Configuration
+
+By default, `thts agents init` installs to project directories (`.claude/`,
+`.codex/`, `.opencode/`). You can also install globally:
+
+```bash
+thts agents init --global all              # Install everything globally
+thts agents init --global skills,commands  # Install specific components
+```
+
+**Global paths:**
+
+| Agent    | Global Path           |
+| -------- | --------------------- |
+| Claude   | `~/.claude/`          |
+| Codex    | `~/.codex/`           |
+| OpenCode | `~/.config/opencode/` |
+
+**When to use global:**
+
+- Skills/commands you want available in all projects
+- Codex prompts (they only work globally)
+- When you don't want to modify project files
 
 #### Integration Levels
 
-When you run `thts claude init`, you'll be asked how to activate the
+When you run `thts agents init`, you'll be asked how to activate the
 integration:
 
-| Level                     | Description                                               | Best For                    |
-| ------------------------- | --------------------------------------------------------- | --------------------------- |
-| **Always-on (CLAUDE.md)** | Adds `@.claude/thts-instructions.md` to project CLAUDE.md | Teams sharing Claude config |
-| **Always-on (local)**     | Creates `.claude/CLAUDE.local.md` (gitignored)            | Personal always-on          |
-| **On-demand only**        | Just installs skill/commands                              | Manual activation           |
+| Level                  | Description                                      | Best For                   |
+| ---------------------- | ------------------------------------------------ | -------------------------- |
+| **Always-on (shared)** | Adds include to project's instruction file       | Teams sharing agent config |
+| **Always-on (local)**  | Creates local-only instruction file (gitignored) | Personal always-on         |
+| **On-demand only**     | Just installs skill/commands                     | Manual activation          |
 
 #### What Gets Installed
 
-**Files copied to `.claude/`:**
+**Files copied to agent directories:**
 
-- `thts-instructions.md` - Teaches Claude about thoughts/ structure and usage
-- `skills/thts-integrate.md` - On-demand activation skill
+- `thts-instructions.md` - Teaches the agent about thoughts/ structure
+- `skills/thts-integrate.*` - On-demand activation skill
 - `commands/thts-handoff.md` - Create session handoff documents
 - `commands/thts-resume.md` - Resume from handoff documents
 - `agents/thoughts-locator.md` - Find documents in thoughts/
 - `agents/thoughts-analyzer.md` - Extract insights from documents
+
+**Note:** Directory names vary by agent (see table above).
 
 #### Using the Commands
 
@@ -459,9 +503,11 @@ integration:
 | `/thts-handoff`       | Create a handoff document when ending a session |
 | `/thts-resume <path>` | Resume work from a handoff document             |
 
+**Codex note:** Use `/prompts:thts-handoff` instead of `/thts-handoff`.
+
 #### Session Handoffs
 
-Handoffs preserve context across Claude Code sessions:
+Handoffs preserve context across sessions:
 
 ```bash
 # At end of session
@@ -480,24 +526,25 @@ The handoff document captures:
 
 #### Removing Integration
 
-To remove Claude Code integration from a project:
+To remove agent integration from a project:
 
 ```bash
-thts claude uninit              # Interactive confirmation
-thts claude uninit --force      # Skip confirmation
-thts claude uninit --dry-run    # Preview what would be removed
+thts agents uninit              # Interactive confirmation
+thts agents uninit --force      # Skip confirmation
+thts agents uninit --dry-run    # Preview what would be removed
+thts agents uninit --global     # Remove global installation
 ```
 
 This removes:
 
-- All thts files from `.claude/` (instructions, skills, commands, agents)
-- The `@.claude/thts-instructions.md` include from CLAUDE.md (if present)
+- All thts files from agent directories (instructions, skills, commands, agents)
+- Instruction file modifications
 - Gitignore patterns added by init
 
-The `.claude/` directory itself is preserved if it contains other files.
+The agent directory itself is preserved if it contains other files.
 
 **Note:** Running `thts uninit` (to remove thoughts/ integration) also removes
-Claude integration automatically, ensuring a clean teardown.
+agent integration automatically, ensuring a clean teardown.
 
 ## Compatibility with HumanLayer
 

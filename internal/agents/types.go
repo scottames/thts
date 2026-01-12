@@ -61,8 +61,17 @@ type AgentConfig struct {
 	// AgentsDir is the directory name for agents.
 	AgentsDir string
 
-	// SupportsCommands indicates if this agent supports commands (only Claude).
+	// SupportsCommands indicates if this agent supports commands/prompts.
 	SupportsCommands bool
+
+	// CommandsDir is the directory name for commands/prompts (e.g., "commands", "prompts", "command").
+	CommandsDir string
+
+	// CommandsGlobalOnly indicates commands can only be installed globally (e.g., Codex prompts).
+	CommandsGlobalOnly bool
+
+	// GlobalUsesXDG indicates global config uses ~/.config/<name>/ instead of ~/.<name>/.
+	GlobalUsesXDG bool
 
 	// SettingsFile is the settings file name for this agent.
 	SettingsFile string
@@ -83,6 +92,9 @@ var AgentConfigs = map[AgentType]*AgentConfig{
 		SkillNeedsDir:         false,
 		AgentsDir:             "agents",
 		SupportsCommands:      true,
+		CommandsDir:           "commands",
+		CommandsGlobalOnly:    false,
+		GlobalUsesXDG:         false,
 		SettingsFile:          "settings.json",
 		SettingsFormat:        "json",
 	},
@@ -95,7 +107,10 @@ var AgentConfigs = map[AgentType]*AgentConfig{
 		SkillsDir:             "skills",
 		SkillNeedsDir:         true,
 		AgentsDir:             "agents",
-		SupportsCommands:      false,
+		SupportsCommands:      true,
+		CommandsDir:           "prompts",
+		CommandsGlobalOnly:    true, // Codex prompts are global-only per docs
+		GlobalUsesXDG:         false,
 		SettingsFile:          "config.toml",
 		SettingsFormat:        "toml",
 	},
@@ -108,7 +123,10 @@ var AgentConfigs = map[AgentType]*AgentConfig{
 		SkillsDir:             "skill",
 		SkillNeedsDir:         true,
 		AgentsDir:             "agent",
-		SupportsCommands:      false,
+		SupportsCommands:      true,
+		CommandsDir:           "command",
+		CommandsGlobalOnly:    false,
+		GlobalUsesXDG:         true, // OpenCode uses ~/.config/opencode/ for global
 		SettingsFile:          "opencode.json",
 		SettingsFormat:        "json",
 	},
@@ -117,6 +135,16 @@ var AgentConfigs = map[AgentType]*AgentConfig{
 // GetConfig returns the configuration for an agent type.
 func GetConfig(agentType AgentType) *AgentConfig {
 	return AgentConfigs[agentType]
+}
+
+// CommandsDirLabel returns the user-facing label for commands directory.
+// Codex uses "prompts", others use "commands".
+func CommandsDirLabel(agentType AgentType) string {
+	config := GetConfig(agentType)
+	if config != nil && config.CommandsDir == "prompts" {
+		return "prompts"
+	}
+	return "commands"
 }
 
 // ParseAgentType parses a string into an AgentType.

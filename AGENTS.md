@@ -30,7 +30,7 @@ internal/
   thts/            # Searchable directory (hard links)
 instructions/      # Embedded: AGENTS.md (shared instructions)
 skills/            # Embedded: skills per agent (claude/codex/opencode)
-commands/          # Embedded: thts-handoff.md, thts-resume.md (claude only)
+commands/          # Embedded: thts-handoff.md, thts-resume.md per agent
 agents/            # Embedded: thoughts-locator.md, thoughts-analyzer.md
 embed.go           # Go embed declarations for above
 ```
@@ -71,11 +71,14 @@ binary and copied to agent directories by `thts agents init`.
 
 ### Supported Agents
 
-| Agent    | Directory    | Skill Format        | Settings File   |
-| -------- | ------------ | ------------------- | --------------- |
-| Claude   | `.claude/`   | `skills/*.md`       | `settings.json` |
-| Codex    | `.codex/`    | `skills/*/SKILL.md` | `config.toml`   |
-| OpenCode | `.opencode/` | `skill/*/SKILL.md`  | `opencode.json` |
+| Agent    | Directory    | Skill Format        | Commands Dir      | Settings File   |
+| -------- | ------------ | ------------------- | ----------------- | --------------- |
+| Claude   | `.claude/`   | `skills/*.md`       | `commands/`       | `settings.json` |
+| Codex    | `.codex/`    | `skills/*/SKILL.md` | `prompts/` (glob) | `config.toml`   |
+| OpenCode | `.opencode/` | `skill/*/SKILL.md`  | `command/`        | `opencode.json` |
+
+**Note:** Codex calls commands "prompts" and they are global-only (`~/.codex/prompts/`).
+OpenCode uses XDG for global config (`~/.config/opencode/`).
 
 ### Embedded Files
 
@@ -83,8 +86,8 @@ binary and copied to agent directories by `thts agents init`.
 | ---------------------- | ----------------------------- | ------------- |
 | `AGENTS.md`            | Shared thoughts/ instructions | All           |
 | `thts-integrate`       | On-demand activation skill    | All           |
-| `thts-handoff.md`      | Session handoff command       | Claude only   |
-| `thts-resume.md`       | Resume from handoff command   | Claude only   |
+| `thts-handoff.md`      | Session handoff command       | All           |
+| `thts-resume.md`       | Resume from handoff command   | All           |
 | `thoughts-locator.md`  | Find documents agent          | All           |
 | `thoughts-analyzer.md` | Analyze documents agent       | All           |
 

@@ -1,9 +1,9 @@
 # thts
 
 A CLI for storing developer thoughts, plans, and dreams in a central repo while
-keeping them accessible in any project. Integrates with AI coding agents like
-Claude Code, giving them persistent memory for research, plans, and context
-across sessions.
+keeping them accessible in any project. Integrates with AI coding agents
+(Claude Code, Codex, OpenCode), giving them persistent memory for research,
+plans, and context across sessions.
 
 <!-- mtoc-start -->
 
@@ -12,7 +12,7 @@ across sessions.
 - [Quick Start](#quick-start)
 - [Commands](#commands)
 - [Documentation](#documentation)
-- [Claude Code Integration](#claude-code-integration)
+- [AI Agent Integration](#ai-agent-integration)
 - [Attribution](#attribution)
 - [Compatibility with HumanLayer](#compatibility-with-humanlayer)
 - [License](#license)
@@ -48,7 +48,7 @@ teams without versioning them in every repo independently.
 - Share with a team
   - By design notes can be given a personal, project, or team scope
 - Automatic LLM integration
-  - Claude will automatically, if [configured](#claude-code-integration) use
+  - AI agents will automatically, if [configured](#ai-agent-integration), use
     `thts` to keep track of research, notes, plans, etc.
 
 <!-- prettier-ignore-start -->
@@ -92,33 +92,33 @@ thts sync -m "Added architecture notes"
 | `thts profile list`            | List profiles                       |
 | `thts profile show <name>`     | Show profile details                |
 | `thts profile delete <name>`   | Delete a profile                    |
-| `thts claude init`             | Install Claude Code integration     |
-| `thts claude uninit`           | Remove Claude Code integration      |
+| `thts agents init`             | Install AI agent integration        |
+| `thts agents uninit`           | Remove AI agent integration         |
 
 ## Documentation
 
 - [User Guide](docs/guide.md) - Complete documentation
 - [Troubleshooting](docs/troubleshooting.md) - Common issues and solutions
 
-## Claude Code Integration
+## AI Agent Integration
 
-thts integrates with Claude Code to give AI assistants awareness of your
-thoughts directory:
+thts integrates with AI coding agents to give them awareness of your thoughts
+directory. Supports Claude Code, OpenAI Codex, and OpenCode.
 
 ```bash
-thts claude init              # Install integration files
-thts claude init -i           # Interactive mode (select files/options)
-thts claude uninit            # Remove integration (run thts claude uninit --help for options)
+thts agents init              # Install for detected agents
+thts agents init -i           # Interactive mode
+thts agents init --global     # Install to global config directories
+thts agents uninit            # Remove integration
 ```
 
-This installs:
+This installs skills, commands, and agents for thoughts/ integration including:
 
-- `/thts-integrate` - Skill to activate thoughts/ awareness for current task
-- `/thts-handoff` - Create session handoff documents
-- `/thts-resume` - Resume from handoff documents
+- `/thts-integrate` - Activate thoughts/ awareness for current task
+- `/thts-handoff`, `/thts-resume` - Session handoff and resume
 - Specialized agents for searching/analyzing thoughts
 
-See [User Guide](docs/guide.md#claude-code-integration) for integration options.
+See [User Guide](docs/guide.md#ai-agent-integration) for details.
 
 ## Attribution
 

@@ -7,7 +7,7 @@
 //	instructions/thts-instructions.md - Shared thts instructions for all agents
 //	skills/{agent}/*.md               - Agent-specific skills (flat for Claude)
 //	skills/{agent}/*/SKILL.md         - Agent-specific skills (subdirs for Codex/OpenCode)
-//	commands/claude/*.md              - Claude-only commands
+//	commands/{agent}/*.md             - Agent commands (prompts for Codex, global-only)
 //	agents/{agent}/*.md               - Agent definitions per tool
 package thtsfiles
 
@@ -37,10 +37,20 @@ var CodexSkills embed.FS
 var OpenCodeSkills embed.FS
 
 // ClaudeCommands contains embedded command markdown files for Claude Code.
-// Only Claude supports commands.
 //
 //go:embed commands/claude/*.md
 var ClaudeCommands embed.FS
+
+// CodexCommands contains embedded prompt markdown files for Codex CLI.
+// Codex calls these "prompts" and they're global-only.
+//
+//go:embed commands/codex/*.md
+var CodexCommands embed.FS
+
+// OpenCodeCommands contains embedded command markdown files for OpenCode.
+//
+//go:embed commands/opencode/*.md
+var OpenCodeCommands embed.FS
 
 // ClaudeAgents contains embedded agent files for Claude Code.
 //

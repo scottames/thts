@@ -92,6 +92,7 @@ func GlobalManifestPath() string {
 
 // GlobalAgentDir returns the global directory for an agent type.
 // These are the user-level config directories where global skills/commands/agents are installed.
+// Note: OpenCode uses XDG (~/.config/opencode/), others use home directory dot-folders.
 func GlobalAgentDir(agentType string) string {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -103,7 +104,8 @@ func GlobalAgentDir(agentType string) string {
 	case "codex":
 		return filepath.Join(home, ".codex")
 	case "opencode":
-		return filepath.Join(home, ".opencode")
+		// OpenCode uses XDG for global config
+		return filepath.Join(XDGConfigHome(), "opencode")
 	}
 	return ""
 }

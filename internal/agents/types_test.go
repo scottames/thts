@@ -114,11 +114,29 @@ func TestAgentConfigProperties(t *testing.T) {
 	if claude.InstructionsFile != "thts-instructions.md" {
 		t.Errorf("Claude InstructionsFile = %q, want thts-instructions.md", claude.InstructionsFile)
 	}
+	if claude.CommandsDir != "commands" {
+		t.Errorf("Claude CommandsDir = %q, want commands", claude.CommandsDir)
+	}
+	if claude.CommandsGlobalOnly {
+		t.Error("Claude commands should not be global-only")
+	}
+	if claude.GlobalUsesXDG {
+		t.Error("Claude should not use XDG for global config")
+	}
 
 	// Codex-specific properties
 	codex := GetConfig(AgentCodex)
-	if codex.SupportsCommands {
-		t.Error("Codex should not support commands")
+	if !codex.SupportsCommands {
+		t.Error("Codex should support commands (prompts)")
+	}
+	if codex.CommandsDir != "prompts" {
+		t.Errorf("Codex CommandsDir = %q, want prompts", codex.CommandsDir)
+	}
+	if !codex.CommandsGlobalOnly {
+		t.Error("Codex commands should be global-only")
+	}
+	if codex.GlobalUsesXDG {
+		t.Error("Codex should not use XDG for global config")
 	}
 	if codex.IntegrationType != "marker" {
 		t.Errorf("Codex IntegrationType = %q, want marker", codex.IntegrationType)
@@ -135,8 +153,17 @@ func TestAgentConfigProperties(t *testing.T) {
 
 	// OpenCode-specific properties
 	opencode := GetConfig(AgentOpenCode)
-	if opencode.SupportsCommands {
-		t.Error("OpenCode should not support commands")
+	if !opencode.SupportsCommands {
+		t.Error("OpenCode should support commands")
+	}
+	if opencode.CommandsDir != "command" {
+		t.Errorf("OpenCode CommandsDir = %q, want command", opencode.CommandsDir)
+	}
+	if opencode.CommandsGlobalOnly {
+		t.Error("OpenCode commands should not be global-only")
+	}
+	if !opencode.GlobalUsesXDG {
+		t.Error("OpenCode should use XDG for global config")
 	}
 	if opencode.IntegrationType != "marker" {
 		t.Errorf("OpenCode IntegrationType = %q, want marker", opencode.IntegrationType)
@@ -252,5 +279,25 @@ func TestAllAgentTypes(t *testing.T) {
 	}
 	if all[2] != AgentOpenCode {
 		t.Error("Third agent should be opencode")
+	}
+}
+
+func TestCommandsDirLabel(t *testing.T) {
+	tests := []struct {
+		agentType AgentType
+		want      string
+	}{
+		{AgentClaude, "commands"},
+		{AgentCodex, "prompts"},
+		{AgentOpenCode, "commands"},
+	}
+
+	for _, tt := range tests {
+		t.Run(string(tt.agentType), func(t *testing.T) {
+			got := CommandsDirLabel(tt.agentType)
+			if got != tt.want {
+				t.Errorf("CommandsDirLabel(%q) = %q, want %q", tt.agentType, got, tt.want)
+			}
+		})
 	}
 }

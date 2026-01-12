@@ -102,9 +102,11 @@ to the project's agent-specific directories.
 
 This enables thoughts/ integration with supported agent tools including:
   - /thts-integrate skill (activate integration for current task)
-  - /thts-handoff command (create session handoff documents) [Claude only]
-  - /thts-resume command (resume from handoff documents) [Claude only]
+  - /thts-handoff command (create session handoff documents)
+  - /thts-resume command (resume from handoff documents)
   - Specialized agents (thoughts-locator, thoughts-analyzer)
+
+Note: Codex uses "prompts" instead of "commands" and they're global-only.
 
 Agent selection priority:
   1. --agents flag if provided
@@ -333,24 +335,31 @@ func initAgent(projectDir string, agentType agents.AgentType, level IntegrationL
 		}
 	}
 
-	// Copy commands (Claude only, check component mode)
+	// Copy commands/prompts (check component mode)
 	if agentConfig.SupportsCommands {
+		cmdLabel := agents.CommandsDirLabel(agentType)
 		commandsMode := cfg.GetAgentComponentMode("commands")
 		switch commandsMode {
 		case config.ComponentModeGlobal:
-			fmt.Println(ui.InfoF("  Commands: using global installation"))
+			fmt.Println(ui.InfoF("  %s: using global installation", capitalize(cmdLabel)))
 		case config.ComponentModeDisabled:
 			// Skip silently
 		default:
-			cmdsCopied, cmdFiles, err := copyCommands(agentDir, agentType)
-			if err != nil {
-				fmt.Println(ui.WarningF("  Could not copy commands: %v", err))
-			} else if cmdsCopied > 0 {
-				filesCopied += cmdsCopied
-				for _, f := range cmdFiles {
-					manifest.Files = append(manifest.Files, filepath.Join("commands", f))
+			// Warn if Codex prompts are being installed to project (they're global-only)
+			if agentConfig.CommandsGlobalOnly {
+				fmt.Println(ui.WarningF("  %s %s are global-only. Use --global to install to %s",
+					string(agentType), cmdLabel, config.GlobalAgentDir(string(agentType))+"/"+agentConfig.CommandsDir+"/"))
+			} else {
+				cmdsCopied, cmdFiles, err := copyCommands(agentDir, agentType)
+				if err != nil {
+					fmt.Println(ui.WarningF("  Could not copy %s: %v", cmdLabel, err))
+				} else if cmdsCopied > 0 {
+					filesCopied += cmdsCopied
+					for _, f := range cmdFiles {
+						manifest.Files = append(manifest.Files, filepath.Join(agentConfig.CommandsDir, f))
+					}
+					fmt.Println(ui.SuccessF("  Copied %d %s", cmdsCopied, cmdLabel))
 				}
-				fmt.Println(ui.SuccessF("  Copied %d command(s)", cmdsCopied))
 			}
 		}
 	}
@@ -579,18 +588,25 @@ func copyFlatFiles(embedFS fs.FS, srcDir, targetDir string) (int, []string, erro
 	return copied, copiedFiles, nil
 }
 
-// copyCommands copies command files (Claude only).
+// copyCommands copies command/prompt files for an agent type.
 func copyCommands(agentDir string, agentType agents.AgentType) (int, []string, error) {
-	if agentType != agents.AgentClaude {
+	agentConfig := agents.GetConfig(agentType)
+	if agentConfig == nil || !agentConfig.SupportsCommands {
 		return 0, nil, nil
 	}
 
-	commandsDir := filepath.Join(agentDir, "commands")
+	commandsDir := filepath.Join(agentDir, agentConfig.CommandsDir)
 	if err := os.MkdirAll(commandsDir, 0755); err != nil {
 		return 0, nil, err
 	}
 
-	return copyFlatFiles(thtsfiles.ClaudeCommands, "commands/claude", commandsDir)
+	embedFS := getCommandsFS(agentType)
+	if embedFS == nil {
+		return 0, nil, nil
+	}
+
+	srcDir := fmt.Sprintf("commands/%s", agentType)
+	return copyFlatFiles(embedFS, srcDir, commandsDir)
 }
 
 // copyAgents copies agent files for an agent type.
@@ -632,6 +648,20 @@ func getAgentsFS(agentType agents.AgentType) fs.FS {
 		return thtsfiles.CodexAgents
 	case agents.AgentOpenCode:
 		return thtsfiles.OpenCodeAgents
+	default:
+		return nil
+	}
+}
+
+// getCommandsFS returns the embedded FS for commands/prompts for an agent type.
+func getCommandsFS(agentType agents.AgentType) fs.FS {
+	switch agentType {
+	case agents.AgentClaude:
+		return thtsfiles.ClaudeCommands
+	case agents.AgentCodex:
+		return thtsfiles.CodexCommands
+	case agents.AgentOpenCode:
+		return thtsfiles.OpenCodeCommands
 	default:
 		return nil
 	}
@@ -1178,7 +1208,7 @@ func promptGlobalComponentSelection() ([]string, error) {
 	var selected []string
 	options := []huh.Option[string]{
 		huh.NewOption("Skills (thts-integrate)", "skills"),
-		huh.NewOption("Commands (thts-handoff, thts-resume) [Claude only]", "commands"),
+		huh.NewOption("Commands/Prompts (thts-handoff, thts-resume)", "commands"),
 		huh.NewOption("Agents (thoughts-locator, thoughts-analyzer)", "agents"),
 	}
 
@@ -1236,10 +1266,10 @@ func installGlobalComponent(component string, agentTypes []agents.AgentType, man
 		case "skills":
 			_, files, err = copySkills(globalDir, agentType, agentCfg)
 		case "commands":
-			if agentType == agents.AgentClaude {
+			if agentCfg.SupportsCommands {
 				_, files, err = copyCommands(globalDir, agentType)
 			} else {
-				continue // commands only for Claude
+				continue // agent doesn't support commands
 			}
 		case "agents":
 			_, files, err = copyAgents(globalDir, agentType, agentCfg)
@@ -1258,7 +1288,7 @@ func installGlobalComponent(component string, agentTypes []agents.AgentType, man
 			case "skills":
 				fullPath = filepath.Join(globalDir, agentCfg.SkillsDir, f)
 			case "commands":
-				fullPath = filepath.Join(globalDir, "commands", f)
+				fullPath = filepath.Join(globalDir, agentCfg.CommandsDir, f)
 			case "agents":
 				fullPath = filepath.Join(globalDir, agentCfg.AgentsDir, f)
 			}
@@ -1276,4 +1306,12 @@ func installGlobalComponent(component string, agentTypes []agents.AgentType, man
 	})
 
 	return nil
+}
+
+// capitalize returns the string with the first letter capitalized.
+func capitalize(s string) string {
+	if s == "" {
+		return s
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
 }
