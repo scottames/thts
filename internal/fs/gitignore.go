@@ -132,3 +132,165 @@ func getGlobalGitignorePath() string {
 
 	return filepath.Join(home, ".config", "git", "ignore")
 }
+
+// Gitignore marker constants.
+const (
+	// GitignoreMarkerStart is the start marker for thts-managed gitignore patterns.
+	GitignoreMarkerStart = "# thts-agent-start"
+	// GitignoreMarkerEnd is the end marker for thts-managed gitignore patterns.
+	GitignoreMarkerEnd = "# thts-agent-end"
+)
+
+// AddGitignoreMarkerBlock adds patterns between markers in the gitignore file.
+// If a marker block already exists, it updates the patterns within it.
+// Returns the list of patterns that were added.
+func AddGitignoreMarkerBlock(repoPath string, patterns []string) ([]string, error) {
+	ignorePath := filepath.Join(repoPath, ".gitignore")
+
+	// Read existing content
+	content, err := os.ReadFile(ignorePath)
+	if err != nil && !os.IsNotExist(err) {
+		return nil, err
+	}
+
+	text := string(content)
+
+	// Build the marker block
+	var blockLines []string
+	blockLines = append(blockLines, GitignoreMarkerStart)
+	blockLines = append(blockLines, patterns...)
+	blockLines = append(blockLines, GitignoreMarkerEnd)
+	block := strings.Join(blockLines, "\n")
+
+	// Check if marker block already exists
+	startIdx := strings.Index(text, GitignoreMarkerStart)
+	endIdx := strings.Index(text, GitignoreMarkerEnd)
+
+	var newContent string
+	if startIdx != -1 && endIdx != -1 {
+		// Update existing block
+		endIdx += len(GitignoreMarkerEnd)
+		// Include trailing newline if present
+		if endIdx < len(text) && text[endIdx] == '\n' {
+			endIdx++
+		}
+		newContent = text[:startIdx] + block + "\n" + text[endIdx:]
+	} else {
+		// Add new block at end
+		if len(text) > 0 && !strings.HasSuffix(text, "\n") {
+			text += "\n"
+		}
+		newContent = text + block + "\n"
+	}
+
+	if err := os.WriteFile(ignorePath, []byte(newContent), 0644); err != nil {
+		return nil, err
+	}
+
+	return patterns, nil
+}
+
+// RemoveGitignoreMarkerBlock removes the marker block from the gitignore file.
+// Returns the patterns that were removed.
+func RemoveGitignoreMarkerBlock(repoPath string) ([]string, error) {
+	ignorePath := filepath.Join(repoPath, ".gitignore")
+
+	content, err := os.ReadFile(ignorePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	text := string(content)
+	startIdx := strings.Index(text, GitignoreMarkerStart)
+	endIdx := strings.Index(text, GitignoreMarkerEnd)
+
+	// No markers found
+	if startIdx == -1 && endIdx == -1 {
+		return nil, nil
+	}
+
+	// Corrupted markers
+	if startIdx == -1 || endIdx == -1 {
+		return nil, nil // Silently ignore corrupted state
+	}
+
+	// Extract patterns that were in the block
+	blockStart := startIdx + len(GitignoreMarkerStart)
+	if blockStart < len(text) && text[blockStart] == '\n' {
+		blockStart++
+	}
+	blockContent := text[blockStart:endIdx]
+	var patterns []string
+	for _, line := range strings.Split(blockContent, "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" && !strings.HasPrefix(line, "#") {
+			patterns = append(patterns, line)
+		}
+	}
+
+	// Calculate removal range
+	endIdx += len(GitignoreMarkerEnd)
+	// Include trailing newline
+	if endIdx < len(text) && text[endIdx] == '\n' {
+		endIdx++
+	}
+
+	newContent := text[:startIdx] + text[endIdx:]
+
+	// Clean up multiple blank lines
+	for strings.Contains(newContent, "\n\n\n") {
+		newContent = strings.ReplaceAll(newContent, "\n\n\n", "\n\n")
+	}
+
+	if err := os.WriteFile(ignorePath, []byte(newContent), 0644); err != nil {
+		return nil, err
+	}
+
+	return patterns, nil
+}
+
+// HasGitignoreMarkerBlock checks if the gitignore file has a thts marker block.
+func HasGitignoreMarkerBlock(repoPath string) bool {
+	ignorePath := filepath.Join(repoPath, ".gitignore")
+	content, err := os.ReadFile(ignorePath)
+	if err != nil {
+		return false
+	}
+	text := string(content)
+	return strings.Contains(text, GitignoreMarkerStart) && strings.Contains(text, GitignoreMarkerEnd)
+}
+
+// GetGitignoreMarkerPatterns returns the patterns in the marker block.
+func GetGitignoreMarkerPatterns(repoPath string) []string {
+	ignorePath := filepath.Join(repoPath, ".gitignore")
+	content, err := os.ReadFile(ignorePath)
+	if err != nil {
+		return nil
+	}
+
+	text := string(content)
+	startIdx := strings.Index(text, GitignoreMarkerStart)
+	endIdx := strings.Index(text, GitignoreMarkerEnd)
+
+	if startIdx == -1 || endIdx == -1 {
+		return nil
+	}
+
+	blockStart := startIdx + len(GitignoreMarkerStart)
+	if blockStart < len(text) && text[blockStart] == '\n' {
+		blockStart++
+	}
+	blockContent := text[blockStart:endIdx]
+
+	var patterns []string
+	for _, line := range strings.Split(blockContent, "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" && !strings.HasPrefix(line, "#") {
+			patterns = append(patterns, line)
+		}
+	}
+	return patterns
+}

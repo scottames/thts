@@ -7,3 +7,8 @@ git-ignored*
 coverage.out
 coverage.html
 thoughts/
+# thts-agent-start
+.claude/thts-*
+.claude/*/thts-*
+.claude/*/thoughts-*
+# thts-agent-end

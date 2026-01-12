@@ -46,7 +46,17 @@ const (
 )
 
 // ManifestFile is the name of the manifest file that tracks init operations.
-const ManifestFile = ".thts-manifest.json"
+const ManifestFile = "thts-manifest.json"
+
+// Marker constants for thts integration blocks.
+const (
+	// ThtsMarkerStart marks the beginning of thts-managed content.
+	ThtsMarkerStart = "<!-- thts-start -->"
+	// ThtsMarkerEnd marks the end of thts-managed content.
+	ThtsMarkerEnd = "<!-- thts-end -->"
+	// ThtsInstructionsFile is the filename for thts instructions.
+	ThtsInstructionsFile = "thts-instructions.md"
+)
 
 // Manifest tracks files created by agents init for clean uninit.
 type Manifest struct {
@@ -65,10 +75,16 @@ type ManifestModifications struct {
 	Gitignore      *GitignoreModification      `json:"gitignore,omitempty"`
 }
 
-// InstructionsMDModification tracks changes made to AGENTS.md or CLAUDE.md.
+// InstructionsMDModification tracks changes made to instruction files.
 type InstructionsMDModification struct {
-	Path    string `json:"path"`
-	Action  string `json:"action"` // "appended", "created", or "symlinked"
+	Path            string `json:"path"`
+	Action          string `json:"action"`          // "appended", "created"
+	IntegrationType string `json:"integrationType"` // "marker" or "config"
+	// MarkerBased is true when HTML comment markers were used.
+	MarkerBased bool `json:"markerBased,omitempty"`
+	// ConfigKey is the config key modified (for config-based integration).
+	ConfigKey string `json:"configKey,omitempty"`
+	// Pattern is kept for backward compatibility with old manifests.
 	Pattern string `json:"pattern,omitempty"`
 }
 
@@ -149,6 +165,11 @@ func runAgentsInit(cmd *cobra.Command, args []string) error {
 			fmt.Println(ui.ErrorF("Failed to initialize %s: %v", agentType, err))
 			continue
 		}
+	}
+
+	// Add gitignore patterns for all initialized agents
+	if err := updateGitignoreForAgents(targetDir, agentTypes); err != nil {
+		fmt.Println(ui.WarningF("Could not update .gitignore: %v", err))
 	}
 
 	fmt.Println()
@@ -262,23 +283,13 @@ func initAgent(projectDir string, agentType agents.AgentType, level IntegrationL
 
 	var filesCopied int
 
-	// Copy AGENTS.md (shared instructions)
+	// Copy thts-instructions.md (shared instructions)
 	if err := copyInstructionsFile(agentDir, agentConfig); err != nil {
 		fmt.Println(ui.WarningF("  Could not copy instructions: %v", err))
 	} else {
 		filesCopied++
-		manifest.Files = append(manifest.Files, "AGENTS.md")
-		fmt.Println(ui.Success("  Copied AGENTS.md"))
-	}
-
-	// For Claude, create CLAUDE.md symlink to AGENTS.md
-	if agentConfig.SymlinkToAgents {
-		if err := createInstructionsSymlink(agentDir, agentConfig); err != nil {
-			fmt.Println(ui.WarningF("  Could not create symlink: %v", err))
-		} else {
-			manifest.Files = append(manifest.Files, agentConfig.InstructionsFile)
-			fmt.Println(ui.SuccessF("  Created %s -> AGENTS.md", agentConfig.InstructionsFile))
-		}
+		manifest.Files = append(manifest.Files, ThtsInstructionsFile)
+		fmt.Println(ui.SuccessF("  Copied %s", ThtsInstructionsFile))
 	}
 
 	// Copy skills
@@ -352,26 +363,19 @@ func initAgent(projectDir string, agentType agents.AgentType, level IntegrationL
 	return nil
 }
 
-// copyInstructionsFile copies AGENTS.md to the agent directory.
+// copyInstructionsFile copies thts-instructions.md to the agent directory.
 func copyInstructionsFile(agentDir string, cfg *agents.AgentConfig) error {
-	content, err := fs.ReadFile(thtsfiles.Instructions, "instructions/AGENTS.md")
+	content, err := fs.ReadFile(thtsfiles.Instructions, "instructions/thts-instructions.md")
 	if err != nil {
-		return fmt.Errorf("failed to read AGENTS.md: %w", err)
+		return fmt.Errorf("failed to read thts-instructions.md: %w", err)
 	}
-	targetPath := filepath.Join(agentDir, "AGENTS.md")
+	targetPath := filepath.Join(agentDir, ThtsInstructionsFile)
 	return os.WriteFile(targetPath, content, 0644)
 }
 
-// createInstructionsSymlink creates a symlink from the agent's instruction file to AGENTS.md.
-// For Claude: CLAUDE.md -> AGENTS.md
-func createInstructionsSymlink(agentDir string, cfg *agents.AgentConfig) error {
-	if !cfg.SymlinkToAgents {
-		return nil
-	}
-	linkPath := filepath.Join(agentDir, cfg.InstructionsFile)
-	// Remove existing file if it exists
-	_ = os.Remove(linkPath)
-	return os.Symlink("AGENTS.md", linkPath)
+// readThtsInstructions reads the embedded thts-instructions.md content.
+func readThtsInstructions() ([]byte, error) {
+	return fs.ReadFile(thtsfiles.Instructions, "instructions/thts-instructions.md")
 }
 
 // copySkills copies skill files for an agent type.
@@ -531,18 +535,28 @@ func setupIntegrationLevel(projectDir, agentDir string, cfg *agents.AgentConfig,
 		if err != nil {
 			gitRoot = projectDir
 		}
-		mod, err := appendToInstructionsMD(gitRoot, cfg)
-		return mod, nil, err
+
+		// Choose integration strategy based on agent type
+		switch cfg.IntegrationType {
+		case "marker":
+			mod, err := appendWithMarkers(gitRoot, agentDir, cfg)
+			return mod, nil, err
+		case "config":
+			mod, err := updateOpenCodeConfig(projectDir, agentDir, cfg)
+			return mod, nil, err
+		default:
+			return nil, nil, fmt.Errorf("unknown integration type: %s", cfg.IntegrationType)
+		}
 
 	case IntegrationLocalOnly:
 		var localFile string
-		if cfg.SymlinkToAgents {
+		if cfg.Type == agents.AgentClaude {
 			// For Claude, use CLAUDE.local.md
-			localFile = strings.Replace(cfg.InstructionsFile, ".md", ".local.md", 1)
+			localFile = "CLAUDE.local.md"
 		} else {
 			localFile = "AGENTS.local.md"
 		}
-		if err := createLocalInstructionsMD(agentDir, localFile); err != nil {
+		if err := createLocalInstructionsMD(agentDir, localFile, cfg); err != nil {
 			return nil, nil, err
 		}
 		pattern := filepath.Join(cfg.RootDir, localFile)
@@ -564,68 +578,151 @@ func setupIntegrationLevel(projectDir, agentDir string, cfg *agents.AgentConfig,
 	return nil, nil, nil
 }
 
-// appendToInstructionsMD appends the @include directive to AGENTS.md (or CLAUDE.md for Claude).
-func appendToInstructionsMD(gitRoot string, cfg *agents.AgentConfig) (*InstructionsMDModification, error) {
-	// For Claude, use CLAUDE.md; for others, use AGENTS.md
-	var fileName string
-	if cfg.SymlinkToAgents {
-		fileName = cfg.InstructionsFile // CLAUDE.md
-	} else {
-		fileName = "AGENTS.md"
+// appendWithMarkers appends thts integration with HTML comment markers.
+// For Claude: adds @include directive wrapped in markers.
+// For Codex: adds full content inline wrapped in markers.
+func appendWithMarkers(gitRoot, agentDir string, cfg *agents.AgentConfig) (*InstructionsMDModification, error) {
+	if cfg.InstructionTargetFile == "" {
+		return nil, nil // No target file (e.g., OpenCode uses config)
 	}
 
-	filePath := filepath.Join(gitRoot, fileName)
-	includeDirective := fmt.Sprintf("\n@%s/AGENTS.md\n", cfg.RootDir)
-	pattern := fmt.Sprintf("@%s/AGENTS.md", cfg.RootDir)
+	filePath := filepath.Join(gitRoot, cfg.InstructionTargetFile)
 
+	// Build the content to insert based on agent type
+	var insertContent string
+	if cfg.Type == agents.AgentClaude {
+		// Claude supports @include
+		insertContent = fmt.Sprintf("\n%s\n@%s/%s\n%s\n",
+			ThtsMarkerStart,
+			cfg.RootDir,
+			ThtsInstructionsFile,
+			ThtsMarkerEnd)
+	} else {
+		// Codex: inline the full content (no @include support)
+		thtsContent, err := readThtsInstructions()
+		if err != nil {
+			return nil, fmt.Errorf("failed to read instructions: %w", err)
+		}
+		insertContent = fmt.Sprintf("\n%s\n%s\n%s\n",
+			ThtsMarkerStart,
+			string(thtsContent),
+			ThtsMarkerEnd)
+	}
+
+	// Check if already integrated
 	if fsutil.Exists(filePath) {
 		content, err := os.ReadFile(filePath)
 		if err != nil {
-			return nil, fmt.Errorf("failed to read %s: %w", fileName, err)
+			return nil, fmt.Errorf("failed to read %s: %w", cfg.InstructionTargetFile, err)
 		}
-		if strings.Contains(string(content), pattern) {
-			fmt.Println(ui.InfoF("  %s already includes thts integration", fileName))
+		if strings.Contains(string(content), ThtsMarkerStart) {
+			fmt.Println(ui.InfoF("  %s already includes thts integration", cfg.InstructionTargetFile))
 			return nil, nil
 		}
+		// Append to existing file
 		f, err := os.OpenFile(filePath, os.O_APPEND|os.O_WRONLY, 0644)
 		if err != nil {
-			return nil, fmt.Errorf("failed to open %s: %w", fileName, err)
+			return nil, fmt.Errorf("failed to open %s: %w", cfg.InstructionTargetFile, err)
 		}
-		if _, err := f.WriteString(includeDirective); err != nil {
+		if _, err := f.WriteString(insertContent); err != nil {
 			_ = f.Close()
-			return nil, fmt.Errorf("failed to append to %s: %w", fileName, err)
+			return nil, fmt.Errorf("failed to append to %s: %w", cfg.InstructionTargetFile, err)
 		}
 		if err := f.Close(); err != nil {
-			return nil, fmt.Errorf("failed to close %s: %w", fileName, err)
+			return nil, fmt.Errorf("failed to close %s: %w", cfg.InstructionTargetFile, err)
 		}
-		fmt.Println(ui.SuccessF("  Appended @include to existing %s", fileName))
+		fmt.Println(ui.SuccessF("  Appended thts integration to %s", cfg.InstructionTargetFile))
 		return &InstructionsMDModification{
-			Path:    filePath,
-			Action:  "appended",
-			Pattern: pattern,
+			Path:            filePath,
+			Action:          "appended",
+			IntegrationType: "marker",
+			MarkerBased:     true,
 		}, nil
 	}
 
 	// Create new file
-	header := "# Agent Instructions\n"
-	if cfg.SymlinkToAgents {
+	var header string
+	if cfg.Type == agents.AgentClaude {
 		header = "# Claude Code Instructions\n"
+	} else {
+		header = "# Agent Instructions\n"
 	}
-	if err := os.WriteFile(filePath, []byte(header+includeDirective), 0644); err != nil {
-		return nil, fmt.Errorf("failed to create %s: %w", fileName, err)
+	if err := os.WriteFile(filePath, []byte(header+insertContent), 0644); err != nil {
+		return nil, fmt.Errorf("failed to create %s: %w", cfg.InstructionTargetFile, err)
 	}
-	fmt.Println(ui.SuccessF("  Created %s with @include", fileName))
+	fmt.Println(ui.SuccessF("  Created %s with thts integration", cfg.InstructionTargetFile))
 	return &InstructionsMDModification{
-		Path:    filePath,
-		Action:  "created",
-		Pattern: pattern,
+		Path:            filePath,
+		Action:          "created",
+		IntegrationType: "marker",
+		MarkerBased:     true,
+	}, nil
+}
+
+// updateOpenCodeConfig adds thts-instructions.md to the instructions array in opencode.json.
+func updateOpenCodeConfig(projectDir, agentDir string, cfg *agents.AgentConfig) (*InstructionsMDModification, error) {
+	configPath := filepath.Join(projectDir, cfg.SettingsFile)
+	instructionPath := fmt.Sprintf("%s/%s", cfg.RootDir, ThtsInstructionsFile)
+
+	var config map[string]any
+
+	if fsutil.Exists(configPath) {
+		data, err := os.ReadFile(configPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read %s: %w", cfg.SettingsFile, err)
+		}
+		if err := json.Unmarshal(data, &config); err != nil {
+			return nil, fmt.Errorf("failed to parse %s: %w", cfg.SettingsFile, err)
+		}
+	} else {
+		// Create minimal config
+		config = make(map[string]any)
+	}
+
+	// Get or create instructions array
+	var instructions []any
+	if existing, ok := config["instructions"].([]any); ok {
+		instructions = existing
+	}
+
+	// Check if already present
+	for _, inst := range instructions {
+		if instStr, ok := inst.(string); ok && instStr == instructionPath {
+			fmt.Println(ui.InfoF("  %s already in instructions array", instructionPath))
+			return nil, nil
+		}
+	}
+
+	// Append to instructions
+	instructions = append(instructions, instructionPath)
+	config["instructions"] = instructions
+
+	// Write back
+	data, err := json.MarshalIndent(config, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal config: %w", err)
+	}
+	if err := os.WriteFile(configPath, append(data, '\n'), 0644); err != nil {
+		return nil, fmt.Errorf("failed to write %s: %w", cfg.SettingsFile, err)
+	}
+
+	action := "appended"
+	if len(instructions) == 1 {
+		action = "created"
+	}
+	fmt.Println(ui.SuccessF("  Added thts instructions to %s", cfg.SettingsFile))
+	return &InstructionsMDModification{
+		Path:            configPath,
+		Action:          action,
+		IntegrationType: "config",
+		ConfigKey:       "instructions",
 	}, nil
 }
 
 // createLocalInstructionsMD creates a local instructions file with the @include directive.
-func createLocalInstructionsMD(agentDir, localFile string) error {
+func createLocalInstructionsMD(agentDir, localFile string, cfg *agents.AgentConfig) error {
 	localPath := filepath.Join(agentDir, localFile)
-	content := "# Local Agent Instructions\n\n@AGENTS.md\n"
+	content := fmt.Sprintf("# Local Agent Instructions\n\n@%s\n", ThtsInstructionsFile)
 	return os.WriteFile(localPath, []byte(content), 0644)
 }
 
@@ -743,4 +840,83 @@ func isTerminal() bool {
 		return false
 	}
 	return (fi.Mode() & os.ModeCharDevice) != 0
+}
+
+// updateGitignoreForAgents adds gitignore patterns for thts-managed files.
+// This collects patterns from ALL agents with manifests (not just the ones being initialized)
+// to ensure the gitignore block is complete.
+func updateGitignoreForAgents(projectDir string, _ []agents.AgentType) error {
+	var allPatterns []string
+
+	// Collect patterns from all agents that have manifests installed
+	for _, agentType := range agents.AllAgentTypes() {
+		cfg := agents.GetConfig(agentType)
+		manifestPath := filepath.Join(projectDir, cfg.RootDir, ManifestFile)
+		if fsutil.Exists(manifestPath) {
+			patterns := getGitignorePatterns(agentType)
+			allPatterns = append(allPatterns, patterns...)
+		}
+	}
+
+	if len(allPatterns) == 0 {
+		return nil
+	}
+
+	// Check if block already exists with same patterns
+	existingPatterns := fsutil.GetGitignoreMarkerPatterns(projectDir)
+	if patternsEqual(existingPatterns, allPatterns) {
+		fmt.Println(ui.Info("Gitignore patterns already up to date"))
+		return nil
+	}
+
+	added, err := fsutil.AddGitignoreMarkerBlock(projectDir, allPatterns)
+	if err != nil {
+		return err
+	}
+
+	if len(added) > 0 {
+		fmt.Println()
+		fmt.Println(ui.Success("Updated .gitignore with thts patterns:"))
+		for _, p := range added {
+			fmt.Printf("  %s\n", ui.Muted(p))
+		}
+	}
+
+	return nil
+}
+
+// getGitignorePatterns returns the gitignore patterns for a specific agent type.
+// Uses wildcard patterns for cleaner, more maintainable gitignore entries.
+func getGitignorePatterns(agentType agents.AgentType) []string {
+	cfg := agents.GetConfig(agentType)
+	if cfg == nil {
+		return nil
+	}
+
+	// Use wildcards for clean patterns:
+	// - thts-* matches thts-manifest.json, thts-instructions.md in root
+	// - */thts-* matches skills/thts-integrate*, commands/thts-*
+	// - */thoughts-* matches agents/thoughts-*
+	return []string{
+		cfg.RootDir + "/thts-*",
+		cfg.RootDir + "/*/thts-*",
+		cfg.RootDir + "/*/thoughts-*",
+	}
+}
+
+// patternsEqual checks if two pattern slices are equal.
+func patternsEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	aMap := make(map[string]bool)
+	for _, p := range a {
+		aMap[p] = true
+	}
+	for _, p := range b {
+		if !aMap[p] {
+			return false
+		}
+	}
+	return true
 }

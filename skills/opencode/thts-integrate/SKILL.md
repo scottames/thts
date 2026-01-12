@@ -7,7 +7,7 @@ description: Activate thoughts/ integration for the current task. Use when you w
 
 For this task, actively integrate with the thoughts/ directory.
 
-Read and apply the full integration instructions from AGENTS.md in .opencode/.
+Read and apply the full integration instructions from thts-instructions.md in .opencode/.
 
 **For this task specifically:**
 

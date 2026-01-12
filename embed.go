@@ -4,18 +4,18 @@
 //
 // The file structure supports multiple agent tools (Claude, Codex, OpenCode):
 //
-//	instructions/AGENTS.md          - Shared instructions for all agents
-//	skills/{agent}/*.md             - Agent-specific skills (flat for Claude)
-//	skills/{agent}/*/SKILL.md       - Agent-specific skills (subdirs for Codex/OpenCode)
-//	commands/claude/*.md            - Claude-only commands
-//	agents/{agent}/*.md             - Agent definitions per tool
+//	instructions/thts-instructions.md - Shared thts instructions for all agents
+//	skills/{agent}/*.md               - Agent-specific skills (flat for Claude)
+//	skills/{agent}/*/SKILL.md         - Agent-specific skills (subdirs for Codex/OpenCode)
+//	commands/claude/*.md              - Claude-only commands
+//	agents/{agent}/*.md               - Agent definitions per tool
 package thtsfiles
 
 import "embed"
 
-// Instructions contains the shared AGENTS.md instruction file.
+// Instructions contains the shared thts-instructions.md file.
 //
-//go:embed instructions/*.md
+//go:embed instructions/thts-instructions.md
 var Instructions embed.FS
 
 // ClaudeSkills contains embedded skill markdown files for Claude Code.

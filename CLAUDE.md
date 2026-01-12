@@ -163,9 +163,13 @@ repo through the symlink. This should be called out when relevant.
 
 ## thts
 
-@.claude/thts-instructions.md
-
 ### Dogfooding thts
 
 We're dogfooding `thts` in this repo - capture any bugs/issues/learnings to
 thoughts/shared/notes/2026-01-11-thts-meta-testing.md
+
+<!-- thts-start -->
+
+@.claude/thts-instructions.md
+
+<!-- thts-end -->

@@ -38,13 +38,18 @@ type AgentConfig struct {
 	// RootDir is the agent's config directory (e.g., ".claude", ".codex", ".opencode").
 	RootDir string
 
-	// InstructionsFile is the primary instructions file name.
-	// For Claude this is "CLAUDE.md", for others it's "AGENTS.md".
+	// InstructionsFile is the thts instructions file name copied to agent directory.
+	// This is "thts-instructions.md" for all agents.
 	InstructionsFile string
 
-	// SymlinkToAgents indicates if InstructionsFile should symlink to AGENTS.md.
-	// True for Claude (CLAUDE.md -> AGENTS.md), false for others.
-	SymlinkToAgents bool
+	// IntegrationType specifies how thts instructions are integrated.
+	// "marker" = append with HTML comment markers (Claude, Codex)
+	// "config" = add to config file's instructions array (OpenCode)
+	IntegrationType string
+
+	// InstructionTargetFile is the file to modify for marker-based integration.
+	// For Claude: "CLAUDE.md", for Codex: "AGENTS.md", empty for config-based.
+	InstructionTargetFile string
 
 	// SkillsDir is the directory name for skills (e.g., "skills", "skill").
 	SkillsDir string
@@ -69,40 +74,43 @@ type AgentConfig struct {
 // AgentConfigs contains the configuration for each supported agent.
 var AgentConfigs = map[AgentType]*AgentConfig{
 	AgentClaude: {
-		Type:             AgentClaude,
-		RootDir:          ".claude",
-		InstructionsFile: "CLAUDE.md",
-		SymlinkToAgents:  true,
-		SkillsDir:        "skills",
-		SkillNeedsDir:    false,
-		AgentsDir:        "agents",
-		SupportsCommands: true,
-		SettingsFile:     "settings.json",
-		SettingsFormat:   "json",
+		Type:                  AgentClaude,
+		RootDir:               ".claude",
+		InstructionsFile:      "thts-instructions.md",
+		IntegrationType:       "marker",
+		InstructionTargetFile: "CLAUDE.md",
+		SkillsDir:             "skills",
+		SkillNeedsDir:         false,
+		AgentsDir:             "agents",
+		SupportsCommands:      true,
+		SettingsFile:          "settings.json",
+		SettingsFormat:        "json",
 	},
 	AgentCodex: {
-		Type:             AgentCodex,
-		RootDir:          ".codex",
-		InstructionsFile: "AGENTS.md",
-		SymlinkToAgents:  false,
-		SkillsDir:        "skills",
-		SkillNeedsDir:    true,
-		AgentsDir:        "agents",
-		SupportsCommands: false,
-		SettingsFile:     "config.toml",
-		SettingsFormat:   "toml",
+		Type:                  AgentCodex,
+		RootDir:               ".codex",
+		InstructionsFile:      "thts-instructions.md",
+		IntegrationType:       "marker",
+		InstructionTargetFile: "AGENTS.md",
+		SkillsDir:             "skills",
+		SkillNeedsDir:         true,
+		AgentsDir:             "agents",
+		SupportsCommands:      false,
+		SettingsFile:          "config.toml",
+		SettingsFormat:        "toml",
 	},
 	AgentOpenCode: {
-		Type:             AgentOpenCode,
-		RootDir:          ".opencode",
-		InstructionsFile: "AGENTS.md",
-		SymlinkToAgents:  false,
-		SkillsDir:        "skill",
-		SkillNeedsDir:    true,
-		AgentsDir:        "agent",
-		SupportsCommands: false,
-		SettingsFile:     "opencode.json",
-		SettingsFormat:   "json",
+		Type:                  AgentOpenCode,
+		RootDir:               ".opencode",
+		InstructionsFile:      "thts-instructions.md",
+		IntegrationType:       "config",
+		InstructionTargetFile: "",
+		SkillsDir:             "skill",
+		SkillNeedsDir:         true,
+		AgentsDir:             "agent",
+		SupportsCommands:      false,
+		SettingsFile:          "opencode.json",
+		SettingsFormat:        "json",
 	},
 }
 

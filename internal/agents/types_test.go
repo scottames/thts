@@ -102,14 +102,17 @@ func TestAgentConfigProperties(t *testing.T) {
 	if !claude.SupportsCommands {
 		t.Error("Claude should support commands")
 	}
-	if !claude.SymlinkToAgents {
-		t.Error("Claude should symlink CLAUDE.md to AGENTS.md")
+	if claude.IntegrationType != "marker" {
+		t.Errorf("Claude IntegrationType = %q, want marker", claude.IntegrationType)
+	}
+	if claude.InstructionTargetFile != "CLAUDE.md" {
+		t.Errorf("Claude InstructionTargetFile = %q, want CLAUDE.md", claude.InstructionTargetFile)
 	}
 	if claude.SkillNeedsDir {
 		t.Error("Claude skills should not require subdirectories")
 	}
-	if claude.InstructionsFile != "CLAUDE.md" {
-		t.Errorf("Claude InstructionsFile = %q, want CLAUDE.md", claude.InstructionsFile)
+	if claude.InstructionsFile != "thts-instructions.md" {
+		t.Errorf("Claude InstructionsFile = %q, want thts-instructions.md", claude.InstructionsFile)
 	}
 
 	// Codex-specific properties
@@ -117,8 +120,11 @@ func TestAgentConfigProperties(t *testing.T) {
 	if codex.SupportsCommands {
 		t.Error("Codex should not support commands")
 	}
-	if codex.SymlinkToAgents {
-		t.Error("Codex should not symlink to AGENTS.md")
+	if codex.IntegrationType != "marker" {
+		t.Errorf("Codex IntegrationType = %q, want marker", codex.IntegrationType)
+	}
+	if codex.InstructionTargetFile != "AGENTS.md" {
+		t.Errorf("Codex InstructionTargetFile = %q, want AGENTS.md", codex.InstructionTargetFile)
 	}
 	if !codex.SkillNeedsDir {
 		t.Error("Codex skills should require subdirectories")
@@ -128,6 +134,12 @@ func TestAgentConfigProperties(t *testing.T) {
 	opencode := GetConfig(AgentOpenCode)
 	if opencode.SupportsCommands {
 		t.Error("OpenCode should not support commands")
+	}
+	if opencode.IntegrationType != "config" {
+		t.Errorf("OpenCode IntegrationType = %q, want config", opencode.IntegrationType)
+	}
+	if opencode.InstructionTargetFile != "" {
+		t.Errorf("OpenCode InstructionTargetFile = %q, want empty string", opencode.InstructionTargetFile)
 	}
 	if opencode.SkillsDir != "skill" {
 		t.Errorf("OpenCode SkillsDir = %q, want skill", opencode.SkillsDir)

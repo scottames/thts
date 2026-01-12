@@ -116,6 +116,11 @@ func runAgentsUninit(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// Update gitignore - remove marker block or rebuild with remaining agents
+	if err := updateGitignoreAfterUninit(targetDir, agentTypes); err != nil {
+		fmt.Println(ui.WarningF("Could not update .gitignore: %v", err))
+	}
+
 	fmt.Println()
 	fmt.Println(ui.Success("Successfully removed thts integration."))
 
@@ -293,20 +298,59 @@ func detectInstallation(agentDir, projectDir string, agentType agents.AgentType)
 		gitRoot = projectDir
 	}
 
-	// Check for @include in CLAUDE.md or AGENTS.md
+	// Check for marker-based integration in CLAUDE.md or AGENTS.md
 	for _, instFile := range []string{"CLAUDE.md", "AGENTS.md"} {
 		instPath := filepath.Join(gitRoot, instFile)
 		if fsutil.Exists(instPath) {
 			content, err := os.ReadFile(instPath)
 			if err == nil {
+				contentStr := string(content)
+				// Check for new marker-based integration
+				if strings.Contains(contentStr, ThtsMarkerStart) {
+					manifest.Modifications.InstructionsMD = &InstructionsMDModification{
+						Path:            instPath,
+						Action:          "appended",
+						IntegrationType: "marker",
+						MarkerBased:     true,
+					}
+					break
+				}
+				// Check for legacy @include pattern
 				pattern := fmt.Sprintf("@%s/AGENTS.md", cfg.RootDir)
-				if strings.Contains(string(content), pattern) {
+				if strings.Contains(contentStr, pattern) {
 					manifest.Modifications.InstructionsMD = &InstructionsMDModification{
 						Path:    instPath,
 						Action:  "appended",
 						Pattern: pattern,
 					}
 					break
+				}
+			}
+		}
+	}
+
+	// Check for config-based integration (OpenCode)
+	if cfg.IntegrationType == "config" && manifest.Modifications.InstructionsMD == nil {
+		configPath := filepath.Join(projectDir, cfg.SettingsFile)
+		if fsutil.Exists(configPath) {
+			data, err := os.ReadFile(configPath)
+			if err == nil {
+				var config map[string]any
+				if json.Unmarshal(data, &config) == nil {
+					if instructions, ok := config["instructions"].([]any); ok {
+						instructionPath := fmt.Sprintf("%s/%s", cfg.RootDir, ThtsInstructionsFile)
+						for _, inst := range instructions {
+							if instStr, ok := inst.(string); ok && instStr == instructionPath {
+								manifest.Modifications.InstructionsMD = &InstructionsMDModification{
+									Path:            configPath,
+									Action:          "appended",
+									IntegrationType: "config",
+									ConfigKey:       "instructions",
+								}
+								break
+							}
+						}
+					}
 				}
 			}
 		}
@@ -367,7 +411,15 @@ func printRemovalPlan(plan *removalPlan) {
 
 	if plan.modifications.InstructionsMD != nil {
 		fmt.Println("  Modifications to revert:")
-		fmt.Printf("    Remove @include from: %s\n", plan.modifications.InstructionsMD.Path)
+		mod := plan.modifications.InstructionsMD
+		switch mod.IntegrationType {
+		case "marker":
+			fmt.Printf("    Remove thts marker block from: %s\n", mod.Path)
+		case "config":
+			fmt.Printf("    Remove thts from instructions array in: %s\n", mod.Path)
+		default:
+			fmt.Printf("    Remove @include from: %s\n", mod.Path)
+		}
 	}
 
 	if plan.modifications.Gitignore != nil && len(plan.modifications.Gitignore.Patterns) > 0 {
@@ -417,10 +469,10 @@ func performRemoval(plan *removalPlan) error {
 
 	// 4. Revert instruction file modification
 	if plan.modifications.InstructionsMD != nil {
-		if err := removeFromInstructionsMD(plan.modifications.InstructionsMD); err != nil {
+		if err := removeThtsIntegration(plan.modifications.InstructionsMD, plan.agentType); err != nil {
 			warnings = append(warnings, fmt.Sprintf("failed to clean instruction file: %v", err))
 		} else {
-			fmt.Println(ui.Success("Removed @include from instruction file"))
+			fmt.Println(ui.Success("Removed thts integration from instruction file"))
 		}
 	}
 
@@ -450,8 +502,131 @@ func performRemoval(plan *removalPlan) error {
 	return nil
 }
 
-// removeFromInstructionsMD removes the @include directive from the instruction file.
-func removeFromInstructionsMD(mod *InstructionsMDModification) error {
+// removeThtsIntegration removes thts integration based on the integration type.
+func removeThtsIntegration(mod *InstructionsMDModification, agentType agents.AgentType) error {
+	// Dispatch based on integration type
+	switch mod.IntegrationType {
+	case "marker":
+		return removeMarkerBlock(mod.Path)
+	case "config":
+		cfg := agents.GetConfig(agentType)
+		return removeFromOpenCodeConfig(mod.Path, cfg)
+	default:
+		// Legacy: try marker removal first, fall back to pattern removal
+		if err := removeMarkerBlock(mod.Path); err == nil {
+			return nil
+		}
+		return removeFromInstructionsMDLegacy(mod)
+	}
+}
+
+// removeMarkerBlock removes content between thts markers from a file.
+// Returns nil if markers not found (nothing to remove).
+// Returns error if markers are corrupted (only one found).
+func removeMarkerBlock(filePath string) error {
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return err
+	}
+
+	text := string(content)
+	startIdx := strings.Index(text, ThtsMarkerStart)
+	endIdx := strings.Index(text, ThtsMarkerEnd)
+
+	// No markers found - nothing to remove
+	if startIdx == -1 && endIdx == -1 {
+		return nil
+	}
+
+	// Corrupted: only one marker
+	if startIdx == -1 || endIdx == -1 {
+		return fmt.Errorf("corrupted markers in %s: found only %s",
+			filePath,
+			map[bool]string{true: "start", false: "end"}[startIdx != -1])
+	}
+
+	// Check for multiple pairs (warn but continue)
+	secondStart := strings.Index(text[startIdx+len(ThtsMarkerStart):], ThtsMarkerStart)
+	if secondStart != -1 {
+		fmt.Println(ui.Warning("  Multiple marker pairs detected, removing first only"))
+	}
+
+	// Calculate removal range
+	endIdx += len(ThtsMarkerEnd)
+
+	// Trim trailing newline if present
+	if endIdx < len(text) && text[endIdx] == '\n' {
+		endIdx++
+	}
+	// Trim leading newline if present
+	if startIdx > 0 && text[startIdx-1] == '\n' {
+		startIdx--
+	}
+
+	newContent := text[:startIdx] + text[endIdx:]
+
+	// Clean up multiple blank lines
+	for strings.Contains(newContent, "\n\n\n") {
+		newContent = strings.ReplaceAll(newContent, "\n\n\n", "\n\n")
+	}
+
+	return os.WriteFile(filePath, []byte(newContent), 0644)
+}
+
+// removeFromOpenCodeConfig removes thts-instructions.md from the instructions array.
+func removeFromOpenCodeConfig(configPath string, cfg *agents.AgentConfig) error {
+	if !fsutil.Exists(configPath) {
+		return nil
+	}
+
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return err
+	}
+
+	var config map[string]any
+	if err := json.Unmarshal(data, &config); err != nil {
+		return fmt.Errorf("failed to parse config: %w", err)
+	}
+
+	instructions, ok := config["instructions"].([]any)
+	if !ok {
+		return nil // No instructions array
+	}
+
+	instructionPath := fmt.Sprintf("%s/%s", cfg.RootDir, ThtsInstructionsFile)
+	var newInstructions []any
+	removed := false
+
+	for _, inst := range instructions {
+		if instStr, ok := inst.(string); ok && instStr == instructionPath {
+			removed = true
+			continue
+		}
+		newInstructions = append(newInstructions, inst)
+	}
+
+	if !removed {
+		return nil
+	}
+
+	if len(newInstructions) == 0 {
+		delete(config, "instructions")
+	} else {
+		config["instructions"] = newInstructions
+	}
+
+	newData, err := json.MarshalIndent(config, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(configPath, append(newData, '\n'), 0644)
+}
+
+// removeFromInstructionsMDLegacy removes the @include directive using legacy pattern matching.
+// This is for backward compatibility with old manifests.
+func removeFromInstructionsMDLegacy(mod *InstructionsMDModification) error {
 	content, err := os.ReadFile(mod.Path)
 	if err != nil {
 		return err
@@ -526,5 +701,68 @@ func Uninit(targetDir string, force bool, agentTypesToRemove []agents.AgentType)
 		}
 	}
 
+	// Update gitignore after removal
+	if err := updateGitignoreAfterUninit(targetDir, agentTypesToRemove); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// updateGitignoreAfterUninit updates the gitignore marker block after uninitializing agents.
+// If no agents remain, the marker block is removed entirely.
+// Otherwise, the block is rebuilt with only the remaining agents' patterns.
+func updateGitignoreAfterUninit(projectDir string, removedAgents []agents.AgentType) error {
+	// Check if marker block exists
+	if !fsutil.HasGitignoreMarkerBlock(projectDir) {
+		return nil
+	}
+
+	// Find which agents still have thts installed
+	var remainingAgents []agents.AgentType
+	for _, agentType := range agents.AllAgentTypes() {
+		// Skip agents we just removed
+		removed := false
+		for _, ra := range removedAgents {
+			if ra == agentType {
+				removed = true
+				break
+			}
+		}
+		if removed {
+			continue
+		}
+
+		// Check if this agent still has thts files
+		cfg := agents.GetConfig(agentType)
+		manifestPath := filepath.Join(projectDir, cfg.RootDir, ManifestFile)
+		if fsutil.Exists(manifestPath) {
+			remainingAgents = append(remainingAgents, agentType)
+		}
+	}
+
+	if len(remainingAgents) == 0 {
+		// No agents remain - remove the entire marker block
+		removed, err := fsutil.RemoveGitignoreMarkerBlock(projectDir)
+		if err != nil {
+			return err
+		}
+		if len(removed) > 0 {
+			fmt.Println(ui.Success("Removed thts patterns from .gitignore"))
+		}
+		return nil
+	}
+
+	// Rebuild the block with remaining agents' patterns
+	var patterns []string
+	for _, agentType := range remainingAgents {
+		patterns = append(patterns, getGitignorePatterns(agentType)...)
+	}
+
+	_, err := fsutil.AddGitignoreMarkerBlock(projectDir, patterns)
+	if err != nil {
+		return err
+	}
+	fmt.Println(ui.Info("Updated .gitignore patterns for remaining agents"))
 	return nil
 }
