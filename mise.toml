@@ -32,5 +32,8 @@ run = "trunk check --fix && trunk fmt"
 [tasks.check]
 depends = ["lint", "test", "test-integration"]
 
+[tasks.install]
+run = "go install ./cmd/thts"
+
 [tasks.clean]
 run = "rm -f thts coverage.out coverage.html"

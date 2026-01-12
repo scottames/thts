@@ -15,8 +15,9 @@ var setDefaultCmd = &cobra.Command{
 
 The default profile is used when initializing repositories without the --profile flag.
 Only one profile can be the default at a time.`,
-	Args: cobra.ExactArgs(1),
-	RunE: runSetDefault,
+	Args:              cobra.ExactArgs(1),
+	ValidArgsFunction: completeProfileNames,
+	RunE:              runSetDefault,
 }
 
 func runSetDefault(cmd *cobra.Command, args []string) error {

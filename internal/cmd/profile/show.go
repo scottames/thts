@@ -13,11 +13,27 @@ import (
 var showJSON bool
 
 var showCmd = &cobra.Command{
-	Use:   "show <name>",
-	Short: "Show profile details",
-	Long:  `Show detailed information about a specific profile.`,
-	Args:  cobra.ExactArgs(1),
-	RunE:  runShow,
+	Use:               "show <name>",
+	Short:             "Show profile details",
+	Long:              `Show detailed information about a specific profile.`,
+	Args:              cobra.ExactArgs(1),
+	ValidArgsFunction: completeProfileNames,
+	RunE:              runShow,
+}
+
+// completeProfileNames provides shell completion for profile names.
+func completeProfileNames(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
+	cfg, err := config.Load()
+	if err != nil {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+
+	names := make([]string, 0, len(cfg.Profiles))
+	for name := range cfg.Profiles {
+		names = append(names, name)
+	}
+
+	return names, cobra.ShellCompDirectiveNoFileComp
 }
 
 func init() {

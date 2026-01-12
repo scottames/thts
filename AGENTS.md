@@ -16,6 +16,7 @@ HumanLayer's `thoughts` subcommand with full feature compatibility.
 | `thts profile`       | Manage profiles (create/list/show/delete)           |
 | `thts agents init`   | Install agent integration (claude, codex, opencode) |
 | `thts agents uninit` | Remove agent integration from project               |
+| `thts completion`    | Generate shell completion scripts (bash/zsh/fish)   |
 
 ## Project Structure
 

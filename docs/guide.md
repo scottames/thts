@@ -34,6 +34,7 @@
   - [Editing Config](#editing-config)
   - [Config Options](#config-options)
   - [gitIgnore Options](#gitignore-options)
+- [Shell Completion](#shell-completion)
 - [Working with AI Assistants](#working-with-ai-assistants)
   - [AI Agent Integration](#ai-agent-integration)
     - [Supported Agents](#supported-agents)
@@ -406,6 +407,44 @@ gitIgnore: project
 | `local`    | Add to `.git/info/exclude`    |
 | `global`   | Add to `~/.config/git/ignore` |
 | `disabled` | Don't add anywhere            |
+
+## Shell Completion
+
+Generate shell completion scripts for tab completion of commands and flags:
+
+```bash
+thts completion bash   # Bash
+thts completion zsh    # Zsh
+thts completion fish   # Fish
+```
+
+### Loading Completions
+
+**Fish:**
+
+```bash
+thts completion fish | source
+# Persist:
+thts completion fish > ~/.config/fish/completions/thts.fish
+```
+
+**Bash:**
+
+```bash
+source <(thts completion bash)
+# Persist:
+thts completion bash > /etc/bash_completion.d/thts
+```
+
+**Zsh:**
+
+```bash
+source <(thts completion zsh)
+# Persist (ensure directory is in fpath):
+thts completion zsh > "${fpath[1]}/_thts"
+```
+
+Completions include dynamic values like profile names and agent types.
 
 ## Working with AI Assistants
 

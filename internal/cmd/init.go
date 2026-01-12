@@ -46,6 +46,9 @@ func init() {
 		BoolVarP(&initForce, "force", "f", false, "Force re-initialization even if thoughts exists")
 	initCmd.Flags().
 		BoolVarP(&initInteractive, "interactive", "i", false, "Force interactive project name selection")
+
+	_ = initCmd.RegisterFlagCompletionFunc("profile", CompleteProfiles)
+
 	rootCmd.AddCommand(initCmd)
 }
 

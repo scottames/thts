@@ -129,6 +129,13 @@ func init() {
 	initCmd.Flags().StringVar(&initGlobal, "global", "", "Install components globally (all, or: skills,commands,agents)")
 	// NoOptDefVal allows --global without value to trigger interactive mode
 	initCmd.Flags().Lookup("global").NoOptDefVal = "interactive"
+
+	_ = initCmd.RegisterFlagCompletionFunc("agents", completeAgentTypes)
+}
+
+// completeAgentTypes provides shell completion for agent types.
+func completeAgentTypes(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
+	return agents.AgentTypesToStrings(agents.AllAgentTypes()), cobra.ShellCompDirectiveNoFileComp
 }
 
 func runAgentsInit(cmd *cobra.Command, args []string) error {

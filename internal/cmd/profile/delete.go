@@ -19,8 +19,9 @@ var deleteCmd = &cobra.Command{
 This removes the profile configuration but does NOT delete the thoughts
 repository files. Use --force to skip confirmation and delete even if
 repositories are using this profile.`,
-	Args: cobra.ExactArgs(1),
-	RunE: runDelete,
+	Args:              cobra.ExactArgs(1),
+	ValidArgsFunction: completeProfileNames,
+	RunE:              runDelete,
 }
 
 func init() {
