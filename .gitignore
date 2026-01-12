@@ -11,4 +11,7 @@ thoughts/
 .claude/thts-*
 .claude/*/thts-*
 .claude/*/thoughts-*
+.opencode/thts-*
+.opencode/*/thts-*
+.opencode/*/thoughts-*
 # thts-agent-end

@@ -283,8 +283,15 @@ func initAgent(projectDir string, agentType agents.AgentType, level IntegrationL
 
 	var filesCopied int
 
-	// Copy thts-instructions.md (shared instructions) - skip if agent uses marker-based AGENTS.md
-	if agentConfig.InstructionsFile != "" {
+	// Copy thts-instructions.md (shared instructions)
+	// Skip if: agent uses inline AGENTS.md, OR Claude with CLAUDE.md symlinked to AGENTS.md
+	copyInstructions := agentConfig.InstructionsFile != ""
+	if copyInstructions && agentConfig.Type == agents.AgentClaude {
+		if checkClaudeMDSymlink(projectDir) == symlinkToLocalAgentsMD {
+			copyInstructions = false // Will use inline mode instead
+		}
+	}
+	if copyInstructions {
 		if err := copyInstructionsFile(agentDir, agentConfig); err != nil {
 			fmt.Println(ui.WarningF("  Could not copy instructions: %v", err))
 		} else {
@@ -406,6 +413,45 @@ func adjustHeaderLevels(content string, offset int) string {
 	}
 
 	return strings.Join(lines, "\n")
+}
+
+// symlinkTargetType indicates what a symlink points to.
+type symlinkTargetType int
+
+const (
+	symlinkNone            symlinkTargetType = iota // Not a symlink
+	symlinkToLocalAgentsMD                          // Symlink to AGENTS.md in same directory
+	symlinkToElsewhere                              // Symlink to something else
+)
+
+// checkClaudeMDSymlink checks if CLAUDE.md is a symlink and what it points to.
+func checkClaudeMDSymlink(gitRoot string) symlinkTargetType {
+	claudePath := filepath.Join(gitRoot, "CLAUDE.md")
+
+	// Check if file exists and is a symlink
+	info, err := os.Lstat(claudePath)
+	if err != nil || info.Mode()&os.ModeSymlink == 0 {
+		return symlinkNone
+	}
+
+	// Resolve the symlink target
+	target, err := filepath.EvalSymlinks(claudePath)
+	if err != nil {
+		return symlinkToElsewhere // Can't resolve, treat as elsewhere
+	}
+
+	// Check if target is AGENTS.md in the same directory
+	agentsPath := filepath.Join(gitRoot, "AGENTS.md")
+	absAgents, err := filepath.Abs(agentsPath)
+	if err != nil {
+		return symlinkToElsewhere
+	}
+
+	if target == absAgents {
+		return symlinkToLocalAgentsMD
+	}
+
+	return symlinkToElsewhere
 }
 
 // copySkills copies skill files for an agent type.
@@ -609,26 +655,38 @@ func setupIntegrationLevel(projectDir, agentDir string, cfg *agents.AgentConfig,
 }
 
 // appendWithMarkers appends thts integration with HTML comment markers.
-// For Claude: adds @include directive wrapped in markers.
-// For Codex: adds full content inline wrapped in markers.
+// For Claude: adds @include directive wrapped in markers (unless CLAUDE.md is symlinked).
+// For Codex/OpenCode: adds full content inline wrapped in markers.
 func appendWithMarkers(gitRoot, agentDir string, cfg *agents.AgentConfig) (*InstructionsMDModification, error) {
 	if cfg.InstructionTargetFile == "" {
-		return nil, nil // No target file (e.g., OpenCode uses config)
+		return nil, nil // No target file
 	}
 
-	filePath := filepath.Join(gitRoot, cfg.InstructionTargetFile)
+	// For Claude, check if CLAUDE.md is a symlink
+	useInlineMode := cfg.Type != agents.AgentClaude
+	targetFile := cfg.InstructionTargetFile
 
-	// Build the content to insert based on agent type
-	var insertContent string
 	if cfg.Type == agents.AgentClaude {
-		// Claude supports @include
-		insertContent = fmt.Sprintf("\n%s\n@%s/%s\n%s\n",
-			ThtsMarkerStart,
-			cfg.RootDir,
-			ThtsInstructionsFile,
-			ThtsMarkerEnd)
-	} else {
-		// Codex: inline the full content (no @include support)
+		switch checkClaudeMDSymlink(gitRoot) {
+		case symlinkToLocalAgentsMD:
+			// CLAUDE.md -> AGENTS.md: use inline mode with AGENTS.md as target
+			fmt.Println(ui.InfoF("  CLAUDE.md is symlinked to AGENTS.md, using inline mode"))
+			useInlineMode = true
+			targetFile = "AGENTS.md"
+		case symlinkToElsewhere:
+			// CLAUDE.md -> elsewhere: warn and skip
+			fmt.Println(ui.WarningF("  CLAUDE.md is symlinked elsewhere, skipping instruction integration"))
+			fmt.Println(ui.Warning("  To integrate, either remove the symlink or manually add thts instructions"))
+			return nil, nil
+		}
+	}
+
+	filePath := filepath.Join(gitRoot, targetFile)
+
+	// Build the content to insert based on mode
+	var insertContent string
+	if useInlineMode {
+		// Inline the full content (Codex/OpenCode, or Claude with symlinked CLAUDE.md)
 		thtsContent, err := readThtsInstructions()
 		if err != nil {
 			return nil, fmt.Errorf("failed to read instructions: %w", err)
@@ -637,43 +695,50 @@ func appendWithMarkers(gitRoot, agentDir string, cfg *agents.AgentConfig) (*Inst
 			ThtsMarkerStart,
 			string(thtsContent),
 			ThtsMarkerEnd)
+	} else {
+		// Claude supports @include
+		insertContent = fmt.Sprintf("\n%s\n@%s/%s\n%s\n",
+			ThtsMarkerStart,
+			cfg.RootDir,
+			ThtsInstructionsFile,
+			ThtsMarkerEnd)
 	}
 
 	// Check if already integrated
 	if fsutil.Exists(filePath) {
 		content, err := os.ReadFile(filePath)
 		if err != nil {
-			return nil, fmt.Errorf("failed to read %s: %w", cfg.InstructionTargetFile, err)
+			return nil, fmt.Errorf("failed to read %s: %w", targetFile, err)
 		}
 		if strings.Contains(string(content), ThtsMarkerStart) {
 			if !initForce {
-				fmt.Println(ui.InfoF("  %s already includes thts integration", cfg.InstructionTargetFile))
+				fmt.Println(ui.InfoF("  %s already includes thts integration", targetFile))
 				return nil, nil
 			}
 			// Force mode: remove existing marker block and re-add
-			fmt.Println(ui.InfoF("  Replacing existing thts integration in %s", cfg.InstructionTargetFile))
+			fmt.Println(ui.InfoF("  Replacing existing thts integration in %s", targetFile))
 			if err := removeMarkerBlock(filePath); err != nil {
 				return nil, fmt.Errorf("failed to remove existing markers: %w", err)
 			}
 		}
 		// Append to existing file
-		// For inline content (non-Claude), adjust header levels to fit under existing structure
+		// For inline content, adjust header levels to fit under existing structure
 		appendContent := insertContent
-		if cfg.Type != agents.AgentClaude {
+		if useInlineMode {
 			appendContent = adjustHeaderLevels(insertContent, 1)
 		}
 		f, err := os.OpenFile(filePath, os.O_APPEND|os.O_WRONLY, 0644)
 		if err != nil {
-			return nil, fmt.Errorf("failed to open %s: %w", cfg.InstructionTargetFile, err)
+			return nil, fmt.Errorf("failed to open %s: %w", targetFile, err)
 		}
 		if _, err := f.WriteString(appendContent); err != nil {
 			_ = f.Close()
-			return nil, fmt.Errorf("failed to append to %s: %w", cfg.InstructionTargetFile, err)
+			return nil, fmt.Errorf("failed to append to %s: %w", targetFile, err)
 		}
 		if err := f.Close(); err != nil {
-			return nil, fmt.Errorf("failed to close %s: %w", cfg.InstructionTargetFile, err)
+			return nil, fmt.Errorf("failed to close %s: %w", targetFile, err)
 		}
-		fmt.Println(ui.SuccessF("  Appended thts integration to %s", cfg.InstructionTargetFile))
+		fmt.Println(ui.SuccessF("  Appended thts integration to %s", targetFile))
 		return &InstructionsMDModification{
 			Path:            filePath,
 			Action:          "appended",
@@ -685,17 +750,17 @@ func appendWithMarkers(gitRoot, agentDir string, cfg *agents.AgentConfig) (*Inst
 	// Create new file
 	var header string
 	createContent := insertContent
-	if cfg.Type == agents.AgentClaude {
-		header = "# Claude Code Instructions\n"
-	} else {
+	if useInlineMode {
 		header = "# Agent Instructions\n"
-		// For inline content (non-Claude), adjust header levels to fit under top-level header
+		// For inline content, adjust header levels to fit under top-level header
 		createContent = adjustHeaderLevels(insertContent, 1)
+	} else {
+		header = "# Claude Code Instructions\n"
 	}
 	if err := os.WriteFile(filePath, []byte(header+createContent), 0644); err != nil {
-		return nil, fmt.Errorf("failed to create %s: %w", cfg.InstructionTargetFile, err)
+		return nil, fmt.Errorf("failed to create %s: %w", targetFile, err)
 	}
-	fmt.Println(ui.SuccessF("  Created %s with thts integration", cfg.InstructionTargetFile))
+	fmt.Println(ui.SuccessF("  Created %s with thts integration", targetFile))
 	return &InstructionsMDModification{
 		Path:            filePath,
 		Action:          "created",
