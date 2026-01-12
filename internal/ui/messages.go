@@ -4,7 +4,7 @@ import "fmt"
 
 // Success returns a success message with checkmark prefix.
 func Success(msg string) string {
-	return fmt.Sprintf("%s %s", StyleSuccess.Render(SymbolSuccess), msg)
+	return fmt.Sprintf("%s  %s", StyleSuccess.Render(SymbolSuccess), msg)
 }
 
 // SuccessF returns a formatted success message with checkmark prefix.
@@ -14,7 +14,7 @@ func SuccessF(format string, args ...any) string {
 
 // Info returns an info message with info symbol prefix.
 func Info(msg string) string {
-	return fmt.Sprintf("%s %s", StyleInfo.Render(SymbolInfo), msg)
+	return fmt.Sprintf("%s  %s", StyleInfo.Render(SymbolInfo), msg)
 }
 
 // InfoF returns a formatted info message with info symbol prefix.
@@ -24,7 +24,7 @@ func InfoF(format string, args ...any) string {
 
 // Warning returns a warning message with warning symbol prefix.
 func Warning(msg string) string {
-	return fmt.Sprintf("%s %s", StyleWarning.Render(SymbolWarning), msg)
+	return fmt.Sprintf("%s  %s", StyleWarning.Render(SymbolWarning), msg)
 }
 
 // WarningF returns a formatted warning message with warning symbol prefix.
@@ -34,7 +34,7 @@ func WarningF(format string, args ...any) string {
 
 // Error returns an error message with X symbol prefix.
 func Error(msg string) string {
-	return fmt.Sprintf("%s %s", StyleError.Render(SymbolError), msg)
+	return fmt.Sprintf("%s  %s", StyleError.Render(SymbolError), msg)
 }
 
 // ErrorF returns a formatted error message with X symbol prefix.
@@ -54,5 +54,5 @@ func Accent(msg string) string {
 
 // Bullet returns an indented bullet point.
 func Bullet(msg string) string {
-	return fmt.Sprintf("  %s %s", StyleMuted.Render(SymbolBullet), msg)
+	return fmt.Sprintf("  %s  %s", StyleMuted.Render(SymbolBullet), msg)
 }
