@@ -10,22 +10,21 @@ import (
 
 // AddToGitignore adds a pattern to the appropriate gitignore file.
 // Returns true if the pattern was added, false if it already existed or was disabled.
-func AddToGitignore(repoPath, pattern string, location config.GitIgnoreMode) (bool, error) {
-	if location == config.GitIgnoreDisabled {
+func AddToGitignore(repoPath, pattern string, location config.ComponentMode) (bool, error) {
+	if location == config.ComponentModeDisabled {
 		return false, nil
 	}
 
 	var ignorePath string
 
 	switch location {
-	case config.GitIgnoreProject:
+	case config.ComponentModeLocal:
 		ignorePath = filepath.Join(repoPath, ".gitignore")
-	case config.GitIgnoreLocal:
-		ignorePath = filepath.Join(repoPath, ".git", "info", "exclude")
-	case config.GitIgnoreGlobal:
+	case config.ComponentModeGlobal:
 		ignorePath = getGlobalGitignorePath()
 	default:
-		return false, nil
+		// Default to project .gitignore for empty/unknown values
+		ignorePath = filepath.Join(repoPath, ".gitignore")
 	}
 
 	// Read existing content
@@ -69,22 +68,21 @@ func AddToGitignore(repoPath, pattern string, location config.GitIgnoreMode) (bo
 
 // RemoveFromGitignore removes a pattern from the gitignore file.
 // Returns true if the pattern was removed.
-func RemoveFromGitignore(repoPath, pattern string, location config.GitIgnoreMode) (bool, error) {
-	if location == config.GitIgnoreDisabled {
+func RemoveFromGitignore(repoPath, pattern string, location config.ComponentMode) (bool, error) {
+	if location == config.ComponentModeDisabled {
 		return false, nil
 	}
 
 	var ignorePath string
 
 	switch location {
-	case config.GitIgnoreProject:
+	case config.ComponentModeLocal:
 		ignorePath = filepath.Join(repoPath, ".gitignore")
-	case config.GitIgnoreLocal:
-		ignorePath = filepath.Join(repoPath, ".git", "info", "exclude")
-	case config.GitIgnoreGlobal:
+	case config.ComponentModeGlobal:
 		ignorePath = getGlobalGitignorePath()
 	default:
-		return false, nil
+		// Default to project .gitignore for empty/unknown values
+		ignorePath = filepath.Join(repoPath, ".gitignore")
 	}
 
 	content, err := os.ReadFile(ignorePath)

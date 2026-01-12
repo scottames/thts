@@ -134,7 +134,7 @@ func setupTestEnv(t *testing.T) *testEnv {
 	// Create initial config
 	cfg := &config.Config{
 		User:                "testuser",
-		GitIgnore:           config.GitIgnoreProject,
+		Gitignore:           config.ComponentModeLocal,
 		AutoSyncInWorktrees: true,
 		RepoMappings:        make(map[string]*config.RepoMapping),
 		Profiles: map[string]*config.ProfileConfig{

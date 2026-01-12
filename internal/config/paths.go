@@ -72,3 +72,43 @@ func DefaultUser() string {
 	}
 	return "user"
 }
+
+// XDGStateHome returns the XDG state home directory.
+func XDGStateHome() string {
+	if xdg := os.Getenv("XDG_STATE_HOME"); xdg != "" {
+		return xdg
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(home, ".local", "state")
+}
+
+// GlobalManifestPath returns the path to the global agent manifest file.
+func GlobalManifestPath() string {
+	return filepath.Join(XDGStateHome(), "thts", "global-manifest.json")
+}
+
+// GlobalAgentDir returns the global directory for an agent type.
+// These are the user-level config directories where global skills/commands/agents are installed.
+func GlobalAgentDir(agentType string) string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	switch agentType {
+	case "claude":
+		return filepath.Join(home, ".claude")
+	case "codex":
+		return filepath.Join(home, ".codex")
+	case "opencode":
+		return filepath.Join(home, ".opencode")
+	}
+	return ""
+}
+
+// GlobalGitignorePath returns the path to the global gitignore file.
+func GlobalGitignorePath() string {
+	return filepath.Join(XDGConfigHome(), "git", "ignore")
+}

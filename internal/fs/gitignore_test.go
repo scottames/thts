@@ -14,7 +14,7 @@ func TestAddToGitignore(t *testing.T) {
 		dir, cleanup := setupTestDir(t)
 		defer cleanup()
 
-		added, err := AddToGitignore(dir, "thoughts/", config.GitIgnoreProject)
+		added, err := AddToGitignore(dir, "thoughts/", config.ComponentModeLocal)
 		if err != nil {
 			t.Fatalf("AddToGitignore() error: %v", err)
 		}
@@ -42,7 +42,7 @@ func TestAddToGitignore(t *testing.T) {
 			t.Fatalf("failed to create .gitignore: %v", err)
 		}
 
-		added, err := AddToGitignore(dir, "thoughts/", config.GitIgnoreProject)
+		added, err := AddToGitignore(dir, "thoughts/", config.ComponentModeLocal)
 		if err != nil {
 			t.Fatalf("AddToGitignore() error: %v", err)
 		}
@@ -75,7 +75,7 @@ func TestAddToGitignore(t *testing.T) {
 			t.Fatalf("failed to create .gitignore: %v", err)
 		}
 
-		_, err := AddToGitignore(dir, "thoughts/", config.GitIgnoreProject)
+		_, err := AddToGitignore(dir, "thoughts/", config.ComponentModeLocal)
 		if err != nil {
 			t.Fatalf("AddToGitignore() error: %v", err)
 		}
@@ -88,35 +88,6 @@ func TestAddToGitignore(t *testing.T) {
 		// Should have proper newline separation
 		if !strings.Contains(string(content), "node_modules/\nthoughts/") {
 			t.Errorf("expected proper newline separation, got: %q", string(content))
-		}
-	})
-
-	t.Run("local mode uses git exclude", func(t *testing.T) {
-		dir, cleanup := setupTestDir(t)
-		defer cleanup()
-
-		// Create .git/info directory
-		gitInfoDir := filepath.Join(dir, ".git", "info")
-		if err := os.MkdirAll(gitInfoDir, 0755); err != nil {
-			t.Fatalf("failed to create .git/info: %v", err)
-		}
-
-		added, err := AddToGitignore(dir, "thoughts/", config.GitIgnoreLocal)
-		if err != nil {
-			t.Fatalf("AddToGitignore() error: %v", err)
-		}
-
-		if !added {
-			t.Error("expected pattern to be added")
-		}
-
-		content, err := os.ReadFile(filepath.Join(gitInfoDir, "exclude"))
-		if err != nil {
-			t.Fatalf("failed to read exclude: %v", err)
-		}
-
-		if !strings.Contains(string(content), "thoughts/") {
-			t.Error("expected exclude to contain thoughts/")
 		}
 	})
 
@@ -146,7 +117,7 @@ func TestAddToGitignore(t *testing.T) {
 			t.Fatalf("failed to create repo directory: %v", err)
 		}
 
-		added, err := AddToGitignore(repoDir, "thoughts/", config.GitIgnoreGlobal)
+		added, err := AddToGitignore(repoDir, "thoughts/", config.ComponentModeGlobal)
 		if err != nil {
 			t.Fatalf("AddToGitignore() error: %v", err)
 		}
@@ -170,7 +141,7 @@ func TestAddToGitignore(t *testing.T) {
 		dir, cleanup := setupTestDir(t)
 		defer cleanup()
 
-		added, err := AddToGitignore(dir, "thoughts/", config.GitIgnoreDisabled)
+		added, err := AddToGitignore(dir, "thoughts/", config.ComponentModeDisabled)
 		if err != nil {
 			t.Fatalf("AddToGitignore() error: %v", err)
 		}
@@ -193,7 +164,7 @@ func TestAddToGitignore(t *testing.T) {
 			t.Fatalf("failed to create .gitignore: %v", err)
 		}
 
-		added, err := AddToGitignore(dir, "thoughts/", config.GitIgnoreProject)
+		added, err := AddToGitignore(dir, "thoughts/", config.ComponentModeLocal)
 		if err != nil {
 			t.Fatalf("AddToGitignore() error: %v", err)
 		}
@@ -223,7 +194,7 @@ func TestAddToGitignore(t *testing.T) {
 			t.Fatalf("failed to create .gitignore: %v", err)
 		}
 
-		added, err := AddToGitignore(dir, "thoughts/", config.GitIgnoreProject)
+		added, err := AddToGitignore(dir, "thoughts/", config.ComponentModeLocal)
 		if err != nil {
 			t.Fatalf("AddToGitignore() error: %v", err)
 		}
@@ -244,7 +215,7 @@ func TestRemoveFromGitignore(t *testing.T) {
 			t.Fatalf("failed to create .gitignore: %v", err)
 		}
 
-		removed, err := RemoveFromGitignore(dir, "thoughts/", config.GitIgnoreProject)
+		removed, err := RemoveFromGitignore(dir, "thoughts/", config.ComponentModeLocal)
 		if err != nil {
 			t.Fatalf("RemoveFromGitignore() error: %v", err)
 		}
@@ -280,7 +251,7 @@ func TestRemoveFromGitignore(t *testing.T) {
 			t.Fatalf("failed to create .gitignore: %v", err)
 		}
 
-		removed, err := RemoveFromGitignore(dir, "thoughts/", config.GitIgnoreProject)
+		removed, err := RemoveFromGitignore(dir, "thoughts/", config.ComponentModeLocal)
 		if err != nil {
 			t.Fatalf("RemoveFromGitignore() error: %v", err)
 		}
@@ -294,7 +265,7 @@ func TestRemoveFromGitignore(t *testing.T) {
 		dir, cleanup := setupTestDir(t)
 		defer cleanup()
 
-		removed, err := RemoveFromGitignore(dir, "thoughts/", config.GitIgnoreProject)
+		removed, err := RemoveFromGitignore(dir, "thoughts/", config.ComponentModeLocal)
 		if err != nil {
 			t.Fatalf("RemoveFromGitignore() error: %v", err)
 		}
@@ -313,47 +284,13 @@ func TestRemoveFromGitignore(t *testing.T) {
 			t.Fatalf("failed to create .gitignore: %v", err)
 		}
 
-		removed, err := RemoveFromGitignore(dir, "thoughts/", config.GitIgnoreDisabled)
+		removed, err := RemoveFromGitignore(dir, "thoughts/", config.ComponentModeDisabled)
 		if err != nil {
 			t.Fatalf("RemoveFromGitignore() error: %v", err)
 		}
 
 		if removed {
 			t.Error("expected pattern not to be removed in disabled mode")
-		}
-	})
-
-	t.Run("removes from local mode", func(t *testing.T) {
-		dir, cleanup := setupTestDir(t)
-		defer cleanup()
-
-		// Create .git/info/exclude with pattern
-		gitInfoDir := filepath.Join(dir, ".git", "info")
-		if err := os.MkdirAll(gitInfoDir, 0755); err != nil {
-			t.Fatalf("failed to create .git/info: %v", err)
-		}
-
-		exclude := filepath.Join(gitInfoDir, "exclude")
-		if err := os.WriteFile(exclude, []byte("thoughts/\n"), 0644); err != nil {
-			t.Fatalf("failed to create exclude: %v", err)
-		}
-
-		removed, err := RemoveFromGitignore(dir, "thoughts/", config.GitIgnoreLocal)
-		if err != nil {
-			t.Fatalf("RemoveFromGitignore() error: %v", err)
-		}
-
-		if !removed {
-			t.Error("expected pattern to be removed")
-		}
-
-		content, err := os.ReadFile(exclude)
-		if err != nil {
-			t.Fatalf("failed to read exclude: %v", err)
-		}
-
-		if strings.Contains(string(content), "thoughts/") {
-			t.Error("expected thoughts/ to be removed from exclude")
 		}
 	})
 
@@ -393,7 +330,7 @@ func TestRemoveFromGitignore(t *testing.T) {
 			t.Fatalf("failed to create repo directory: %v", err)
 		}
 
-		removed, err := RemoveFromGitignore(repoDir, "thoughts/", config.GitIgnoreGlobal)
+		removed, err := RemoveFromGitignore(repoDir, "thoughts/", config.ComponentModeGlobal)
 		if err != nil {
 			t.Fatalf("RemoveFromGitignore() error: %v", err)
 		}

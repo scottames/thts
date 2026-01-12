@@ -16,21 +16,28 @@ type ProfileConfig struct {
 	DefaultAgents []string `yaml:"defaultAgents,omitempty"`
 }
 
-// GitIgnoreMode specifies where to add the thoughts/ ignore rule.
-type GitIgnoreMode string
+// ComponentMode specifies where a component is managed.
+type ComponentMode string
 
 const (
-	GitIgnoreProject  GitIgnoreMode = "project"  // Add to project's .gitignore
-	GitIgnoreLocal    GitIgnoreMode = "local"    // Add to .git/info/exclude
-	GitIgnoreGlobal   GitIgnoreMode = "global"   // Add to ~/.config/git/ignore
-	GitIgnoreDisabled GitIgnoreMode = "disabled" // Don't add anywhere
+	ComponentModeGlobal   ComponentMode = "global"   // Managed globally (e.g., ~/.claude/, ~/.config/git/ignore)
+	ComponentModeLocal    ComponentMode = "local"    // Managed per-project (default)
+	ComponentModeDisabled ComponentMode = "disabled" // Not managed by thts, user handles
 )
+
+// AgentsConfig holds configuration for agent component management.
+type AgentsConfig struct {
+	Skills   ComponentMode `yaml:"skills,omitempty"`
+	Commands ComponentMode `yaml:"commands,omitempty"`
+	Agents   ComponentMode `yaml:"agents,omitempty"`
+}
 
 // Config represents the thts configuration.
 type Config struct {
 	User                string                    `yaml:"user"`
 	AutoSyncInWorktrees bool                      `yaml:"autoSyncInWorktrees,omitempty"`
-	GitIgnore           GitIgnoreMode             `yaml:"gitIgnore,omitempty"`
+	Gitignore           ComponentMode             `yaml:"gitignore,omitempty"`
+	Agents              *AgentsConfig             `yaml:"agents,omitempty"`
 	RepoMappings        map[string]*RepoMapping   `yaml:"repoMappings,omitempty"`
 	Profiles            map[string]*ProfileConfig `yaml:"profiles"`
 }
@@ -47,7 +54,7 @@ type ResolvedProfile struct {
 func Defaults() *Config {
 	return &Config{
 		AutoSyncInWorktrees: true,
-		GitIgnore:           GitIgnoreProject,
+		Gitignore:           ComponentModeLocal,
 		RepoMappings:        make(map[string]*RepoMapping),
 		Profiles: map[string]*ProfileConfig{
 			"default": {
@@ -200,4 +207,49 @@ func (c *Config) SetDefaultProfile(profileName string) bool {
 	// Set new default
 	profile.Default = true
 	return true
+}
+
+// GetGitignoreMode returns the gitignore mode, defaulting to local.
+func (c *Config) GetGitignoreMode() ComponentMode {
+	if c.Gitignore == "" {
+		return ComponentModeLocal
+	}
+	return c.Gitignore
+}
+
+// GetAgentComponentMode returns the mode for an agent component, defaulting to local.
+func (c *Config) GetAgentComponentMode(component string) ComponentMode {
+	if c.Agents == nil {
+		return ComponentModeLocal
+	}
+	switch component {
+	case "skills":
+		if c.Agents.Skills != "" {
+			return c.Agents.Skills
+		}
+	case "commands":
+		if c.Agents.Commands != "" {
+			return c.Agents.Commands
+		}
+	case "agents":
+		if c.Agents.Agents != "" {
+			return c.Agents.Agents
+		}
+	}
+	return ComponentModeLocal
+}
+
+// SetAgentComponentMode sets the mode for an agent component.
+func (c *Config) SetAgentComponentMode(component string, mode ComponentMode) {
+	if c.Agents == nil {
+		c.Agents = &AgentsConfig{}
+	}
+	switch component {
+	case "skills":
+		c.Agents.Skills = mode
+	case "commands":
+		c.Agents.Commands = mode
+	case "agents":
+		c.Agents.Agents = mode
+	}
 }

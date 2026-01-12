@@ -314,7 +314,7 @@ func TestSave(t *testing.T) {
 		cfg := &Config{
 			User:                "testuser",
 			AutoSyncInWorktrees: true,
-			GitIgnore:           GitIgnoreProject,
+			Gitignore:           ComponentModeLocal,
 			RepoMappings:        make(map[string]*RepoMapping),
 			Profiles: map[string]*ProfileConfig{
 				"personal": {
@@ -350,7 +350,7 @@ func TestSave(t *testing.T) {
 		cfg := &Config{
 			User:                "testuser",
 			AutoSyncInWorktrees: true,
-			GitIgnore:           GitIgnoreProject,
+			Gitignore:           ComponentModeLocal,
 			RepoMappings: map[string]*RepoMapping{
 				"/path/to/repo": {Repo: "myrepo", Profile: "work"},
 			},

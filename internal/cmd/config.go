@@ -105,10 +105,22 @@ func displayConfig(cfg *config.Config) error {
 	generalRows := [][]string{
 		{"User", cfg.User},
 	}
-	if cfg.GitIgnore != "" {
-		generalRows = append(generalRows, []string{"Git ignore", string(cfg.GitIgnore)})
+	if cfg.Gitignore != "" {
+		generalRows = append(generalRows, []string{"Gitignore", string(cfg.Gitignore)})
 	}
 	generalRows = append(generalRows, []string{"Auto-sync in worktrees", fmt.Sprintf("%v", cfg.AutoSyncInWorktrees)})
+	// Show agents config if set
+	if cfg.Agents != nil {
+		if cfg.Agents.Skills != "" {
+			generalRows = append(generalRows, []string{"Agents: skills", string(cfg.Agents.Skills)})
+		}
+		if cfg.Agents.Commands != "" {
+			generalRows = append(generalRows, []string{"Agents: commands", string(cfg.Agents.Commands)})
+		}
+		if cfg.Agents.Agents != "" {
+			generalRows = append(generalRows, []string{"Agents: agents", string(cfg.Agents.Agents)})
+		}
+	}
 	fmt.Println(ui.KeyValueTable(generalRows))
 
 	// Profiles

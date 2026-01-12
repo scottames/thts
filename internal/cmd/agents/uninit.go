@@ -9,6 +9,7 @@ import (
 
 	"github.com/charmbracelet/huh"
 	"github.com/scottames/thts/internal/agents"
+	"github.com/scottames/thts/internal/config"
 	fsutil "github.com/scottames/thts/internal/fs"
 	"github.com/scottames/thts/internal/git"
 	"github.com/scottames/thts/internal/ui"
@@ -20,6 +21,7 @@ var (
 	uninitForce  bool
 	uninitDryRun bool
 	uninitAll    bool
+	uninitGlobal bool
 )
 
 var uninitCmd = &cobra.Command{
@@ -47,9 +49,15 @@ func init() {
 	uninitCmd.Flags().BoolVarP(&uninitForce, "force", "f", false, "Skip confirmation prompt")
 	uninitCmd.Flags().BoolVar(&uninitDryRun, "dry-run", false, "Show what would be removed without removing")
 	uninitCmd.Flags().BoolVar(&uninitAll, "all", false, "Remove all detected agent integrations")
+	uninitCmd.Flags().BoolVar(&uninitGlobal, "global", false, "Remove globally installed components")
 }
 
 func runAgentsUninit(cmd *cobra.Command, args []string) error {
+	// Check if --global flag was provided
+	if uninitGlobal {
+		return runGlobalUninit(cmd, args)
+	}
+
 	fmt.Println(ui.Header("Remove Agent Integration"))
 	fmt.Println()
 
@@ -764,5 +772,94 @@ func updateGitignoreAfterUninit(projectDir string, removedAgents []agents.AgentT
 		return err
 	}
 	fmt.Println(ui.Info("Updated .gitignore patterns for remaining agents"))
+	return nil
+}
+
+// runGlobalUninit removes globally installed agent components.
+func runGlobalUninit(_ *cobra.Command, _ []string) error {
+	fmt.Println(ui.Header("Remove Global Agent Components"))
+	fmt.Println()
+
+	// Load global manifest
+	manifest, err := LoadGlobalManifest()
+	if err != nil {
+		return fmt.Errorf("failed to load global manifest: %w", err)
+	}
+	if manifest == nil || manifest.IsEmpty() {
+		fmt.Println(ui.Info("No global installation found."))
+		return nil
+	}
+
+	// Show what will be removed
+	fmt.Println(ui.SubHeader("Files to remove:"))
+	for component, info := range manifest.Components {
+		fmt.Printf("  %s (%d files for %s):\n", ui.Accent(component), len(info.Files), strings.Join(info.Agents, ", "))
+		for _, f := range info.Files {
+			fmt.Printf("    %s\n", ui.Muted(config.ContractPath(f)))
+		}
+	}
+	fmt.Println()
+
+	// Confirm removal
+	if !uninitForce {
+		var confirmed bool
+		err := huh.NewConfirm().
+			Title("Remove these global files?").
+			Affirmative("Yes, remove").
+			Negative("No, cancel").
+			Value(&confirmed).
+			Run()
+		if err != nil {
+			return err
+		}
+		if !confirmed {
+			fmt.Println(ui.Info("Cancelled."))
+			return nil
+		}
+	}
+
+	// Remove files
+	var removed int
+	for _, f := range manifest.GetAllFiles() {
+		if err := os.Remove(f); err != nil {
+			if !os.IsNotExist(err) {
+				fmt.Println(ui.WarningF("  Could not remove %s: %v", config.ContractPath(f), err))
+			}
+		} else {
+			removed++
+		}
+	}
+	fmt.Printf("%s Removed %d file(s)\n", ui.Success(""), removed)
+
+	// Clean up empty directories
+	for _, agentType := range agents.AllAgentTypes() {
+		globalDir := config.GlobalAgentDir(string(agentType))
+		if globalDir == "" {
+			continue
+		}
+		cleanEmptyDirs(globalDir)
+	}
+
+	// Reset config to local
+	cfg := config.LoadOrDefault()
+	for component := range manifest.Components {
+		cfg.SetAgentComponentMode(component, config.ComponentModeLocal)
+	}
+	if err := config.Save(cfg); err != nil {
+		fmt.Println(ui.WarningF("Could not update config: %v", err))
+	} else {
+		fmt.Println(ui.Success("Reset config to local mode"))
+	}
+
+	// Remove manifest
+	if err := DeleteGlobalManifest(); err != nil {
+		fmt.Println(ui.WarningF("Could not remove manifest: %v", err))
+	} else {
+		fmt.Println(ui.SuccessF("Removed manifest: %s", config.ContractPath(config.GlobalManifestPath())))
+	}
+
+	fmt.Println()
+	fmt.Println(ui.Success("Global uninstallation complete."))
+
 	return nil
 }

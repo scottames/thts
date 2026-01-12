@@ -11,8 +11,8 @@ func TestDefaults(t *testing.T) {
 	if !cfg.AutoSyncInWorktrees {
 		t.Error("expected AutoSyncInWorktrees to be true")
 	}
-	if cfg.GitIgnore != GitIgnoreProject {
-		t.Errorf("expected GitIgnore to be project, got %s", cfg.GitIgnore)
+	if cfg.Gitignore != ComponentModeLocal {
+		t.Errorf("expected Gitignore to be local, got %s", cfg.Gitignore)
 	}
 	if cfg.RepoMappings == nil {
 		t.Error("expected RepoMappings to be initialized")

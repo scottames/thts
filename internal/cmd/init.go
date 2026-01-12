@@ -184,15 +184,12 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 
 	// Add to gitignore
-	gitIgnoreMode := cfg.GitIgnore
-	if gitIgnoreMode == "" {
-		gitIgnoreMode = config.GitIgnoreProject
-	}
-	added, err := fs.AddToGitignore(currentRepo, "thoughts/", gitIgnoreMode)
+	gitignoreMode := cfg.GetGitignoreMode()
+	added, err := fs.AddToGitignore(currentRepo, "thoughts/", gitignoreMode)
 	if err != nil {
 		fmt.Println(ui.WarningF("Could not add to gitignore: %v", err))
 	} else if added {
-		fmt.Println(ui.SuccessF("Added 'thoughts/' to %s", gitignoreLocationName(gitIgnoreMode)))
+		fmt.Println(ui.SuccessF("Added 'thoughts/' to %s", gitignoreLocationName(gitignoreMode)))
 	}
 
 	// Update config with repo mapping
@@ -509,16 +506,14 @@ func createThoughtsSymlinks(
 }
 
 // gitignoreLocationName returns a human-readable name for the gitignore location.
-func gitignoreLocationName(mode config.GitIgnoreMode) string {
+func gitignoreLocationName(mode config.ComponentMode) string {
 	switch mode {
-	case config.GitIgnoreProject:
+	case config.ComponentModeLocal:
 		return ".gitignore"
-	case config.GitIgnoreLocal:
-		return ".git/info/exclude"
-	case config.GitIgnoreGlobal:
-		return "global gitignore"
+	case config.ComponentModeGlobal:
+		return "global gitignore (~/.config/git/ignore)"
 	default:
-		return "gitignore"
+		return ".gitignore"
 	}
 }
 

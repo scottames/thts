@@ -25,6 +25,7 @@ var (
 	initForce        bool
 	initInteractive  bool
 	initWithSettings bool
+	initGlobal       string
 )
 
 // ModelType represents the available Claude models.
@@ -123,9 +124,17 @@ func init() {
 	initCmd.Flags().BoolVarP(&initForce, "force", "f", false, "Overwrite existing files")
 	initCmd.Flags().BoolVarP(&initInteractive, "interactive", "i", false, "Interactively select options")
 	initCmd.Flags().BoolVar(&initWithSettings, "with-settings", false, "Also create settings files")
+	initCmd.Flags().StringVar(&initGlobal, "global", "", "Install components globally (all, or: skills,commands,agents)")
+	// NoOptDefVal allows --global without value to trigger interactive mode
+	initCmd.Flags().Lookup("global").NoOptDefVal = "interactive"
 }
 
 func runAgentsInit(cmd *cobra.Command, args []string) error {
+	// Check if --global flag was provided
+	if initGlobal != "" {
+		return runGlobalInit(cmd, args)
+	}
+
 	fmt.Println(ui.Header("Initialize Agent Integration"))
 	fmt.Println()
 
@@ -275,6 +284,9 @@ func initAgent(projectDir string, agentType agents.AgentType, level IntegrationL
 		return fmt.Errorf("failed to create %s directory: %w", agentConfig.RootDir, err)
 	}
 
+	// Load config to check component modes
+	cfg := config.LoadOrDefault()
+
 	manifest := &Manifest{
 		Agent:            string(agentType),
 		IntegrationLevel: level,
@@ -301,42 +313,66 @@ func initAgent(projectDir string, agentType agents.AgentType, level IntegrationL
 		}
 	}
 
-	// Copy skills
-	skillsCopied, skillFiles, err := copySkills(agentDir, agentType, agentConfig)
-	if err != nil {
-		fmt.Println(ui.WarningF("  Could not copy skills: %v", err))
-	} else if skillsCopied > 0 {
-		filesCopied += skillsCopied
-		for _, f := range skillFiles {
-			manifest.Files = append(manifest.Files, filepath.Join(agentConfig.SkillsDir, f))
-		}
-		fmt.Println(ui.SuccessF("  Copied %d skill(s)", skillsCopied))
-	}
-
-	// Copy commands (Claude only)
-	if agentConfig.SupportsCommands {
-		cmdsCopied, cmdFiles, err := copyCommands(agentDir, agentType)
+	// Copy skills (check component mode)
+	skillsMode := cfg.GetAgentComponentMode("skills")
+	switch skillsMode {
+	case config.ComponentModeGlobal:
+		fmt.Println(ui.InfoF("  Skills: using global installation"))
+	case config.ComponentModeDisabled:
+		// Skip silently
+	default:
+		skillsCopied, skillFiles, err := copySkills(agentDir, agentType, agentConfig)
 		if err != nil {
-			fmt.Println(ui.WarningF("  Could not copy commands: %v", err))
-		} else if cmdsCopied > 0 {
-			filesCopied += cmdsCopied
-			for _, f := range cmdFiles {
-				manifest.Files = append(manifest.Files, filepath.Join("commands", f))
+			fmt.Println(ui.WarningF("  Could not copy skills: %v", err))
+		} else if skillsCopied > 0 {
+			filesCopied += skillsCopied
+			for _, f := range skillFiles {
+				manifest.Files = append(manifest.Files, filepath.Join(agentConfig.SkillsDir, f))
 			}
-			fmt.Println(ui.SuccessF("  Copied %d command(s)", cmdsCopied))
+			fmt.Println(ui.SuccessF("  Copied %d skill(s)", skillsCopied))
 		}
 	}
 
-	// Copy agents
-	agentsCopied, agentFiles, err := copyAgents(agentDir, agentType, agentConfig)
-	if err != nil {
-		fmt.Println(ui.WarningF("  Could not copy agents: %v", err))
-	} else if agentsCopied > 0 {
-		filesCopied += agentsCopied
-		for _, f := range agentFiles {
-			manifest.Files = append(manifest.Files, filepath.Join(agentConfig.AgentsDir, f))
+	// Copy commands (Claude only, check component mode)
+	if agentConfig.SupportsCommands {
+		commandsMode := cfg.GetAgentComponentMode("commands")
+		switch commandsMode {
+		case config.ComponentModeGlobal:
+			fmt.Println(ui.InfoF("  Commands: using global installation"))
+		case config.ComponentModeDisabled:
+			// Skip silently
+		default:
+			cmdsCopied, cmdFiles, err := copyCommands(agentDir, agentType)
+			if err != nil {
+				fmt.Println(ui.WarningF("  Could not copy commands: %v", err))
+			} else if cmdsCopied > 0 {
+				filesCopied += cmdsCopied
+				for _, f := range cmdFiles {
+					manifest.Files = append(manifest.Files, filepath.Join("commands", f))
+				}
+				fmt.Println(ui.SuccessF("  Copied %d command(s)", cmdsCopied))
+			}
 		}
-		fmt.Println(ui.SuccessF("  Copied %d agent(s)", agentsCopied))
+	}
+
+	// Copy agents (check component mode)
+	agentsMode := cfg.GetAgentComponentMode("agents")
+	switch agentsMode {
+	case config.ComponentModeGlobal:
+		fmt.Println(ui.InfoF("  Agents: using global installation"))
+	case config.ComponentModeDisabled:
+		// Skip silently
+	default:
+		agentsCopied, agentFiles, err := copyAgents(agentDir, agentType, agentConfig)
+		if err != nil {
+			fmt.Println(ui.WarningF("  Could not copy agents: %v", err))
+		} else if agentsCopied > 0 {
+			filesCopied += agentsCopied
+			for _, f := range agentFiles {
+				manifest.Files = append(manifest.Files, filepath.Join(agentConfig.AgentsDir, f))
+			}
+			fmt.Println(ui.SuccessF("  Copied %d agent(s)", agentsCopied))
+		}
 	}
 
 	// Setup integration level
@@ -1029,4 +1065,215 @@ func patternsEqual(a, b []string) bool {
 		}
 	}
 	return true
+}
+
+// runGlobalInit handles global installation of agent components.
+func runGlobalInit(_ *cobra.Command, _ []string) error {
+	fmt.Println(ui.Header("Initialize Global Agent Components"))
+	fmt.Println()
+
+	// Parse components from flag value
+	components, err := parseGlobalComponents(initGlobal)
+	if err != nil {
+		return err
+	}
+
+	if len(components) == 0 {
+		fmt.Println(ui.Error("No components selected."))
+		return nil
+	}
+
+	fmt.Printf("%s Installing globally: %s\n", ui.Info(""), strings.Join(components, ", "))
+	fmt.Println()
+
+	// Resolve which agents to use (from profile's defaultAgents or all)
+	agentTypes, err := resolveGlobalAgentSelection()
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%s For agents: %s\n", ui.Info(""), strings.Join(agents.AgentTypesToStrings(agentTypes), ", "))
+	fmt.Println()
+
+	// Load or create global manifest
+	manifest, err := LoadGlobalManifest()
+	if err != nil {
+		return fmt.Errorf("failed to load global manifest: %w", err)
+	}
+	if manifest == nil {
+		manifest = NewGlobalManifest()
+	}
+
+	// Install each component globally
+	for _, component := range components {
+		if err := installGlobalComponent(component, agentTypes, manifest); err != nil {
+			fmt.Println(ui.ErrorF("Failed to install %s globally: %v", component, err))
+			continue
+		}
+	}
+
+	// Save manifest
+	if err := SaveGlobalManifest(manifest); err != nil {
+		return fmt.Errorf("failed to save global manifest: %w", err)
+	}
+
+	// Update config to mark components as global
+	cfg := config.LoadOrDefault()
+
+	for _, component := range components {
+		cfg.SetAgentComponentMode(component, config.ComponentModeGlobal)
+	}
+
+	if err := config.Save(cfg); err != nil {
+		return fmt.Errorf("failed to save config: %w", err)
+	}
+
+	fmt.Println()
+	fmt.Println(ui.Success("Global installation complete."))
+	fmt.Println()
+	fmt.Println(ui.InfoF("Config updated: %s", config.ContractPath(config.ThtsConfigPath())))
+	fmt.Println(ui.InfoF("Manifest saved: %s", config.ContractPath(config.GlobalManifestPath())))
+
+	return nil
+}
+
+// parseGlobalComponents parses the --global flag value into component names.
+func parseGlobalComponents(value string) ([]string, error) {
+	if value == "interactive" {
+		return promptGlobalComponentSelection()
+	}
+
+	if value == "all" {
+		return []string{"skills", "commands", "agents"}, nil
+	}
+
+	// Parse comma-separated list
+	var components []string
+	validComponents := map[string]bool{
+		"skills":   true,
+		"commands": true,
+		"agents":   true,
+	}
+
+	for _, c := range strings.Split(value, ",") {
+		c = strings.TrimSpace(c)
+		if c == "" {
+			continue
+		}
+		if !validComponents[c] {
+			return nil, fmt.Errorf("invalid component: %s (valid: skills, commands, agents)", c)
+		}
+		components = append(components, c)
+	}
+
+	return components, nil
+}
+
+// promptGlobalComponentSelection shows an interactive multi-select for components.
+func promptGlobalComponentSelection() ([]string, error) {
+	if !isTerminal() {
+		return nil, fmt.Errorf("interactive mode requires a terminal. Specify components: --global all or --global skills,commands,agents")
+	}
+
+	var selected []string
+	options := []huh.Option[string]{
+		huh.NewOption("Skills (thts-integrate)", "skills"),
+		huh.NewOption("Commands (thts-handoff, thts-resume) [Claude only]", "commands"),
+		huh.NewOption("Agents (thoughts-locator, thoughts-analyzer)", "agents"),
+	}
+
+	err := huh.NewMultiSelect[string]().
+		Title("Which components should be installed globally?").
+		Options(options...).
+		Value(&selected).
+		Run()
+	if err != nil {
+		return nil, err
+	}
+
+	return selected, nil
+}
+
+// resolveGlobalAgentSelection determines which agents to install globally.
+// Uses profile's defaultAgents or falls back to all agents.
+func resolveGlobalAgentSelection() ([]agents.AgentType, error) {
+	// Check profile's defaultAgents
+	cfg, err := config.Load()
+	if err == nil {
+		profile, _ := cfg.GetDefaultProfile()
+		if profile != nil && len(profile.DefaultAgents) > 0 {
+			agentTypes, err := agents.StringsToAgentTypes(profile.DefaultAgents)
+			if err == nil && len(agentTypes) > 0 {
+				return agentTypes, nil
+			}
+		}
+	}
+
+	// Fall back to all agents
+	return agents.AllAgentTypes(), nil
+}
+
+// installGlobalComponent installs a component to global directories for all specified agents.
+func installGlobalComponent(component string, agentTypes []agents.AgentType, manifest *GlobalManifest) error {
+	var allFiles []string
+	var agentNames []string
+
+	for _, agentType := range agentTypes {
+		globalDir := config.GlobalAgentDir(string(agentType))
+		if globalDir == "" {
+			continue
+		}
+
+		agentCfg := agents.GetConfig(agentType)
+		if agentCfg == nil {
+			continue
+		}
+
+		var files []string
+		var err error
+
+		switch component {
+		case "skills":
+			_, files, err = copySkills(globalDir, agentType, agentCfg)
+		case "commands":
+			if agentType == agents.AgentClaude {
+				_, files, err = copyCommands(globalDir, agentType)
+			} else {
+				continue // commands only for Claude
+			}
+		case "agents":
+			_, files, err = copyAgents(globalDir, agentType, agentCfg)
+		default:
+			return fmt.Errorf("unknown component: %s", component)
+		}
+
+		if err != nil {
+			return fmt.Errorf("failed to copy %s for %s: %w", component, agentType, err)
+		}
+
+		// Convert relative file names to absolute paths
+		for _, f := range files {
+			var fullPath string
+			switch component {
+			case "skills":
+				fullPath = filepath.Join(globalDir, agentCfg.SkillsDir, f)
+			case "commands":
+				fullPath = filepath.Join(globalDir, "commands", f)
+			case "agents":
+				fullPath = filepath.Join(globalDir, agentCfg.AgentsDir, f)
+			}
+			allFiles = append(allFiles, fullPath)
+		}
+
+		agentNames = append(agentNames, string(agentType))
+		fmt.Printf("  %s %s: installed to %s\n", ui.Success(""), component, config.ContractPath(globalDir))
+	}
+
+	// Update manifest
+	manifest.AddComponent(component, &GlobalComponentInfo{
+		Agents: agentNames,
+		Files:  allFiles,
+	})
+
+	return nil
 }
