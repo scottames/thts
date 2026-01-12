@@ -283,13 +283,15 @@ func initAgent(projectDir string, agentType agents.AgentType, level IntegrationL
 
 	var filesCopied int
 
-	// Copy thts-instructions.md (shared instructions)
-	if err := copyInstructionsFile(agentDir, agentConfig); err != nil {
-		fmt.Println(ui.WarningF("  Could not copy instructions: %v", err))
-	} else {
-		filesCopied++
-		manifest.Files = append(manifest.Files, ThtsInstructionsFile)
-		fmt.Println(ui.SuccessF("  Copied %s", ThtsInstructionsFile))
+	// Copy thts-instructions.md (shared instructions) - skip if agent uses marker-based AGENTS.md
+	if agentConfig.InstructionsFile != "" {
+		if err := copyInstructionsFile(agentDir, agentConfig); err != nil {
+			fmt.Println(ui.WarningF("  Could not copy instructions: %v", err))
+		} else {
+			filesCopied++
+			manifest.Files = append(manifest.Files, ThtsInstructionsFile)
+			fmt.Println(ui.SuccessF("  Copied %s", ThtsInstructionsFile))
+		}
 	}
 
 	// Copy skills
@@ -376,6 +378,34 @@ func copyInstructionsFile(agentDir string, cfg *agents.AgentConfig) error {
 // readThtsInstructions reads the embedded thts-instructions.md content.
 func readThtsInstructions() ([]byte, error) {
 	return fs.ReadFile(thtsfiles.Instructions, "instructions/thts-instructions.md")
+}
+
+// adjustHeaderLevels increments all markdown headers by the given offset.
+// Skips content inside fenced code blocks to avoid modifying markdown examples.
+func adjustHeaderLevels(content string, offset int) string {
+	if offset <= 0 {
+		return content
+	}
+
+	lines := strings.Split(content, "\n")
+	prefix := strings.Repeat("#", offset)
+	inCodeBlock := false
+
+	for i, line := range lines {
+		// Track fenced code blocks (``` or ~~~)
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "```") || strings.HasPrefix(trimmed, "~~~") {
+			inCodeBlock = !inCodeBlock
+			continue
+		}
+
+		// Only adjust headers outside code blocks
+		if !inCodeBlock && strings.HasPrefix(line, "#") {
+			lines[i] = prefix + line
+		}
+	}
+
+	return strings.Join(lines, "\n")
 }
 
 // copySkills copies skill files for an agent type.
@@ -616,15 +646,27 @@ func appendWithMarkers(gitRoot, agentDir string, cfg *agents.AgentConfig) (*Inst
 			return nil, fmt.Errorf("failed to read %s: %w", cfg.InstructionTargetFile, err)
 		}
 		if strings.Contains(string(content), ThtsMarkerStart) {
-			fmt.Println(ui.InfoF("  %s already includes thts integration", cfg.InstructionTargetFile))
-			return nil, nil
+			if !initForce {
+				fmt.Println(ui.InfoF("  %s already includes thts integration", cfg.InstructionTargetFile))
+				return nil, nil
+			}
+			// Force mode: remove existing marker block and re-add
+			fmt.Println(ui.InfoF("  Replacing existing thts integration in %s", cfg.InstructionTargetFile))
+			if err := removeMarkerBlock(filePath); err != nil {
+				return nil, fmt.Errorf("failed to remove existing markers: %w", err)
+			}
 		}
 		// Append to existing file
+		// For inline content (non-Claude), adjust header levels to fit under existing structure
+		appendContent := insertContent
+		if cfg.Type != agents.AgentClaude {
+			appendContent = adjustHeaderLevels(insertContent, 1)
+		}
 		f, err := os.OpenFile(filePath, os.O_APPEND|os.O_WRONLY, 0644)
 		if err != nil {
 			return nil, fmt.Errorf("failed to open %s: %w", cfg.InstructionTargetFile, err)
 		}
-		if _, err := f.WriteString(insertContent); err != nil {
+		if _, err := f.WriteString(appendContent); err != nil {
 			_ = f.Close()
 			return nil, fmt.Errorf("failed to append to %s: %w", cfg.InstructionTargetFile, err)
 		}
@@ -642,12 +684,15 @@ func appendWithMarkers(gitRoot, agentDir string, cfg *agents.AgentConfig) (*Inst
 
 	// Create new file
 	var header string
+	createContent := insertContent
 	if cfg.Type == agents.AgentClaude {
 		header = "# Claude Code Instructions\n"
 	} else {
 		header = "# Agent Instructions\n"
+		// For inline content (non-Claude), adjust header levels to fit under top-level header
+		createContent = adjustHeaderLevels(insertContent, 1)
 	}
-	if err := os.WriteFile(filePath, []byte(header+insertContent), 0644); err != nil {
+	if err := os.WriteFile(filePath, []byte(header+createContent), 0644); err != nil {
 		return nil, fmt.Errorf("failed to create %s: %w", cfg.InstructionTargetFile, err)
 	}
 	fmt.Println(ui.SuccessF("  Created %s with thts integration", cfg.InstructionTargetFile))

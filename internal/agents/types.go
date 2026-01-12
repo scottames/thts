@@ -89,7 +89,7 @@ var AgentConfigs = map[AgentType]*AgentConfig{
 	AgentCodex: {
 		Type:                  AgentCodex,
 		RootDir:               ".codex",
-		InstructionsFile:      "thts-instructions.md",
+		InstructionsFile:      "",
 		IntegrationType:       "marker",
 		InstructionTargetFile: "AGENTS.md",
 		SkillsDir:             "skills",
@@ -102,9 +102,9 @@ var AgentConfigs = map[AgentType]*AgentConfig{
 	AgentOpenCode: {
 		Type:                  AgentOpenCode,
 		RootDir:               ".opencode",
-		InstructionsFile:      "thts-instructions.md",
-		IntegrationType:       "config",
-		InstructionTargetFile: "",
+		InstructionsFile:      "",
+		IntegrationType:       "marker",
+		InstructionTargetFile: "AGENTS.md",
 		SkillsDir:             "skill",
 		SkillNeedsDir:         true,
 		AgentsDir:             "agent",

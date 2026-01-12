@@ -126,6 +126,9 @@ func TestAgentConfigProperties(t *testing.T) {
 	if codex.InstructionTargetFile != "AGENTS.md" {
 		t.Errorf("Codex InstructionTargetFile = %q, want AGENTS.md", codex.InstructionTargetFile)
 	}
+	if codex.InstructionsFile != "" {
+		t.Errorf("Codex InstructionsFile = %q, want empty (inline in AGENTS.md)", codex.InstructionsFile)
+	}
 	if !codex.SkillNeedsDir {
 		t.Error("Codex skills should require subdirectories")
 	}
@@ -135,11 +138,14 @@ func TestAgentConfigProperties(t *testing.T) {
 	if opencode.SupportsCommands {
 		t.Error("OpenCode should not support commands")
 	}
-	if opencode.IntegrationType != "config" {
-		t.Errorf("OpenCode IntegrationType = %q, want config", opencode.IntegrationType)
+	if opencode.IntegrationType != "marker" {
+		t.Errorf("OpenCode IntegrationType = %q, want marker", opencode.IntegrationType)
 	}
-	if opencode.InstructionTargetFile != "" {
-		t.Errorf("OpenCode InstructionTargetFile = %q, want empty string", opencode.InstructionTargetFile)
+	if opencode.InstructionTargetFile != "AGENTS.md" {
+		t.Errorf("OpenCode InstructionTargetFile = %q, want AGENTS.md", opencode.InstructionTargetFile)
+	}
+	if opencode.InstructionsFile != "" {
+		t.Errorf("OpenCode InstructionsFile = %q, want empty (inline in AGENTS.md)", opencode.InstructionsFile)
 	}
 	if opencode.SkillsDir != "skill" {
 		t.Errorf("OpenCode SkillsDir = %q, want skill", opencode.SkillsDir)
