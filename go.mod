@@ -1,6 +1,6 @@
 module github.com/scottames/thts
 
-go 1.23.0
+go 1.25.5
 
 require (
 	github.com/charmbracelet/huh v0.8.0
