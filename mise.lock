@@ -1,20 +1,11 @@
-[[tools."aqua:casey/just"]]
-version = "1.46.0"
-backend = "aqua:casey/just"
-"platforms.linux-arm64" = { checksum = "sha256:b81970c8247fa64cfb30d2a3da0e487e4253f9f2d01865ed5e7d53cdc7b02188", url = "https://github.com/casey/just/releases/download/1.46.0/just-1.46.0-aarch64-unknown-linux-musl.tar.gz"}
-"platforms.linux-x64" = { checksum = "sha256:79966e6e353f535ee7d1c6221641bcc8e3381c55b0d0a6dc6e54b34f9db36eaa", url = "https://github.com/casey/just/releases/download/1.46.0/just-1.46.0-x86_64-unknown-linux-musl.tar.gz"}
-"platforms.macos-arm64" = { checksum = "sha256:438eaf6468a115aa7db93e501cc7e3272f453f6b7083be3863adfab546b23358", url = "https://github.com/casey/just/releases/download/1.46.0/just-1.46.0-aarch64-apple-darwin.tar.gz"}
-"platforms.macos-x64" = { checksum = "sha256:ec54dd60ac876261b7318f1852ef9c0319fede1e5a73c14f56d908a8edf595b8", url = "https://github.com/casey/just/releases/download/1.46.0/just-1.46.0-x86_64-apple-darwin.tar.gz"}
-"platforms.windows-x64" = { checksum = "sha256:f0acf3f8ccbcf360b481baae9cae4c921774c89d5d932012481d3e0bda78ab39", url = "https://github.com/casey/just/releases/download/1.46.0/just-1.46.0-x86_64-pc-windows-msvc.zip"}
-
 [[tools."aqua:goreleaser/goreleaser"]]
-version = "2.13.2"
+version = "2.13.3"
 backend = "aqua:goreleaser/goreleaser"
-"platforms.linux-arm64" = { checksum = "sha256:81b59a932f6cb6632d29f334f890bd7a8414cb1b765451517a2e0b8de523453d", url = "https://github.com/goreleaser/goreleaser/releases/download/v2.13.2/goreleaser_Linux_arm64.tar.gz"}
-"platforms.linux-x64" = { checksum = "sha256:b38d8f8f9231ee52eeac9bbd1e3441467a8b1a2e0aa7461f2b1e52b80cd5c62a", url = "https://github.com/goreleaser/goreleaser/releases/download/v2.13.2/goreleaser_Linux_x86_64.tar.gz"}
-"platforms.macos-arm64" = { checksum = "sha256:d63ba9584b71a0ffdb0f66bddcbe4db5ca1f23eef1000a63328e19e3ed71d91d", url = "https://github.com/goreleaser/goreleaser/releases/download/v2.13.2/goreleaser_Darwin_all.tar.gz"}
-"platforms.macos-x64" = { checksum = "sha256:d63ba9584b71a0ffdb0f66bddcbe4db5ca1f23eef1000a63328e19e3ed71d91d", url = "https://github.com/goreleaser/goreleaser/releases/download/v2.13.2/goreleaser_Darwin_all.tar.gz"}
-"platforms.windows-x64" = { checksum = "sha256:105b8b760449d111775376580ce1b28bef11afac5cb1b0fc4231113c52daf06a", url = "https://github.com/goreleaser/goreleaser/releases/download/v2.13.2/goreleaser_Windows_x86_64.zip"}
+"platforms.linux-arm64" = { checksum = "sha256:156656d0f874542d618568bd50afd3d33ced2e8aab2c60cc7c21e1b9fa52031e", url = "https://github.com/goreleaser/goreleaser/releases/download/v2.13.3/goreleaser_Linux_arm64.tar.gz"}
+"platforms.linux-x64" = { checksum = "sha256:4b66f2f78f78561330350651ade557b70328664718490f37834749073af21d20", url = "https://github.com/goreleaser/goreleaser/releases/download/v2.13.3/goreleaser_Linux_x86_64.tar.gz"}
+"platforms.macos-arm64" = { checksum = "sha256:5516c37779efb3935d5b213cda3b0b9025ae94ddbcb51df6919acbcdef4194b0", url = "https://github.com/goreleaser/goreleaser/releases/download/v2.13.3/goreleaser_Darwin_all.tar.gz"}
+"platforms.macos-x64" = { checksum = "sha256:5516c37779efb3935d5b213cda3b0b9025ae94ddbcb51df6919acbcdef4194b0", url = "https://github.com/goreleaser/goreleaser/releases/download/v2.13.3/goreleaser_Darwin_all.tar.gz"}
+"platforms.windows-x64" = { checksum = "sha256:c5586c4ed749ca358ad61ed73ee4b8039cfa68daae8c23e69fb086d549dfb31d", url = "https://github.com/goreleaser/goreleaser/releases/download/v2.13.3/goreleaser_Windows_x86_64.zip"}
 
 [[tools."aqua:int128/ghcp"]]
 version = "1.15.1"
