@@ -16,6 +16,7 @@
     {
       matchPackageNames: ['go'],
       groupName: 'go',
+      branchName: 'renovate/go',
     },
   ],
 }
