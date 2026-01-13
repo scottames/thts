@@ -1,9 +1,17 @@
 # thts
 
 A CLI for storing developer thoughts, plans, and dreams in a central repo while
-keeping them accessible in any project. Integrates with AI coding agents
-(Claude Code, Codex, OpenCode), giving them persistent memory for research,
-plans, and context across sessions.
+keeping them accessible in any project. Integrates with AI coding agents (Claude
+Code, Codex, OpenCode), giving them persistent memory for research, plans, and
+context across sessions.
+
+<!-- prettier-ignore-start -->
+> [!WARNING]
+> This project incorporates code, comments, or documentation
+> generated or assisted by artificial intelligence tools (such as Claude or
+> ChatGPT). All content is actively reviewed and modified by project maintainers
+> before inclusion. Use at your own risk.
+<!-- prettier-ignore-end -->
 
 <!-- mtoc-start -->
 
@@ -15,6 +23,7 @@ plans, and context across sessions.
 - [AI Agent Integration](#ai-agent-integration)
 - [Attribution](#attribution)
 - [Compatibility with HumanLayer](#compatibility-with-humanlayer)
+  - [Config handling](#config-handling)
 - [License](#license)
 
 <!-- mtoc-end -->
@@ -102,7 +111,7 @@ thts sync -m "Added architecture notes"
 
 ## AI Agent Integration
 
-thts integrates with AI coding agents to give them awareness of your thoughts
+`thts` integrates with AI coding agents to give them awareness of your thoughts
 directory. Supports Claude Code, OpenAI Codex, and OpenCode.
 
 ```bash
@@ -140,12 +149,15 @@ subcommand. They share:
 - Symlink layout in projects
 - Git hooks
 
-**Config handling:** thts uses its own config at `~/.config/thts/config.yaml`
-(YAML format). It can read HumanLayer's config (`~/.config/humanlayer/humanlayer.json`)
-as a fallback, but never writes to it. This means:
+### Config handling
 
-- Migrating from HumanLayer to thts is seamless—your existing config is read automatically
-- thts writes its own config, so HumanLayer won't see changes made via thts
+`thts` uses its own config at `~/.config/thts/config.yaml` (YAML format). It can
+read HumanLayer's config (`~/.config/humanlayer/humanlayer.json`) as a fallback,
+but never writes to it. This means:
+
+- Migrating from HumanLayer to `thts` is seamless - existing config is read
+  automatically
+- `thts` writes its own config, so HumanLayer won't see changes made via `thts`
 - Team members can use whichever tool they prefer on the same thoughts repo
 
 See the [Compatibility Guide](docs/guide.md#compatibility-with-humanlayer) for
