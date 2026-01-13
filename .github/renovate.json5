@@ -2,5 +2,20 @@
   $schema: 'https://docs.renovatebot.com/renovate-schema.json',
   extends: [
     'github>scottames/renovate:default.json5',
-  ]
+  ],
+  customManagers: [
+    {
+      customType: 'regex',
+      fileMatch: ['^go\\.mod$'],
+      matchStrings: ['go (?<currentValue>\\d+\\.\\d+)'],
+      depNameTemplate: 'go',
+      datasourceTemplate: 'golang-version',
+    },
+  ],
+  packageRules: [
+    {
+      matchPackageNames: ['go'],
+      groupName: 'go',
+    },
+  ],
 }
