@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -34,6 +35,7 @@ instructions for manual resolution.`,
 
 func init() {
 	syncCmd.Flags().StringVarP(&syncMessage, "message", "m", "", "Commit message (default: auto-generated)")
+	syncCmd.Flags().Bool("push", true, "Push to remote after sync (use --push=false to disable)")
 	rootCmd.AddCommand(syncCmd)
 }
 
@@ -96,9 +98,15 @@ func runSync(cmd *cobra.Command, args []string) error {
 		fmt.Println(ui.Bullet(fmt.Sprintf("Created %d hard links in searchable directory", result.LinkedCount)))
 	}
 
+	// Determine push behavior: CLI flag overrides config
+	shouldPush := cfg.GetSyncPush()
+	if cmd.Flags().Changed("push") {
+		shouldPush, _ = cmd.Flags().GetBool("push")
+	}
+
 	// 3. Sync the thoughts repository
 	fmt.Println(ui.Info("Syncing thoughts..."))
-	if err := syncThoughtsRepo(expandedRepo, syncMessage); err != nil {
+	if err := syncThoughtsRepo(expandedRepo, syncMessage, shouldPush); err != nil {
 		return err
 	}
 
@@ -106,7 +114,7 @@ func runSync(cmd *cobra.Command, args []string) error {
 }
 
 // syncThoughtsRepo performs git operations to sync the thoughts repository.
-func syncThoughtsRepo(repoPath, message string) error {
+func syncThoughtsRepo(repoPath, message string, shouldPush bool) error {
 	// Stage all changes
 	if err := runGitCommand(repoPath, "add", "-A"); err != nil {
 		return fmt.Errorf("failed to stage changes: %w", err)
@@ -138,10 +146,25 @@ func syncThoughtsRepo(repoPath, message string) error {
 		return err
 	}
 
-	// Push if remote exists
-	if err := pushToRemote(repoPath); err != nil {
-		// Push errors are warnings, not fatal
-		fmt.Println(ui.WarningF("%v", err))
+	// Push if enabled
+	if shouldPush {
+		if err := pushToRemote(repoPath); err != nil {
+			// Push errors are warnings, not fatal
+			fmt.Println(ui.WarningF("%v", err))
+		}
+	} else {
+		// Warn if there are unpushed commits
+		if count := getUnpushedCommitCount(repoPath); count > 0 {
+			noun := "commits"
+			if count == 1 {
+				noun = "commit"
+			}
+			fmt.Println(ui.WarningF("%d %s not pushed (push disabled)", count, noun))
+			fmt.Printf("  Run %s or %s in %s to push\n",
+				ui.Accent("thts sync --push"),
+				ui.Accent("git push"),
+				ui.Accent(repoPath))
+		}
 	}
 
 	return nil
@@ -243,6 +266,17 @@ func pushToRemote(repoPath string) error {
 
 	fmt.Println(ui.Success("Pushed to remote"))
 	return nil
+}
+
+// getUnpushedCommitCount returns the number of commits ahead of the upstream.
+func getUnpushedCommitCount(repoPath string) int {
+	cmd := exec.Command("git", "-C", repoPath, "rev-list", "--count", "@{u}..HEAD")
+	output, err := cmd.Output()
+	if err != nil {
+		return 0 // no upstream or error, skip warning
+	}
+	count, _ := strconv.Atoi(strings.TrimSpace(string(output)))
+	return count
 }
 
 // updateSymlinksForNewUsers checks for other users' directories and creates symlinks.

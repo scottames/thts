@@ -32,11 +32,17 @@ type AgentsConfig struct {
 	Agents   ComponentMode `yaml:"agents,omitempty"`
 }
 
+// SyncConfig holds configuration for sync behavior.
+type SyncConfig struct {
+	Push *bool `yaml:"push,omitempty"`
+}
+
 // Config represents the thts configuration.
 type Config struct {
 	User                string                    `yaml:"user"`
 	AutoSyncInWorktrees bool                      `yaml:"autoSyncInWorktrees,omitempty"`
 	Gitignore           ComponentMode             `yaml:"gitignore,omitempty"`
+	Sync                *SyncConfig               `yaml:"sync,omitempty"`
 	Agents              *AgentsConfig             `yaml:"agents,omitempty"`
 	RepoMappings        map[string]*RepoMapping   `yaml:"repoMappings,omitempty"`
 	Profiles            map[string]*ProfileConfig `yaml:"profiles"`
@@ -236,6 +242,14 @@ func (c *Config) GetGitignoreMode() ComponentMode {
 		return ComponentModeLocal
 	}
 	return c.Gitignore
+}
+
+// GetSyncPush returns whether to push on sync, defaulting to true.
+func (c *Config) GetSyncPush() bool {
+	if c.Sync != nil && c.Sync.Push != nil {
+		return *c.Sync.Push
+	}
+	return true
 }
 
 // GetAgentComponentMode returns the mode for an agent component, defaulting to local.

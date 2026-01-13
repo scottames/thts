@@ -109,6 +109,10 @@ func displayConfig(cfg *config.Config) error {
 		generalRows = append(generalRows, []string{"Gitignore", string(cfg.Gitignore)})
 	}
 	generalRows = append(generalRows, []string{"Auto-sync in worktrees", fmt.Sprintf("%v", cfg.AutoSyncInWorktrees)})
+	// Show sync config if set
+	if cfg.Sync != nil && cfg.Sync.Push != nil {
+		generalRows = append(generalRows, []string{"Sync: push", fmt.Sprintf("%v", *cfg.Sync.Push)})
+	}
 	// Show agents config if set
 	if cfg.Agents != nil {
 		if cfg.Agents.Skills != "" {
