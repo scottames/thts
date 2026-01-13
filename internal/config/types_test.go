@@ -222,7 +222,7 @@ func TestGetDefaultProfile(t *testing.T) {
 			wantName:    "",
 		},
 		{
-			name: "returns first profile if no default marked",
+			name: "returns nil if no default marked",
 			cfg: &Config{
 				Profiles: map[string]*ProfileConfig{
 					"work": {
@@ -231,11 +231,8 @@ func TestGetDefaultProfile(t *testing.T) {
 					},
 				},
 			},
-			wantProfile: &ProfileConfig{
-				ThoughtsRepo: "~/work",
-				Default:      false,
-			},
-			wantName: "work",
+			wantProfile: nil,
+			wantName:    "",
 		},
 	}
 

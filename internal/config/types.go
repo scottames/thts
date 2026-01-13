@@ -68,26 +68,19 @@ func Defaults() *Config {
 }
 
 // GetDefaultProfile returns the default profile and its name.
-// If no profile is marked as default, returns the first profile found and warns.
-// Returns nil, "" if no profiles exist.
+// Returns nil, "" if no profiles exist or no profile is marked as default.
 func (c *Config) GetDefaultProfile() (*ProfileConfig, string) {
 	if len(c.Profiles) == 0 {
 		return nil, ""
 	}
 
-	// Look for explicitly marked default
 	for name, profile := range c.Profiles {
 		if profile.Default {
 			return profile, name
 		}
 	}
 
-	// No explicit default - use first profile (map iteration order is random,
-	// but this is a fallback for misconfigured state)
-	for name, profile := range c.Profiles {
-		return profile, name
-	}
-
+	// No profile marked as default - return nil to surface misconfiguration
 	return nil, ""
 }
 

@@ -100,11 +100,19 @@ func runInit(cmd *cobra.Command, args []string) error {
 	// Resolve profile config
 	profileConfig := resolveInitProfile(cfg, currentRepo)
 	if profileConfig == nil {
-		fmt.Println(ui.Error("No profiles configured."))
-		fmt.Printf(
-			"Run %s first to create a profile.\n",
-			ui.Accent("thts setup"),
-		)
+		if len(cfg.Profiles) == 0 {
+			fmt.Println(ui.Error("No profiles configured."))
+			fmt.Printf(
+				"Run %s first to create a profile.\n",
+				ui.Accent("thts setup"),
+			)
+		} else {
+			fmt.Println(ui.Error("No default profile set."))
+			fmt.Printf(
+				"Run %s to set a default profile.\n",
+				ui.Accent("thts profile set-default <name>"),
+			)
+		}
 		return nil
 	}
 

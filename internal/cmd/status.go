@@ -59,8 +59,13 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		tbl.Row("Mapped repos", fmt.Sprintf("%d", len(cfg.RepoMappings)))
 		fmt.Println(tbl)
 	} else {
-		fmt.Println(ui.Error("No profiles configured"))
-		fmt.Printf("  Run %s to create a profile\n", ui.Accent("thts setup"))
+		if len(cfg.Profiles) == 0 {
+			fmt.Println(ui.Error("No profiles configured"))
+			fmt.Printf("  Run %s to create a profile\n", ui.Accent("thts setup"))
+		} else {
+			fmt.Println(ui.Error("No default profile set"))
+			fmt.Printf("  Run %s to set a default\n", ui.Accent("thts profile set-default <name>"))
+		}
 	}
 	fmt.Println()
 
