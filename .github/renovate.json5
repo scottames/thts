@@ -6,15 +6,21 @@
   customManagers: [
     {
       customType: 'regex',
-      fileMatch: ['^go\\.mod$'],
-      matchStrings: ['go (?<currentValue>\\d+\\.\\d+)'],
+      managerFilePatterns: [
+        '/^go\\.mod$/',
+      ],
+      matchStrings: [
+        'go (?<currentValue>\\d+\\.\\d+)',
+      ],
       depNameTemplate: 'go',
       datasourceTemplate: 'golang-version',
     },
   ],
   packageRules: [
     {
-      matchPackageNames: ['go'],
+      matchPackageNames: [
+        'go',
+      ],
       groupName: 'go',
     },
   ],
