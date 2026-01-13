@@ -301,3 +301,53 @@ func TestCommandsDirLabel(t *testing.T) {
 		})
 	}
 }
+
+// TestAgentCompleteness verifies all registered agents have required configuration.
+// This test catches incomplete agent additions - if you add a new agent to AllAgentTypes(),
+// this test will fail until you also add the config, label, and parser case.
+func TestAgentCompleteness(t *testing.T) {
+	for _, agentType := range AllAgentTypes() {
+		t.Run(string(agentType), func(t *testing.T) {
+			// Must have config
+			config := GetConfig(agentType)
+			if config == nil {
+				t.Errorf("Agent %q registered in AllAgentTypes() but missing from AgentConfigs", agentType)
+				return
+			}
+
+			// Must have label
+			if AgentTypeLabels[agentType] == "" {
+				t.Errorf("Agent %q missing from AgentTypeLabels", agentType)
+			}
+
+			// Must be parseable
+			parsed, err := ParseAgentType(string(agentType))
+			if err != nil {
+				t.Errorf("Agent %q not handled in ParseAgentType: %v", agentType, err)
+			}
+			if parsed != agentType {
+				t.Errorf("ParseAgentType(%q) = %q, want %q", agentType, parsed, agentType)
+			}
+
+			// Config must have required fields
+			if config.RootDir == "" {
+				t.Errorf("Agent %q config missing RootDir", agentType)
+			}
+			if config.SkillsDir == "" {
+				t.Errorf("Agent %q config missing SkillsDir", agentType)
+			}
+			if config.AgentsDir == "" {
+				t.Errorf("Agent %q config missing AgentsDir", agentType)
+			}
+			if config.IntegrationType == "" {
+				t.Errorf("Agent %q config missing IntegrationType", agentType)
+			}
+			if config.SettingsFile == "" {
+				t.Errorf("Agent %q config missing SettingsFile", agentType)
+			}
+			if config.SettingsFormat == "" {
+				t.Errorf("Agent %q config missing SettingsFormat", agentType)
+			}
+		})
+	}
+}

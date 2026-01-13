@@ -919,13 +919,14 @@ func writeAgentSettings(agentDir string, agentType agents.AgentType) error {
 	var content string
 	switch agentType {
 	case agents.AgentClaude:
+		// Claude settings are built dynamically with user input
 		content = buildClaudeSettings()
-	case agents.AgentCodex:
-		content = thtsfiles.DefaultCodexConfigTOML
-	case agents.AgentOpenCode:
-		content = thtsfiles.DefaultOpenCodeJSON
 	default:
-		return fmt.Errorf("no default settings for agent: %s", agentType)
+		// Other agents use embedded settings files
+		content = thtsfiles.GetDefaultSettings(cfg.SettingsFile)
+		if content == "" {
+			return fmt.Errorf("no default settings for agent: %s", agentType)
+		}
 	}
 
 	settingsPath := filepath.Join(agentDir, cfg.SettingsFile)

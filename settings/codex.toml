@@ -1,0 +1,12 @@
+# Codex CLI configuration
+# See: https://github.com/openai/codex
+
+[model]
+name = "gpt-4o"
+
+[sandbox]
+enabled = true
+
+[approval]
+# auto-edit | suggest | full-auto
+policy = "suggest"

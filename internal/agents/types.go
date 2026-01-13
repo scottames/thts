@@ -223,12 +223,12 @@ func StringsToAgentTypes(strings []string) ([]AgentType, error) {
 	return result, nil
 }
 
-// SortAgentTypes sorts agent types in canonical order (claude, codex, opencode).
+// SortAgentTypes sorts agent types in canonical order (derived from AllAgentTypes).
 func SortAgentTypes(agents []AgentType) {
-	order := map[AgentType]int{
-		AgentClaude:   0,
-		AgentCodex:    1,
-		AgentOpenCode: 2,
+	// Build order map from AllAgentTypes slice position
+	order := make(map[AgentType]int)
+	for i, at := range AllAgentTypes() {
+		order[at] = i
 	}
 	sort.Slice(agents, func(i, j int) bool {
 		return order[agents[i]] < order[agents[j]]

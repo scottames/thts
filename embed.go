@@ -73,35 +73,19 @@ var OpenCodeAgents embed.FS
 //go:embed templates/*.md
 var Templates embed.FS
 
-// DefaultSettingsJSON provides a default settings.json template for Claude.
-var DefaultSettingsJSON = `{
-  "permissions": {
-    "allow": []
-  },
-  "enableAllProjectMcpServers": false
+// Settings contains embedded default settings files for agents.
+// Files are named by agent type: codex.toml, opencode.json, etc.
+// Claude settings are built dynamically and not embedded.
+//
+//go:embed settings/*
+var Settings embed.FS
+
+// GetDefaultSettings returns the default settings content for an agent.
+// Returns empty string if no default settings exist (e.g., Claude builds dynamically).
+func GetDefaultSettings(filename string) string {
+	content, err := Settings.ReadFile("settings/" + filename)
+	if err != nil {
+		return ""
+	}
+	return string(content)
 }
-`
-
-// DefaultCodexConfigTOML provides a default config.toml template for Codex.
-var DefaultCodexConfigTOML = `# Codex CLI configuration
-# See: https://github.com/openai/codex
-
-[model]
-name = "gpt-4o"
-
-[sandbox]
-enabled = true
-
-[approval]
-# auto-edit | suggest | full-auto
-policy = "suggest"
-`
-
-// DefaultOpenCodeJSON provides a default opencode.json template for OpenCode.
-var DefaultOpenCodeJSON = `{
-  "model": "anthropic/claude-sonnet-4-20250514",
-  "permissions": {
-    "allow": []
-  }
-}
-`
