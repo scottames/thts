@@ -56,3 +56,8 @@ func Accent(msg string) string {
 func Bullet(msg string) string {
 	return fmt.Sprintf("  %s  %s", StyleMuted.Render(SymbolBullet), msg)
 }
+
+// MutedBullet returns an indented bullet point with muted text.
+func MutedBullet(msg string) string {
+	return fmt.Sprintf("  %s  %s", StyleMuted.Render(SymbolBullet), StyleMuted.Render(msg))
+}

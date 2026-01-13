@@ -32,9 +32,18 @@ type AgentsConfig struct {
 	Agents   ComponentMode `yaml:"agents,omitempty"`
 }
 
+// SyncMode specifies the sync behavior for remote operations.
+type SyncMode string
+
+const (
+	SyncModeFull  SyncMode = "full"  // Pull and push (default)
+	SyncModePull  SyncMode = "pull"  // Pull only, no push
+	SyncModeLocal SyncMode = "local" // No remote operations
+)
+
 // SyncConfig holds configuration for sync behavior.
 type SyncConfig struct {
-	Push *bool `yaml:"push,omitempty"`
+	Mode SyncMode `yaml:"mode,omitempty"`
 }
 
 // Config represents the thts configuration.
@@ -244,12 +253,12 @@ func (c *Config) GetGitignoreMode() ComponentMode {
 	return c.Gitignore
 }
 
-// GetSyncPush returns whether to push on sync, defaulting to true.
-func (c *Config) GetSyncPush() bool {
-	if c.Sync != nil && c.Sync.Push != nil {
-		return *c.Sync.Push
+// GetSyncMode returns the sync mode, defaulting to full.
+func (c *Config) GetSyncMode() SyncMode {
+	if c.Sync != nil && c.Sync.Mode != "" {
+		return c.Sync.Mode
 	}
-	return true
+	return SyncModeFull
 }
 
 // GetAgentComponentMode returns the mode for an agent component, defaulting to local.

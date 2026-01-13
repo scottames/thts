@@ -35,7 +35,7 @@ instructions for manual resolution.`,
 
 func init() {
 	syncCmd.Flags().StringVarP(&syncMessage, "message", "m", "", "Commit message (default: auto-generated)")
-	syncCmd.Flags().Bool("push", true, "Push to remote after sync (use --push=false to disable)")
+	syncCmd.Flags().String("mode", "", "Sync mode: full (pull+push), pull (pull only), local (no remote ops)")
 	rootCmd.AddCommand(syncCmd)
 }
 
@@ -95,18 +95,19 @@ func runSync(cmd *cobra.Command, args []string) error {
 		if result.CrossFilesystem {
 			fmt.Println(ui.Warning("Some files skipped (cross-filesystem - hard links not supported)"))
 		}
-		fmt.Println(ui.Bullet(fmt.Sprintf("Created %d hard links in searchable directory", result.LinkedCount)))
+		fmt.Println(ui.MutedBullet(fmt.Sprintf("Created %d hard links in searchable directory", result.LinkedCount)))
 	}
 
-	// Determine push behavior: CLI flag overrides config
-	shouldPush := cfg.GetSyncPush()
-	if cmd.Flags().Changed("push") {
-		shouldPush, _ = cmd.Flags().GetBool("push")
+	// Determine sync mode: CLI flag overrides config
+	syncMode := cfg.GetSyncMode()
+	if cmd.Flags().Changed("mode") {
+		modeFlag, _ := cmd.Flags().GetString("mode")
+		syncMode = config.SyncMode(modeFlag)
 	}
 
 	// 3. Sync the thoughts repository
 	fmt.Println(ui.Info("Syncing thoughts..."))
-	if err := syncThoughtsRepo(expandedRepo, syncMessage, shouldPush); err != nil {
+	if err := syncThoughtsRepo(expandedRepo, syncMessage, syncMode); err != nil {
 		return err
 	}
 
@@ -114,7 +115,7 @@ func runSync(cmd *cobra.Command, args []string) error {
 }
 
 // syncThoughtsRepo performs git operations to sync the thoughts repository.
-func syncThoughtsRepo(repoPath, message string, shouldPush bool) error {
+func syncThoughtsRepo(repoPath, message string, mode config.SyncMode) error {
 	// Stage all changes
 	if err := runGitCommand(repoPath, "add", "-A"); err != nil {
 		return fmt.Errorf("failed to stage changes: %w", err)
@@ -138,7 +139,13 @@ func syncThoughtsRepo(repoPath, message string, shouldPush bool) error {
 		}
 		fmt.Println(ui.Success("Thoughts committed"))
 	} else {
-		fmt.Println(ui.Muted("No changes to commit"))
+		fmt.Println(ui.MutedBullet("No changes to commit"))
+	}
+
+	// Skip remote operations in local mode
+	if mode == config.SyncModeLocal {
+		warnUnpushedCommits(repoPath, "local mode")
+		return nil
 	}
 
 	// Pull latest changes (after committing to avoid conflicts with staged changes)
@@ -146,28 +153,32 @@ func syncThoughtsRepo(repoPath, message string, shouldPush bool) error {
 		return err
 	}
 
-	// Push if enabled
-	if shouldPush {
+	// Push only in full mode
+	if mode == config.SyncModeFull {
 		if err := pushToRemote(repoPath); err != nil {
 			// Push errors are warnings, not fatal
 			fmt.Println(ui.WarningF("%v", err))
 		}
 	} else {
-		// Warn if there are unpushed commits
-		if count := getUnpushedCommitCount(repoPath); count > 0 {
-			noun := "commits"
-			if count == 1 {
-				noun = "commit"
-			}
-			fmt.Println(ui.WarningF("%d %s not pushed (push disabled)", count, noun))
-			fmt.Printf("  Run %s or %s in %s to push\n",
-				ui.Accent("thts sync --push"),
-				ui.Accent("git push"),
-				ui.Accent(repoPath))
-		}
+		warnUnpushedCommits(repoPath, "pull mode")
 	}
 
 	return nil
+}
+
+// warnUnpushedCommits prints a warning if there are unpushed commits.
+func warnUnpushedCommits(repoPath, reason string) {
+	if count := getUnpushedCommitCount(repoPath); count > 0 {
+		noun := "commits"
+		if count == 1 {
+			noun = "commit"
+		}
+		fmt.Println(ui.WarningF("%d %s not pushed (%s)", count, noun, reason))
+		fmt.Printf("  Run %s or %s in %s to push\n",
+			ui.Accent("thts sync --mode=full"),
+			ui.Accent("git push"),
+			ui.Accent(repoPath))
+	}
 }
 
 // hasUncommittedChanges checks if there are uncommitted changes.
@@ -200,7 +211,9 @@ func pullWithRebase(repoPath string) error {
 		return nil
 	}
 
-	// Try to pull
+	// Print before git pull which may require auth (e.g., yubikey touch)
+	fmt.Println(ui.MutedBullet("Pulling from remote..."))
+
 	cmd = exec.Command("git", "pull", "--rebase")
 	cmd.Dir = repoPath
 	output, err := cmd.CombinedOutput()
@@ -256,8 +269,15 @@ func pushToRemote(repoPath string) error {
 		return nil
 	}
 
-	// Try to push
-	fmt.Println(ui.Muted("Pushing to remote..."))
+	// Skip push if nothing to push
+	if getUnpushedCommitCount(repoPath) == 0 {
+		fmt.Println(ui.MutedBullet("Nothing to push"))
+		return nil
+	}
+
+	// Print before git push which may require auth (e.g., yubikey touch)
+	fmt.Println(ui.MutedBullet("Pushing to remote..."))
+
 	cmd = exec.Command("git", "push")
 	cmd.Dir = repoPath
 	if err := cmd.Run(); err != nil {

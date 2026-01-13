@@ -110,8 +110,8 @@ func displayConfig(cfg *config.Config) error {
 	}
 	generalRows = append(generalRows, []string{"Auto-sync in worktrees", fmt.Sprintf("%v", cfg.AutoSyncInWorktrees)})
 	// Show sync config if set
-	if cfg.Sync != nil && cfg.Sync.Push != nil {
-		generalRows = append(generalRows, []string{"Sync: push", fmt.Sprintf("%v", *cfg.Sync.Push)})
+	if cfg.Sync != nil && cfg.Sync.Mode != "" {
+		generalRows = append(generalRows, []string{"Sync: mode", string(cfg.Sync.Mode)})
 	}
 	// Show agents config if set
 	if cfg.Agents != nil {

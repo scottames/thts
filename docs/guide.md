@@ -18,6 +18,7 @@
 - [Syncing](#syncing)
   - [Automatic Sync](#automatic-sync)
   - [Manual Sync](#manual-sync)
+  - [Sync Modes](#sync-modes)
   - [Handling Conflicts](#handling-conflicts)
 - [Team Collaboration](#team-collaboration)
   - [Sharing a Thoughts Repo](#sharing-a-thoughts-repo)
@@ -260,6 +261,36 @@ Sync does:
 4. Pulls and rebases from remote
 5. Pushes to remote
 
+### Sync Modes
+
+Control remote operations with the `--mode` flag or config:
+
+```bash
+thts sync --mode=full    # Pull and push (default)
+thts sync --mode=pull    # Pull only, skip push
+thts sync --mode=local   # No remote operations
+```
+
+| Mode    | Pull | Push | Use Case                                  |
+| ------- | ---- | ---- | ----------------------------------------- |
+| `full`  | Yes  | Yes  | Normal operation (default)                |
+| `pull`  | Yes  | No   | Stay updated, batch pushes for later      |
+| `local` | No   | No   | Offline/airplane mode, avoid auth prompts |
+
+Set a default mode in config:
+
+```yaml
+sync:
+  mode: local
+```
+
+When push is skipped, you'll see a warning if there are unpushed commits:
+
+```plaintext
+! 2 commits not pushed (local mode)
+  Run 'thts sync --mode=full' or 'git push' in ~/thoughts to push
+```
+
 ### Handling Conflicts
 
 If sync fails due to conflicts:
@@ -403,6 +434,7 @@ gitIgnore: project
 | `user`                | Your username (can't be "global") | `$USER`      |
 | `autoSyncInWorktrees` | Auto-sync on commits in worktrees | `true`       |
 | `gitIgnore`           | Where to ignore `thoughts/`       | `project`    |
+| `sync.mode`           | Sync mode: full, pull, or local   | `full`       |
 
 ### gitIgnore Options
 
