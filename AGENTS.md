@@ -179,6 +179,8 @@ thoughts/shared/notes/2026-01-11-thts-meta-testing.md
 This project uses `thts` to manage a `thoughts/` directory for persistent notes,
 research, plans, and context across sessions.
 
+The `thoughts/` directory is git-ignored but always available for your use.
+
 #### Directory Structure
 
 ```plaintext
@@ -191,57 +193,79 @@ thoughts/
 │   ├── research/        # Research findings
 │   ├── plans/           # Implementation plans
 │   ├── handoffs/        # Session handoff documents
+│   ├── notes/           # Shared notes, gotchas, learnings
 │   └── decisions/       # Architecture/design decisions
 ├── global/              # Cross-repository thoughts
 │   ├── {user}/          # Personal cross-repo notes
 │   └── shared/          # Team cross-repo notes
+├── .templates/          # Document templates (read these when writing)
 └── searchable/          # Hard links for search tools (read-only)
 ```
 
-#### Path Handling
+**Note:** `{user}` is your username from thts config (`~/.config/thts/config.yaml`).
 
-The `searchable/` directory contains hard links to enable search tools to find
-content. When referencing files found there, always report the canonical path:
-
-- `thoughts/searchable/shared/research/api.md` →
-  `thoughts/shared/research/api.md`
-- `thoughts/searchable/{user}/notes/todo.md` → `thoughts/{user}/notes/todo.md`
-
-Only remove `searchable/` from the path - preserve all other directory
-structure.
+**searchable/ paths:** When referencing files from `thoughts/searchable/`, report
+the canonical path (remove `searchable/` from the path).
 
 ---
 
-### When to Use thoughts/
+### Auto-Save Triggers
 
-#### Before Starting Work
+Save to thoughts/ automatically (without asking) when:
+
+| Trigger                                                          | Location                     | Template                 |
+| ---------------------------------------------------------------- | ---------------------------- | ------------------------ |
+| **Research completes** - Any research phase produces findings    | `thoughts/shared/research/`  | `.templates/research.md` |
+| **Gotchas discovered** - Non-obvious behavior, bugs, workarounds | `thoughts/shared/notes/`     | `.templates/note.md`     |
+| **Plans finalized** - After plan mode approval                   | `thoughts/shared/plans/`     | `.templates/plan.md`     |
+| **Decisions made** - Architecture/design choices with rationale  | `thoughts/shared/decisions/` | `.templates/decision.md` |
+| **Session ending** - Incomplete work that needs handoff          | Suggest `/thts-handoff`      | -                        |
+
+**File naming:** `YYYY-MM-DD-descriptive-name.md`
+
+#### Preserving Plans
+
+When a plan is finalized, copy it to thoughts/ to preserve beyond the session:
+
+| Agent    | Plan Location       | Action                           |
+| -------- | ------------------- | -------------------------------- |
+| Claude   | `~/.claude/plans/`  | Copy to `thoughts/shared/plans/` |
+| Codex    | Agent's plan output | Save to `thoughts/shared/plans/` |
+| OpenCode | Agent's plan output | Save to `thoughts/shared/plans/` |
+
+---
+
+### Before Starting Work
 
 Use the `thoughts-locator` agent to discover relevant documents, then
 `thoughts-analyzer` for deep analysis of the most relevant ones.
 
-Check thoughts/ for existing context when:
+ALWAYS check thoughts/ for existing context when:
 
 - Beginning research on a topic
 - Starting implementation of a feature
 - Debugging an issue
 - Resuming work from a previous session
 
-#### While Working
+---
 
-Consider capturing to thoughts/ when you:
+### While Working
+
+ALWAYS save to thoughts/ when you:
 
 - Discover non-obvious behavior or gotchas
 - Make architectural decisions with rationale
 - Find important patterns or conventions
 - Complete research that others might benefit from
 
-#### After Completing Work
+---
 
-Write to thoughts/ when:
+### After Completing Work
+
+MUST write to thoughts/ when:
 
 - Finishing research that should be preserved
 - Completing a plan that will guide implementation
-- Ending a session that someone will resume (use handoff)
 - Making decisions that should be documented
 
 **Always run `thts sync` after writing to thoughts/.**
@@ -250,149 +274,39 @@ Write to thoughts/ when:
 
 ### Where to Write
 
-| Content Type            | Location                     | When to Use                 |
-| ----------------------- | ---------------------------- | --------------------------- |
-| Quick notes, scratchpad | `thoughts/{user}/notes/`     | Personal, informal notes    |
-| Research findings       | `thoughts/shared/research/`  | Findings others should see  |
-| Implementation plans    | `thoughts/shared/plans/`     | Plans guiding future work   |
-| Session handoffs        | `thoughts/shared/handoffs/`  | Use `/thts-handoff` command |
-| Decisions/ADRs          | `thoughts/shared/decisions/` | Architectural decisions     |
-| Ticket context          | `thoughts/{user}/tickets/`   | Personal ticket notes       |
+| Content Type            | Location                     |
+| ----------------------- | ---------------------------- |
+| Implementation plans    | `thoughts/shared/plans/`     |
+| Research findings       | `thoughts/shared/research/`  |
+| Session handoffs        | `thoughts/shared/handoffs/`  |
+| Decisions/ADRs          | `thoughts/shared/decisions/` |
+| Gotchas/learnings       | `thoughts/shared/notes/`     |
+| Quick notes, scratchpad | `thoughts/{user}/notes/`     |
+| Ticket context          | `thoughts/{user}/tickets/`   |
 
 ---
 
-### Output Formats
+### Templates
 
-#### Research Documents
+Read the template from `thoughts/.templates/` before writing:
 
-Location: `thoughts/shared/research/YYYY-MM-DD-description.md`
+| Document Type | Template Path                     |
+| ------------- | --------------------------------- |
+| Research      | `thoughts/.templates/research.md` |
+| Plan          | `thoughts/.templates/plan.md`     |
+| Decision/ADR  | `thoughts/.templates/decision.md` |
+| Note/Gotcha   | `thoughts/.templates/note.md`     |
 
-```markdown
----
-date: [ISO timestamp with timezone]
-researcher: [your name]
-topic: "[Research topic/question]"
-tags: [relevant, component, names]
-status: complete
 ---
 
-# Research: [Topic]
+### What NOT to Save
 
-## Research Question
+Do not write to thoughts/:
 
-[Original question or area of investigation]
-
-## Summary
-
-[High-level findings - what was discovered]
-
-## Detailed Findings
-
-### [Component/Area]
-
-[Findings with file:line references where applicable]
-
-## Code References
-
-- `path/to/file.ext:123` - Description
-- `another/file.ts:45-67` - Description
-
-## Historical Context
-
-[Relevant insights from other thoughts/ documents, if any]
-
-## Open Questions
-
-[Areas needing further investigation, if any]
-```
-
-#### Implementation Plans
-
-Location: `thoughts/shared/plans/YYYY-MM-DD-description.md`
-
-```markdown
----
-date: [ISO timestamp]
-author: [your name]
-topic: "[Feature/Task] Implementation Plan"
-tags: [implementation, relevant, components]
-status: draft|in_progress|complete
----
-
-# [Feature/Task] Implementation Plan
-
-## Overview
-
-[Brief description of what we're implementing and why]
-
-## Current State
-
-[What exists now, key constraints]
-
-## Desired End State
-
-[What success looks like, how to verify]
-
-## What We're NOT Doing
-
-[Explicit out-of-scope items]
-
-## Implementation Phases
-
-### Phase 1: [Name]
-
-**Changes:**
-
-- `path/to/file.ext` - [description of changes]
-
-**Success Criteria:**
-
-- [ ] [Verifiable criterion]
-- [ ] [Another criterion]
-
-### Phase 2: [Name]
-
-[Continue pattern...]
-
-## Testing Strategy
-
-[How to verify the implementation works]
-```
-
-#### Quick Notes
-
-Location: `thoughts/{user}/notes/YYYY-MM-DD-description.md` unless specified by
-the user.
-
-#### Decisions/ADRs
-
-Location: `thoughts/shared/decisions/YYYY-MM-DD-description.md`
-
-```markdown
----
-date: [ISO timestamp]
-author: [your name]
-status: proposed|accepted|deprecated
----
-
-# Decision: [Title]
-
-## Context
-
-[What situation led to this decision]
-
-## Decision
-
-[What was decided]
-
-## Rationale
-
-[Why this choice over alternatives]
-
-## Consequences
-
-[What this enables/prevents going forward]
-```
+- Secrets, credentials, API keys, tokens
+- Temporary debugging output you won't need again
+- Large generated files or logs
+- Content that belongs in repo documentation
 
 ---
 

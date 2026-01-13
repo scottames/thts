@@ -67,6 +67,12 @@ var CodexAgents embed.FS
 //go:embed agents/opencode/*.md
 var OpenCodeAgents embed.FS
 
+// Templates contains embedded template files for thoughts/ documents.
+// These are copied to thoughts/.templates/ during init.
+//
+//go:embed templates/*.md
+var Templates embed.FS
+
 // DefaultSettingsJSON provides a default settings.json template for Claude.
 var DefaultSettingsJSON = `{
   "permissions": {

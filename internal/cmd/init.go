@@ -2,11 +2,13 @@ package cmd
 
 import (
 	"fmt"
+	iofs "io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/charmbracelet/huh"
+	thtsfiles "github.com/scottames/thts"
 	"github.com/scottames/thts/internal/config"
 	"github.com/scottames/thts/internal/fs"
 	"github.com/scottames/thts/internal/git"
@@ -184,6 +186,11 @@ func runInit(cmd *cobra.Command, args []string) error {
 	// Create thoughts directory with symlinks
 	if err := createThoughtsSymlinks(thoughtsDir, profileConfig, projectName, cfg.User); err != nil {
 		return fmt.Errorf("failed to create symlinks: %w", err)
+	}
+
+	// Copy templates to thoughts/.templates/
+	if err := copyTemplates(thoughtsDir); err != nil {
+		fmt.Println(ui.WarningF("Could not copy templates: %v", err))
 	}
 
 	// Generate CLAUDE.md for Claude Code integration
@@ -531,4 +538,44 @@ func gitignoreLocationName(mode config.ComponentMode) string {
 // startsWithDot returns true if the string starts with a dot.
 func startsWithDot(s string) bool {
 	return len(s) > 0 && s[0] == '.'
+}
+
+// copyTemplates copies embedded template files to thoughts/.templates/.
+func copyTemplates(thoughtsDir string) error {
+	templatesDir := filepath.Join(thoughtsDir, ".templates")
+
+	// Create .templates directory
+	if err := os.MkdirAll(templatesDir, 0755); err != nil {
+		return fmt.Errorf("failed to create .templates directory: %w", err)
+	}
+
+	// Read all template files from embedded FS
+	entries, err := iofs.ReadDir(thtsfiles.Templates, "templates")
+	if err != nil {
+		return fmt.Errorf("failed to read embedded templates: %w", err)
+	}
+
+	var copied int
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".md") {
+			continue
+		}
+
+		content, err := iofs.ReadFile(thtsfiles.Templates, filepath.Join("templates", entry.Name()))
+		if err != nil {
+			return fmt.Errorf("failed to read template %s: %w", entry.Name(), err)
+		}
+
+		targetPath := filepath.Join(templatesDir, entry.Name())
+		if err := os.WriteFile(targetPath, content, 0644); err != nil {
+			return fmt.Errorf("failed to write template %s: %w", entry.Name(), err)
+		}
+		copied++
+	}
+
+	if copied > 0 {
+		fmt.Println(ui.SuccessF("Copied %d template(s) to thoughts/.templates/", copied))
+	}
+
+	return nil
 }
