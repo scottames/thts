@@ -597,6 +597,119 @@ func TestGetReposUsingProfile(t *testing.T) {
 	}
 }
 
+func TestCountReposUsingProfileWithImplicit(t *testing.T) {
+	tests := []struct {
+		name        string
+		cfg         *Config
+		profileName string
+		want        ProfileUsageCounts
+	}{
+		{
+			name: "zero repos",
+			cfg: &Config{
+				RepoMappings: map[string]*RepoMapping{},
+				Profiles: map[string]*ProfileConfig{
+					"default": {ThoughtsRepo: "~/thoughts", Default: true},
+				},
+			},
+			profileName: "default",
+			want:        ProfileUsageCounts{Explicit: 0, Implicit: 0, Total: 0},
+		},
+		{
+			name: "explicit only",
+			cfg: &Config{
+				RepoMappings: map[string]*RepoMapping{
+					"/repo1": {Repo: "repo1", Profile: "work"},
+					"/repo2": {Repo: "repo2", Profile: "work"},
+				},
+				Profiles: map[string]*ProfileConfig{
+					"default": {ThoughtsRepo: "~/thoughts", Default: true},
+					"work":    {ThoughtsRepo: "~/work"},
+				},
+			},
+			profileName: "work",
+			want:        ProfileUsageCounts{Explicit: 2, Implicit: 0, Total: 2},
+		},
+		{
+			name: "implicit only - default profile",
+			cfg: &Config{
+				RepoMappings: map[string]*RepoMapping{
+					"/repo1": {Repo: "repo1"},
+					"/repo2": {Repo: "repo2"},
+					"/repo3": {Repo: "repo3", Profile: "work"},
+				},
+				Profiles: map[string]*ProfileConfig{
+					"default": {ThoughtsRepo: "~/thoughts", Default: true},
+					"work":    {ThoughtsRepo: "~/work"},
+				},
+			},
+			profileName: "default",
+			want:        ProfileUsageCounts{Explicit: 0, Implicit: 2, Total: 2},
+		},
+		{
+			name: "mixed explicit and implicit",
+			cfg: &Config{
+				RepoMappings: map[string]*RepoMapping{
+					"/repo1": {Repo: "repo1", Profile: "default"},
+					"/repo2": {Repo: "repo2"},
+					"/repo3": {Repo: "repo3"},
+					"/repo4": {Repo: "repo4", Profile: "work"},
+				},
+				Profiles: map[string]*ProfileConfig{
+					"default": {ThoughtsRepo: "~/thoughts", Default: true},
+					"work":    {ThoughtsRepo: "~/work"},
+				},
+			},
+			profileName: "default",
+			want:        ProfileUsageCounts{Explicit: 1, Implicit: 2, Total: 3},
+		},
+		{
+			name: "non-default profile has no implicit",
+			cfg: &Config{
+				RepoMappings: map[string]*RepoMapping{
+					"/repo1": {Repo: "repo1"},
+					"/repo2": {Repo: "repo2", Profile: "work"},
+				},
+				Profiles: map[string]*ProfileConfig{
+					"default": {ThoughtsRepo: "~/thoughts", Default: true},
+					"work":    {ThoughtsRepo: "~/work"},
+				},
+			},
+			profileName: "work",
+			want:        ProfileUsageCounts{Explicit: 1, Implicit: 0, Total: 1},
+		},
+		{
+			name: "handles nil mapping",
+			cfg: &Config{
+				RepoMappings: map[string]*RepoMapping{
+					"/repo1": nil,
+					"/repo2": {Repo: "repo2"},
+				},
+				Profiles: map[string]*ProfileConfig{
+					"default": {ThoughtsRepo: "~/thoughts", Default: true},
+				},
+			},
+			profileName: "default",
+			want:        ProfileUsageCounts{Explicit: 0, Implicit: 1, Total: 1},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.cfg.CountReposUsingProfileWithImplicit(tt.profileName)
+			if got.Explicit != tt.want.Explicit {
+				t.Errorf("Explicit = %d, want %d", got.Explicit, tt.want.Explicit)
+			}
+			if got.Implicit != tt.want.Implicit {
+				t.Errorf("Implicit = %d, want %d", got.Implicit, tt.want.Implicit)
+			}
+			if got.Total != tt.want.Total {
+				t.Errorf("Total = %d, want %d", got.Total, tt.want.Total)
+			}
+		})
+	}
+}
+
 func TestDeleteProfile(t *testing.T) {
 	t.Run("deletes existing profile", func(t *testing.T) {
 		cfg := &Config{

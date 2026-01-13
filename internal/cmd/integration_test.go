@@ -294,8 +294,14 @@ func TestInitCommand(t *testing.T) {
 		mapping := cfg.RepoMappings[env.projectRepo]
 		if mapping == nil {
 			t.Errorf("repo mapping not added to config")
-		} else if mapping.Repo != "myproject" {
-			t.Errorf("repo mapping name = %q, want %q", mapping.Repo, "myproject")
+		} else {
+			if mapping.Repo != "myproject" {
+				t.Errorf("repo mapping name = %q, want %q", mapping.Repo, "myproject")
+			}
+			// Verify profile is explicitly set even without --profile flag
+			if mapping.Profile != "default" {
+				t.Errorf("repo mapping profile = %q, want %q", mapping.Profile, "default")
+			}
 		}
 	})
 

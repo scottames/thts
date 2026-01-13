@@ -200,9 +200,9 @@ func runInit(cmd *cobra.Command, args []string) error {
 		cfg.RepoMappings = make(map[string]*config.RepoMapping)
 	}
 
-	mapping := &config.RepoMapping{Repo: projectName}
-	if initProfile != "" {
-		mapping.Profile = initProfile
+	mapping := &config.RepoMapping{
+		Repo:    projectName,
+		Profile: profileConfig.ProfileName,
 	}
 	cfg.RepoMappings[currentRepo] = mapping
 

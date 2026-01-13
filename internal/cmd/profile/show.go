@@ -94,10 +94,19 @@ func runShow(cmd *cobra.Command, args []string) error {
 	fmt.Println()
 
 	// Count repositories using this profile
-	repoCount := cfg.CountReposUsingProfile(profileName)
+	counts := cfg.CountReposUsingProfileWithImplicit(profileName)
 
 	fmt.Println(ui.SubHeader("Usage"))
-	fmt.Printf("  Repositories using this profile: %s\n", ui.Accent(fmt.Sprintf("%d", repoCount)))
+	if counts.Implicit > 0 {
+		fmt.Printf("  Repositories using this profile: %s (%s explicit, %s via default)\n",
+			ui.Accent(fmt.Sprintf("%d", counts.Total)),
+			ui.Accent(fmt.Sprintf("%d", counts.Explicit)),
+			ui.Accent(fmt.Sprintf("%d", counts.Implicit)),
+		)
+	} else {
+		fmt.Printf("  Repositories using this profile: %s\n",
+			ui.Accent(fmt.Sprintf("%d", counts.Total)))
+	}
 
 	return nil
 }

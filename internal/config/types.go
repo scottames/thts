@@ -170,6 +170,34 @@ func (c *Config) CountReposUsingProfile(profileName string) int {
 	return count
 }
 
+// ProfileUsageCounts holds counts of repos using a profile.
+type ProfileUsageCounts struct {
+	Explicit int // mapping.Profile == profileName
+	Implicit int // mapping.Profile == "" AND this profile is default
+	Total    int
+}
+
+// CountReposUsingProfileWithImplicit counts repos using a profile,
+// distinguishing explicit assignments from implicit (via default) usage.
+func (c *Config) CountReposUsingProfileWithImplicit(profileName string) ProfileUsageCounts {
+	counts := ProfileUsageCounts{}
+	_, defaultName := c.GetDefaultProfile()
+	isDefault := profileName == defaultName
+
+	for _, mapping := range c.RepoMappings {
+		if mapping == nil {
+			continue
+		}
+		if mapping.Profile == profileName {
+			counts.Explicit++
+		} else if mapping.Profile == "" && isDefault {
+			counts.Implicit++
+		}
+	}
+	counts.Total = counts.Explicit + counts.Implicit
+	return counts
+}
+
 // GetReposUsingProfile returns paths of repositories using a given profile.
 func (c *Config) GetReposUsingProfile(profileName string) []string {
 	var repos []string

@@ -181,6 +181,11 @@ thts init --profile work        # Use a specific profile
 thts init --force               # Reinitialize existing setup
 ```
 
+**Profile assignment:** When you run `thts init`, the current default profile is
+explicitly assigned to the repository. This "locks in" the profile so that if
+you later change your default profile, existing repositories keep their original
+assignment. To see which profile a repository uses, run `thts status`.
+
 ### Your First Notes
 
 ```bash
