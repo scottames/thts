@@ -11,6 +11,13 @@
       depNameTemplate: 'go',
       datasourceTemplate: 'golang-version',
     },
+    {
+      customType: 'regex',
+      fileMatch: ['^\\.trunk/trunk\\.yaml$'],
+      matchStrings: ['- go@(?<currentValue>\\d+\\.\\d+\\.\\d+)'],
+      depNameTemplate: 'go',
+      datasourceTemplate: 'golang-version',
+    },
   ],
   packageRules: [
     {
