@@ -49,6 +49,7 @@ type SyncConfig struct {
 // Config represents the thts configuration.
 type Config struct {
 	User                string                    `yaml:"user"`
+	Editor              string                    `yaml:"editor,omitempty"`
 	AutoSyncInWorktrees bool                      `yaml:"autoSyncInWorktrees,omitempty"`
 	Gitignore           ComponentMode             `yaml:"gitignore,omitempty"`
 	Sync                *SyncConfig               `yaml:"sync,omitempty"`

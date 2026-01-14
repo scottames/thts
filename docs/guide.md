@@ -253,6 +253,24 @@ thts sync                    # Sync with auto-generated message
 thts sync -m "Updated docs"  # Sync with custom message
 ```
 
+### Opening in Editor
+
+Open your thoughts directory directly in your editor:
+
+```bash
+thts edit                    # Open ./thoughts/ (or default profile if not in repo)
+thts edit --profile work     # Open specific profile's thoughts repo
+```
+
+**Editor resolution:** Uses config `editor` field, then `$VISUAL`, then `$EDITOR`.
+Errors if none set.
+
+Configure a default editor in `~/.config/thts/config.yaml`:
+
+```yaml
+editor: nvim
+```
+
 Sync does:
 
 1. Discovers other users' directories (creates symlinks for teammates)
@@ -422,6 +440,7 @@ thoughtsRepo: ~/thoughts
 reposDir: repos
 globalDir: global
 user: "{user}"
+editor: nvim
 autoSyncInWorktrees: true
 gitIgnore: project
 ```
@@ -432,6 +451,7 @@ gitIgnore: project
 | `reposDir`            | Subdirectory for project thoughts | `repos`      |
 | `globalDir`           | Subdirectory for global thoughts  | `global`     |
 | `user`                | Your username (can't be "global") | `$USER`      |
+| `editor`              | Editor for `thts edit`            | `$EDITOR`    |
 | `autoSyncInWorktrees` | Auto-sync on commits in worktrees | `true`       |
 | `gitIgnore`           | Where to ignore `thoughts/`       | `project`    |
 | `sync.mode`           | Sync mode: full, pull, or local   | `full`       |
