@@ -1,5 +1,5 @@
 // Package agents provides multi-agent tool support for thts.
-// Currently supports Claude Code, OpenAI Codex CLI, and OpenCode.
+// Currently supports Claude Code, OpenAI Codex CLI, OpenCode, and Google Gemini CLI.
 package agents
 
 import (
@@ -17,11 +17,12 @@ const (
 	AgentClaude   AgentType = "claude"
 	AgentCodex    AgentType = "codex"
 	AgentOpenCode AgentType = "opencode"
+	AgentGemini   AgentType = "gemini"
 )
 
 // AllAgentTypes returns all supported agent types in canonical order.
 func AllAgentTypes() []AgentType {
-	return []AgentType{AgentClaude, AgentCodex, AgentOpenCode}
+	return []AgentType{AgentClaude, AgentCodex, AgentOpenCode, AgentGemini}
 }
 
 // AgentTypeLabels provides human-readable labels for agent types.
@@ -29,6 +30,7 @@ var AgentTypeLabels = map[AgentType]string{
 	AgentClaude:   "Claude Code",
 	AgentCodex:    "OpenAI Codex CLI",
 	AgentOpenCode: "OpenCode",
+	AgentGemini:   "Google Gemini CLI",
 }
 
 // AgentConfig describes the configuration and conventions for a specific agent.
@@ -78,6 +80,15 @@ type AgentConfig struct {
 
 	// SettingsFormat is the format of the settings file ("json", "toml").
 	SettingsFormat string
+
+	// CommandsFormat specifies the format of command files ("md" or "toml").
+	// Defaults to "md" (markdown) if empty.
+	CommandsFormat string
+
+	// SettingsContextKey is the JSON key used in settings to point to the context file.
+	// If non-empty, thts will ensure this key is set to InstructionTargetFile.
+	// Example: Gemini uses "contextFileName": "AGENTS.md"
+	SettingsContextKey string
 }
 
 // AgentConfigs contains the configuration for each supported agent.
@@ -130,6 +141,24 @@ var AgentConfigs = map[AgentType]*AgentConfig{
 		SettingsFile:          "opencode.json",
 		SettingsFormat:        "json",
 	},
+	AgentGemini: {
+		Type:                  AgentGemini,
+		RootDir:               ".gemini",
+		InstructionsFile:      "",
+		IntegrationType:       "marker",
+		InstructionTargetFile: "AGENTS.md",
+		SkillsDir:             "skills",
+		SkillNeedsDir:         true,
+		AgentsDir:             "", // Gemini doesn't support agents
+		SupportsCommands:      true,
+		CommandsDir:           "commands",
+		CommandsGlobalOnly:    false,
+		GlobalUsesXDG:         false, // Uses ~/.gemini/
+		SettingsFile:          "settings.json",
+		SettingsFormat:        "json",
+		CommandsFormat:        "toml", // Gemini uses TOML for commands
+		SettingsContextKey:    "contextFileName",
+	},
 }
 
 // GetConfig returns the configuration for an agent type.
@@ -157,8 +186,10 @@ func ParseAgentType(s string) (AgentType, error) {
 		return AgentCodex, nil
 	case "opencode":
 		return AgentOpenCode, nil
+	case "gemini":
+		return AgentGemini, nil
 	default:
-		return "", fmt.Errorf("unknown agent type: %q (valid: claude, codex, opencode)", s)
+		return "", fmt.Errorf("unknown agent type: %q (valid: claude, codex, opencode, gemini)", s)
 	}
 }
 

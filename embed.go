@@ -2,7 +2,7 @@
 // This package exists at the repo root to enable go:embed access to
 // instructions/, skills/, commands/, and agents/ directories.
 //
-// The file structure supports multiple agent tools (Claude, Codex, OpenCode):
+// The file structure supports multiple agent tools (Claude, Codex, OpenCode, Gemini):
 //
 //	instructions/thts-instructions.md - Shared thts instructions for all agents
 //	skills/{agent}/*.md               - Agent-specific skills (flat for Claude)
@@ -66,6 +66,18 @@ var CodexAgents embed.FS
 //
 //go:embed agents/opencode/*.md
 var OpenCodeAgents embed.FS
+
+// GeminiSkills contains embedded skill files for Gemini CLI.
+// Gemini uses subdirectories: skills/gemini/skill-name/SKILL.md
+//
+//go:embed skills/gemini/*/SKILL.md
+var GeminiSkills embed.FS
+
+// GeminiCommands contains embedded command TOML files for Gemini CLI.
+// Gemini uses TOML format for commands, not markdown.
+//
+//go:embed commands/gemini/*.toml
+var GeminiCommands embed.FS
 
 // Templates contains embedded template files for thoughts/ documents.
 // These are copied to thoughts/.templates/ during init.

@@ -106,6 +106,8 @@ func GlobalAgentDir(agentType string) string {
 	case "opencode":
 		// OpenCode uses XDG for global config
 		return filepath.Join(XDGConfigHome(), "opencode")
+	case "gemini":
+		return filepath.Join(home, ".gemini")
 	}
 	return ""
 }

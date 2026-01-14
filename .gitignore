@@ -14,4 +14,7 @@ thoughts/
 .opencode/thts-*
 .opencode/*/thts-*
 .opencode/*/thoughts-*
+.gemini/thts-*
+.gemini/*/thts-*
+.gemini/*/thoughts-*
 # thts-agent-end

@@ -48,6 +48,8 @@ Before starting, gather this information about your agent:
 3. **Settings file format**: JSON or TOML?
 4. **Global config location**: Standard dotfile or XDG?
 5. **Commands directory name**: "commands", "prompts", "command", or other?
+6. **Commands file format**: Markdown (`.md`) or TOML (`.toml`)? (Most use markdown)
+7. **Agents support**: Does the agent support sub-agents? (Leave AgentsDir empty if not)
 
 For testbot, we'll assume:
 
@@ -357,20 +359,22 @@ ls -la .testbot/
 See the `AgentConfig` struct in `internal/agents/types.go` for the authoritative
 field list. Key fields:
 
-| Field                   | Description                                                    |
-| ----------------------- | -------------------------------------------------------------- |
-| `RootDir`               | Agent's config directory (e.g., `.claude`)                     |
-| `InstructionsFile`      | Filename for thts instructions (empty = inline in target file) |
-| `IntegrationType`       | `"marker"` (HTML comments) or `"config"` (JSON array)          |
-| `InstructionTargetFile` | File to modify for marker integration                          |
-| `SkillsDir`             | Skills directory name                                          |
-| `SkillNeedsDir`         | `true` = subdirs with SKILL.md, `false` = flat .md files       |
-| `AgentsDir`             | Agents directory name                                          |
-| `CommandsDir`           | Commands directory name                                        |
-| `CommandsGlobalOnly`    | `true` = commands install globally only                        |
-| `GlobalUsesXDG`         | `true` = uses `~/.config/` instead of `~/.`                    |
-| `SettingsFile`          | Settings filename                                              |
-| `SettingsFormat`        | `"json"` or `"toml"`                                           |
+| Field                   | Description                                                      |
+| ----------------------- | ---------------------------------------------------------------- |
+| `RootDir`               | Agent's config directory (e.g., `.claude`)                       |
+| `InstructionsFile`      | Filename for thts instructions (empty = inline in target file)   |
+| `IntegrationType`       | `"marker"` (HTML comments) or `"config"` (JSON array)            |
+| `InstructionTargetFile` | File to modify for marker integration                            |
+| `SkillsDir`             | Skills directory name                                            |
+| `SkillNeedsDir`         | `true` = subdirs with SKILL.md, `false` = flat .md files         |
+| `AgentsDir`             | Agents directory name (empty = agent doesn't support agents)     |
+| `CommandsDir`           | Commands directory name                                          |
+| `CommandsGlobalOnly`    | `true` = commands install globally only                          |
+| `CommandsFormat`        | `"md"` (default) or `"toml"` for command file format             |
+| `GlobalUsesXDG`         | `true` = uses `~/.config/` instead of `~/.`                      |
+| `SettingsFile`          | Settings filename                                                |
+| `SettingsFormat`        | `"json"` or `"toml"`                                             |
+| `SettingsContextKey`    | JSON key for context file (e.g., `"contextFileName"` for Gemini) |
 
 ## Common Pitfalls
 

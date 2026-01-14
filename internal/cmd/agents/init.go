@@ -379,15 +379,20 @@ func initAgent(projectDir string, agentType agents.AgentType, level IntegrationL
 	case config.ComponentModeDisabled:
 		// Skip silently
 	default:
-		agentsCopied, agentFiles, err := copyAgents(agentDir, agentType, agentConfig)
-		if err != nil {
-			fmt.Println(ui.WarningF("  Could not copy agents: %v", err))
-		} else if agentsCopied > 0 {
-			filesCopied += agentsCopied
-			for _, f := range agentFiles {
-				manifest.Files = append(manifest.Files, filepath.Join(agentConfig.AgentsDir, f))
+		// Check if agent supports agents feature
+		if agentConfig.AgentsDir == "" {
+			fmt.Println(ui.InfoF("  Agents: not supported by %s", agents.AgentTypeLabels[agentType]))
+		} else {
+			agentsCopied, agentFiles, err := copyAgents(agentDir, agentType, agentConfig)
+			if err != nil {
+				fmt.Println(ui.WarningF("  Could not copy agents: %v", err))
+			} else if agentsCopied > 0 {
+				filesCopied += agentsCopied
+				for _, f := range agentFiles {
+					manifest.Files = append(manifest.Files, filepath.Join(agentConfig.AgentsDir, f))
+				}
+				fmt.Println(ui.SuccessF("  Copied %d agent(s)", agentsCopied))
 			}
-			fmt.Println(ui.SuccessF("  Copied %d agent(s)", agentsCopied))
 		}
 	}
 
@@ -568,6 +573,11 @@ func copySkillsWithSubdirs(embedFS fs.FS, srcDir, targetDir string) (int, []stri
 
 // copyFlatFiles copies markdown files from an embedded FS to a target directory.
 func copyFlatFiles(embedFS fs.FS, srcDir, targetDir string) (int, []string, error) {
+	return copyFlatFilesWithExt(embedFS, srcDir, targetDir, ".md")
+}
+
+// copyFlatFilesWithExt copies files with a specific extension from an embedded FS to a target directory.
+func copyFlatFilesWithExt(embedFS fs.FS, srcDir, targetDir, ext string) (int, []string, error) {
 	entries, err := fs.ReadDir(embedFS, srcDir)
 	if err != nil {
 		return 0, nil, err
@@ -577,7 +587,7 @@ func copyFlatFiles(embedFS fs.FS, srcDir, targetDir string) (int, []string, erro
 	var copiedFiles []string
 
 	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".md") {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ext) {
 			continue
 		}
 		content, err := fs.ReadFile(embedFS, filepath.Join(srcDir, entry.Name()))
@@ -612,12 +622,24 @@ func copyCommands(agentDir string, agentType agents.AgentType) (int, []string, e
 		return 0, nil, nil
 	}
 
+	// Determine file extension based on agent's command format
+	ext := ".md"
+	if agentConfig.CommandsFormat == "toml" {
+		ext = ".toml"
+	}
+
 	srcDir := fmt.Sprintf("commands/%s", agentType)
-	return copyFlatFiles(embedFS, srcDir, commandsDir)
+	return copyFlatFilesWithExt(embedFS, srcDir, commandsDir, ext)
 }
 
 // copyAgents copies agent files for an agent type.
+// Returns 0, nil, nil if the agent doesn't support the agents feature (AgentsDir is empty).
 func copyAgents(agentDir string, agentType agents.AgentType, cfg *agents.AgentConfig) (int, []string, error) {
+	// Skip if agent doesn't support agents (e.g., Gemini)
+	if cfg.AgentsDir == "" {
+		return 0, nil, nil
+	}
+
 	agentsTargetDir := filepath.Join(agentDir, cfg.AgentsDir)
 	if err := os.MkdirAll(agentsTargetDir, 0755); err != nil {
 		return 0, nil, err
@@ -641,12 +663,15 @@ func getSkillsFS(agentType agents.AgentType) fs.FS {
 		return thtsfiles.CodexSkills
 	case agents.AgentOpenCode:
 		return thtsfiles.OpenCodeSkills
+	case agents.AgentGemini:
+		return thtsfiles.GeminiSkills
 	default:
 		return nil
 	}
 }
 
 // getAgentsFS returns the embedded FS for agents for an agent type.
+// Returns nil for agents that don't support the agents feature (e.g., Gemini).
 func getAgentsFS(agentType agents.AgentType) fs.FS {
 	switch agentType {
 	case agents.AgentClaude:
@@ -655,6 +680,8 @@ func getAgentsFS(agentType agents.AgentType) fs.FS {
 		return thtsfiles.CodexAgents
 	case agents.AgentOpenCode:
 		return thtsfiles.OpenCodeAgents
+	case agents.AgentGemini:
+		return nil // Gemini doesn't support agents
 	default:
 		return nil
 	}
@@ -669,9 +696,57 @@ func getCommandsFS(agentType agents.AgentType) fs.FS {
 		return thtsfiles.CodexCommands
 	case agents.AgentOpenCode:
 		return thtsfiles.OpenCodeCommands
+	case agents.AgentGemini:
+		return thtsfiles.GeminiCommands
 	default:
 		return nil
 	}
+}
+
+// ensureSettingsContextKey ensures the agent's settings file has the context key configured.
+// For agents like Gemini, this sets "contextFileName": "AGENTS.md" in settings.json.
+// This function is non-destructive: it preserves any existing configuration.
+func ensureSettingsContextKey(agentDir string, cfg *agents.AgentConfig) error {
+	if cfg.SettingsContextKey == "" {
+		return nil // Agent doesn't need this
+	}
+
+	settingsPath := filepath.Join(agentDir, cfg.SettingsFile)
+	contextValue := cfg.InstructionTargetFile
+
+	var settings map[string]any
+
+	if fsutil.Exists(settingsPath) {
+		data, err := os.ReadFile(settingsPath)
+		if err != nil {
+			return fmt.Errorf("failed to read %s: %w", cfg.SettingsFile, err)
+		}
+		if err := json.Unmarshal(data, &settings); err != nil {
+			return fmt.Errorf("failed to parse %s: %w", cfg.SettingsFile, err)
+		}
+	} else {
+		settings = make(map[string]any)
+	}
+
+	// Check if already set correctly
+	if existing, ok := settings[cfg.SettingsContextKey].(string); ok && existing == contextValue {
+		return nil // Already configured
+	}
+
+	// Set the context key
+	settings[cfg.SettingsContextKey] = contextValue
+
+	// Write back with proper formatting
+	data, err := json.MarshalIndent(settings, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal settings: %w", err)
+	}
+	if err := os.WriteFile(settingsPath, append(data, '\n'), 0644); err != nil {
+		return fmt.Errorf("failed to write %s: %w", cfg.SettingsFile, err)
+	}
+
+	fmt.Println(ui.SuccessF("  Set %s in %s", cfg.SettingsContextKey, cfg.SettingsFile))
+	return nil
 }
 
 // setupIntegrationLevel configures the integration based on the selected level.
@@ -689,7 +764,16 @@ func setupIntegrationLevel(projectDir, agentDir string, cfg *agents.AgentConfig,
 		switch cfg.IntegrationType {
 		case "marker":
 			mod, err := appendWithMarkers(gitRoot, agentDir, cfg)
-			return mod, nil, err
+			if err != nil {
+				return mod, nil, err
+			}
+			// Ensure settings context key is set (for agents like Gemini)
+			if cfg.SettingsContextKey != "" {
+				if err := ensureSettingsContextKey(agentDir, cfg); err != nil {
+					fmt.Println(ui.WarningF("  Could not update settings: %v", err))
+				}
+			}
+			return mod, nil, nil
 		case "config":
 			mod, err := updateOpenCodeConfig(projectDir, agentDir, cfg)
 			return mod, nil, err
@@ -1287,6 +1371,11 @@ func installGlobalComponent(component string, agentTypes []agents.AgentType, man
 
 		if err != nil {
 			return fmt.Errorf("failed to copy %s for %s: %w", component, agentType, err)
+		}
+
+		// Skip if no files were copied (e.g., Gemini doesn't support agents)
+		if len(files) == 0 {
+			continue
 		}
 
 		// Convert relative file names to absolute paths

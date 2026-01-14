@@ -284,15 +284,23 @@ func detectInstallation(agentDir, projectDir string, agentType agents.AgentType)
 	}
 
 	if cfg.SupportsCommands && cfg.CommandsDir != "" {
-		knownFiles = append(knownFiles, filepath.Join(cfg.CommandsDir, "thts-handoff.md"))
-		knownFiles = append(knownFiles, filepath.Join(cfg.CommandsDir, "thts-resume.md"))
+		// Determine command file extension based on agent's command format
+		ext := ".md"
+		if cfg.CommandsFormat == "toml" {
+			ext = ".toml"
+		}
+		knownFiles = append(knownFiles, filepath.Join(cfg.CommandsDir, "thts-handoff"+ext))
+		knownFiles = append(knownFiles, filepath.Join(cfg.CommandsDir, "thts-resume"+ext))
 	}
 
-	agentFiles := []string{
-		filepath.Join(cfg.AgentsDir, "thoughts-locator.md"),
-		filepath.Join(cfg.AgentsDir, "thoughts-analyzer.md"),
+	// Only add agent files if agent supports agents feature
+	if cfg.AgentsDir != "" {
+		agentFiles := []string{
+			filepath.Join(cfg.AgentsDir, "thoughts-locator.md"),
+			filepath.Join(cfg.AgentsDir, "thoughts-analyzer.md"),
+		}
+		knownFiles = append(knownFiles, agentFiles...)
 	}
-	knownFiles = append(knownFiles, agentFiles...)
 
 	for _, f := range knownFiles {
 		if fsutil.Exists(filepath.Join(agentDir, f)) {
@@ -466,7 +474,10 @@ func performRemoval(plan *removalPlan) error {
 	}
 
 	// 3. Clean up empty subdirectories
-	subdirs := []string{cfg.SkillsDir, cfg.AgentsDir}
+	subdirs := []string{cfg.SkillsDir}
+	if cfg.AgentsDir != "" {
+		subdirs = append(subdirs, cfg.AgentsDir)
+	}
 	if cfg.SupportsCommands && cfg.CommandsDir != "" {
 		subdirs = append(subdirs, cfg.CommandsDir)
 	}
@@ -475,7 +486,16 @@ func performRemoval(plan *removalPlan) error {
 		cleanEmptyDirs(dir)
 	}
 
-	// 4. Revert instruction file modification
+	// 4. Remove settings context key if applicable (non-destructive)
+	if cfg.SettingsContextKey != "" {
+		if err := removeSettingsContextKey(plan.agentDir, cfg); err != nil {
+			warnings = append(warnings, fmt.Sprintf("failed to clean settings context key: %v", err))
+		} else {
+			fmt.Println(ui.SuccessF("Removed %s from %s", cfg.SettingsContextKey, cfg.SettingsFile))
+		}
+	}
+
+	// 5. Revert instruction file modification
 	if plan.modifications.InstructionsMD != nil {
 		if err := removeThtsIntegration(plan.modifications.InstructionsMD, plan.agentType); err != nil {
 			warnings = append(warnings, fmt.Sprintf("failed to clean instruction file: %v", err))
@@ -484,7 +504,7 @@ func performRemoval(plan *removalPlan) error {
 		}
 	}
 
-	// 5. Remove gitignore patterns
+	// 6. Remove gitignore patterns
 	if plan.modifications.Gitignore != nil {
 		for _, pattern := range plan.modifications.Gitignore.Patterns {
 			removed, err := fsutil.RemoveFromGitignore(plan.projectDir, pattern, "project")
@@ -496,7 +516,7 @@ func performRemoval(plan *removalPlan) error {
 		}
 	}
 
-	// 6. Remove manifest itself
+	// 7. Remove manifest itself
 	manifestPath := filepath.Join(plan.agentDir, ManifestFile)
 	_ = os.Remove(manifestPath)
 
@@ -671,6 +691,44 @@ func cleanEmptyDirs(dir string) {
 	if len(entries) == 0 {
 		_ = os.Remove(dir)
 	}
+}
+
+// removeSettingsContextKey removes the context key from settings if present.
+// This function is non-destructive: it only removes the specific key added by thts.
+func removeSettingsContextKey(agentDir string, cfg *agents.AgentConfig) error {
+	if cfg.SettingsContextKey == "" {
+		return nil // Agent doesn't use this feature
+	}
+
+	settingsPath := filepath.Join(agentDir, cfg.SettingsFile)
+	if !fsutil.Exists(settingsPath) {
+		return nil // No settings file to clean
+	}
+
+	data, err := os.ReadFile(settingsPath)
+	if err != nil {
+		return err
+	}
+
+	var settings map[string]any
+	if err := json.Unmarshal(data, &settings); err != nil {
+		return err
+	}
+
+	// Check if key exists
+	if _, ok := settings[cfg.SettingsContextKey]; !ok {
+		return nil // Nothing to remove
+	}
+
+	delete(settings, cfg.SettingsContextKey)
+
+	// Write back the modified settings (even if empty, preserve user's file)
+	newData, err := json.MarshalIndent(settings, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(settingsPath, append(newData, '\n'), 0644)
 }
 
 // confirmRemoval prompts for confirmation.

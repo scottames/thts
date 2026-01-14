@@ -19,6 +19,8 @@ func TestParseAgentType(t *testing.T) {
 		{"CODEX", AgentCodex, false},
 		{"opencode", AgentOpenCode, false},
 		{"OpenCode", AgentOpenCode, false},
+		{"gemini", AgentGemini, false},
+		{"GEMINI", AgentGemini, false},
 		{"invalid", "", true},
 		{"", "", true},
 	}
@@ -81,6 +83,7 @@ func TestGetConfig(t *testing.T) {
 		{AgentClaude, ".claude"},
 		{AgentCodex, ".codex"},
 		{AgentOpenCode, ".opencode"},
+		{AgentGemini, ".gemini"},
 	}
 
 	for _, tt := range tests {
@@ -180,6 +183,39 @@ func TestAgentConfigProperties(t *testing.T) {
 	if opencode.AgentsDir != "agent" {
 		t.Errorf("OpenCode AgentsDir = %q, want agent", opencode.AgentsDir)
 	}
+
+	// Gemini-specific properties
+	gemini := GetConfig(AgentGemini)
+	if !gemini.SupportsCommands {
+		t.Error("Gemini should support commands")
+	}
+	if gemini.CommandsDir != "commands" {
+		t.Errorf("Gemini CommandsDir = %q, want commands", gemini.CommandsDir)
+	}
+	if gemini.CommandsFormat != "toml" {
+		t.Errorf("Gemini CommandsFormat = %q, want toml", gemini.CommandsFormat)
+	}
+	if gemini.AgentsDir != "" {
+		t.Errorf("Gemini AgentsDir = %q, want empty (no agents support)", gemini.AgentsDir)
+	}
+	if gemini.IntegrationType != "marker" {
+		t.Errorf("Gemini IntegrationType = %q, want marker", gemini.IntegrationType)
+	}
+	if gemini.InstructionTargetFile != "AGENTS.md" {
+		t.Errorf("Gemini InstructionTargetFile = %q, want AGENTS.md", gemini.InstructionTargetFile)
+	}
+	if gemini.SettingsContextKey != "contextFileName" {
+		t.Errorf("Gemini SettingsContextKey = %q, want contextFileName", gemini.SettingsContextKey)
+	}
+	if !gemini.SkillNeedsDir {
+		t.Error("Gemini skills should require subdirectories")
+	}
+	if gemini.GlobalUsesXDG {
+		t.Error("Gemini should not use XDG for global config")
+	}
+	if gemini.CommandsGlobalOnly {
+		t.Error("Gemini commands should not be global-only")
+	}
 }
 
 func TestDetectExistingAgents(t *testing.T) {
@@ -267,8 +303,8 @@ func TestStringsToAgentTypes(t *testing.T) {
 
 func TestAllAgentTypes(t *testing.T) {
 	all := AllAgentTypes()
-	if len(all) != 3 {
-		t.Errorf("Expected 3 agent types, got %d", len(all))
+	if len(all) != 4 {
+		t.Errorf("Expected 4 agent types, got %d", len(all))
 	}
 	// Verify canonical order
 	if all[0] != AgentClaude {
@@ -280,6 +316,9 @@ func TestAllAgentTypes(t *testing.T) {
 	if all[2] != AgentOpenCode {
 		t.Error("Third agent should be opencode")
 	}
+	if all[3] != AgentGemini {
+		t.Error("Fourth agent should be gemini")
+	}
 }
 
 func TestCommandsDirLabel(t *testing.T) {
@@ -290,6 +329,7 @@ func TestCommandsDirLabel(t *testing.T) {
 		{AgentClaude, "commands"},
 		{AgentCodex, "prompts"},
 		{AgentOpenCode, "commands"},
+		{AgentGemini, "commands"},
 	}
 
 	for _, tt := range tests {
@@ -336,9 +376,7 @@ func TestAgentCompleteness(t *testing.T) {
 			if config.SkillsDir == "" {
 				t.Errorf("Agent %q config missing SkillsDir", agentType)
 			}
-			if config.AgentsDir == "" {
-				t.Errorf("Agent %q config missing AgentsDir", agentType)
-			}
+			// AgentsDir can be empty for agents that don't support the agents feature (e.g., Gemini)
 			if config.IntegrationType == "" {
 				t.Errorf("Agent %q config missing IntegrationType", agentType)
 			}
