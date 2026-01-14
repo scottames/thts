@@ -11,7 +11,11 @@
 //	agents/{agent}/*.md               - Agent definitions per tool
 package thtsfiles
 
-import "embed"
+import (
+	"bytes"
+	"embed"
+	"text/template"
+)
 
 // Instructions contains the shared thts-instructions.md file.
 //
@@ -92,6 +96,12 @@ var Templates embed.FS
 //go:embed settings/*
 var Settings embed.FS
 
+// Defaults contains embedded default files for the thoughts repository.
+// Currently includes the root README.md created during setup.
+//
+//go:embed defaults/*
+var Defaults embed.FS
+
 // GetDefaultSettings returns the default settings content for an agent.
 // Returns empty string if no default settings exist (e.g., Claude builds dynamically).
 func GetDefaultSettings(filename string) string {
@@ -100,4 +110,68 @@ func GetDefaultSettings(filename string) string {
 		return ""
 	}
 	return string(content)
+}
+
+// ReadmeData holds the template data for the thoughts repo README.
+type ReadmeData struct {
+	Profile   string
+	ReposDir  string
+	GlobalDir string
+}
+
+// CategoryRow represents a category for template rendering in instructions.
+type CategoryRow struct {
+	Name        string // Category name, e.g., "research" or "plans/complete"
+	Description string // Human-readable description
+	Location    string // Path like "thoughts/shared/research/"
+	Trigger     string // Optional auto-save trigger description
+	Template    string // Template filename, e.g., "research.md"
+}
+
+// InstructionsData holds all data for rendering thts-instructions.md.
+type InstructionsData struct {
+	User       string        // Username from config
+	Categories []CategoryRow // Flattened list including sub-categories
+}
+
+// GetDefaultReadme returns the default README.md content for the thoughts repository.
+// It uses Go templates to replace placeholders with the provided values.
+func GetDefaultReadme(data ReadmeData) string {
+	content, err := Defaults.ReadFile("defaults/README.md")
+	if err != nil {
+		return ""
+	}
+
+	tmpl, err := template.New("readme").Parse(string(content))
+	if err != nil {
+		return ""
+	}
+
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		return ""
+	}
+
+	return buf.String()
+}
+
+// GetInstructions returns the rendered thts-instructions.md content.
+// It executes the embedded template with the provided data.
+func GetInstructions(data InstructionsData) (string, error) {
+	content, err := Instructions.ReadFile("instructions/thts-instructions.md")
+	if err != nil {
+		return "", err
+	}
+
+	tmpl, err := template.New("instructions").Parse(string(content))
+	if err != nil {
+		return "", err
+	}
+
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		return "", err
+	}
+
+	return buf.String(), nil
 }

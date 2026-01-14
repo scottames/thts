@@ -542,6 +542,194 @@ func TestExists(t *testing.T) {
 	})
 }
 
+func TestLoadWithCategories(t *testing.T) {
+	t.Run("loads global categories from config", func(t *testing.T) {
+		xdgDir, cleanup := setupTestXDG(t)
+		defer cleanup()
+
+		thtsDir := filepath.Join(xdgDir, "thts")
+		if err := os.MkdirAll(thtsDir, 0755); err != nil {
+			t.Fatalf("failed to create thts dir: %v", err)
+		}
+
+		cfg := `user: testuser
+defaultScope: shared
+defaultTemplate: custom-default.md
+categories:
+  notes:
+    description: Quick notes
+    template: note.md
+  plans:
+    description: Implementation plans
+    template: plan.md
+    subCategories:
+      todo:
+        description: Plans not yet started
+      complete:
+        description: Finished plans
+        template: complete-plan.md
+profiles:
+  default:
+    thoughtsRepo: ~/thoughts
+    default: true
+`
+		if err := os.WriteFile(filepath.Join(thtsDir, "config.yaml"), []byte(cfg), 0644); err != nil {
+			t.Fatalf("failed to write config: %v", err)
+		}
+
+		loaded, err := Load()
+		if err != nil {
+			t.Fatalf("Load() error: %v", err)
+		}
+
+		// Check defaultScope
+		if loaded.DefaultScope != ScopeShared {
+			t.Errorf("DefaultScope = %q, want %q", loaded.DefaultScope, ScopeShared)
+		}
+		if loaded.GetDefaultScope() != ScopeShared {
+			t.Errorf("GetDefaultScope() = %q, want %q", loaded.GetDefaultScope(), ScopeShared)
+		}
+
+		// Check defaultTemplate
+		if loaded.DefaultTemplate != "custom-default.md" {
+			t.Errorf("DefaultTemplate = %q, want %q", loaded.DefaultTemplate, "custom-default.md")
+		}
+
+		// Check categories
+		categories := loaded.GetCategories()
+		if len(categories) != 2 {
+			t.Errorf("len(categories) = %d, want 2", len(categories))
+		}
+
+		notes, exists := categories["notes"]
+		if !exists {
+			t.Fatal("expected category 'notes' to exist")
+		}
+		if notes.Description != "Quick notes" {
+			t.Errorf("notes.Description = %q, want %q", notes.Description, "Quick notes")
+		}
+
+		plans, exists := categories["plans"]
+		if !exists {
+			t.Fatal("expected category 'plans' to exist")
+		}
+		if plans.SubCategories == nil {
+			t.Fatal("expected plans.SubCategories to exist")
+		}
+		if len(plans.SubCategories) != 2 {
+			t.Errorf("len(plans.SubCategories) = %d, want 2", len(plans.SubCategories))
+		}
+		if plans.SubCategories["complete"].Template != "complete-plan.md" {
+			t.Errorf("plans.SubCategories[complete].Template = %q, want %q",
+				plans.SubCategories["complete"].Template, "complete-plan.md")
+		}
+	})
+
+	t.Run("loads profile categories override", func(t *testing.T) {
+		xdgDir, cleanup := setupTestXDG(t)
+		defer cleanup()
+
+		thtsDir := filepath.Join(xdgDir, "thts")
+		if err := os.MkdirAll(thtsDir, 0755); err != nil {
+			t.Fatalf("failed to create thts dir: %v", err)
+		}
+
+		cfg := `user: testuser
+categories:
+  notes:
+    description: Global notes
+profiles:
+  default:
+    thoughtsRepo: ~/thoughts
+    default: true
+  work:
+    thoughtsRepo: ~/work-thoughts
+    categories:
+      tickets:
+        description: Work tickets
+      notes:
+        description: Work notes
+`
+		if err := os.WriteFile(filepath.Join(thtsDir, "config.yaml"), []byte(cfg), 0644); err != nil {
+			t.Fatalf("failed to write config: %v", err)
+		}
+
+		loaded, err := Load()
+		if err != nil {
+			t.Fatalf("Load() error: %v", err)
+		}
+
+		// Global categories for default profile
+		defaultCategories := loaded.GetCategoriesForProfile("default")
+		if _, exists := defaultCategories["notes"]; !exists {
+			t.Error("expected 'notes' category for default profile")
+		}
+		if defaultCategories["notes"].Description != "Global notes" {
+			t.Errorf("default notes.Description = %q, want %q",
+				defaultCategories["notes"].Description, "Global notes")
+		}
+
+		// Profile categories override for work profile
+		workCategories := loaded.GetCategoriesForProfile("work")
+		if _, exists := workCategories["tickets"]; !exists {
+			t.Error("expected 'tickets' category for work profile")
+		}
+		if _, exists := workCategories["notes"]; !exists {
+			t.Error("expected 'notes' category for work profile")
+		}
+		if workCategories["notes"].Description != "Work notes" {
+			t.Errorf("work notes.Description = %q, want %q",
+				workCategories["notes"].Description, "Work notes")
+		}
+		// Should NOT have global categories - profile overrides entirely
+		if len(workCategories) != 2 {
+			t.Errorf("work profile should have exactly 2 categories, got %d", len(workCategories))
+		}
+	})
+
+	t.Run("uses defaults when no categories configured", func(t *testing.T) {
+		xdgDir, cleanup := setupTestXDG(t)
+		defer cleanup()
+
+		thtsDir := filepath.Join(xdgDir, "thts")
+		if err := os.MkdirAll(thtsDir, 0755); err != nil {
+			t.Fatalf("failed to create thts dir: %v", err)
+		}
+
+		cfg := `user: testuser
+profiles:
+  default:
+    thoughtsRepo: ~/thoughts
+    default: true
+`
+		if err := os.WriteFile(filepath.Join(thtsDir, "config.yaml"), []byte(cfg), 0644); err != nil {
+			t.Fatalf("failed to write config: %v", err)
+		}
+
+		loaded, err := Load()
+		if err != nil {
+			t.Fatalf("Load() error: %v", err)
+		}
+
+		// Should use default categories
+		categories := loaded.GetCategories()
+		expectedDefaults := DefaultCategories()
+		if len(categories) != len(expectedDefaults) {
+			t.Errorf("len(categories) = %d, want %d", len(categories), len(expectedDefaults))
+		}
+		for name := range expectedDefaults {
+			if _, exists := categories[name]; !exists {
+				t.Errorf("expected default category %q to exist", name)
+			}
+		}
+
+		// DefaultScope should default to "user"
+		if loaded.GetDefaultScope() != ScopeUser {
+			t.Errorf("GetDefaultScope() = %q, want %q", loaded.GetDefaultScope(), ScopeUser)
+		}
+	})
+}
+
 func TestLoadOrDefault(t *testing.T) {
 	t.Run("returns loaded config when exists", func(t *testing.T) {
 		xdgDir, cleanup := setupTestXDG(t)

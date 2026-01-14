@@ -22,6 +22,7 @@ var (
 	initName        string
 	initForce       bool
 	initInteractive bool
+	initRefresh     bool
 )
 
 var initCmd = &cobra.Command{
@@ -48,6 +49,8 @@ func init() {
 		BoolVarP(&initForce, "force", "f", false, "Force re-initialization even if thoughts exists")
 	initCmd.Flags().
 		BoolVarP(&initInteractive, "interactive", "i", false, "Force interactive project name selection")
+	initCmd.Flags().
+		BoolVar(&initRefresh, "refresh", false, "Update templates and instructions with current config (skip prompt)")
 
 	_ = initCmd.RegisterFlagCompletionFunc("profile", CompleteProfiles)
 
@@ -123,19 +126,33 @@ func runInit(cmd *cobra.Command, args []string) error {
 	if fs.Exists(thoughtsDir) && !initForce {
 		// Check if it's a valid setup
 		if isValidThoughtsSetup(thoughtsDir, cfg.User) {
+			// Handle --refresh flag: update templates and instructions only
+			if initRefresh {
+				return refreshThoughtsSetup(thoughtsDir, cfg)
+			}
+
 			fmt.Println(ui.Warning("Thoughts directory already configured for this repository."))
-			var reconfigure bool
-			err := huh.NewConfirm().
-				Title("Do you want to reconfigure?").
-				Value(&reconfigure).
+			var action string
+			err := huh.NewSelect[string]().
+				Title("What would you like to do?").
+				Options(
+					huh.NewOption("Update templates and instructions with current config", "refresh"),
+					huh.NewOption("Reconfigure entirely (recreate symlinks)", "reconfigure"),
+					huh.NewOption("Cancel", "cancel"),
+				).
+				Value(&action).
 				Run()
 			if err != nil {
 				return err
 			}
-			if !reconfigure {
+			switch action {
+			case "refresh":
+				return refreshThoughtsSetup(thoughtsDir, cfg)
+			case "cancel":
 				fmt.Println("Setup cancelled.")
 				return nil
 			}
+			// "reconfigure" falls through to full init
 		} else {
 			fmt.Println(ui.Warning("Thoughts directory exists but setup is incomplete."))
 			var fix bool
@@ -575,6 +592,55 @@ func copyTemplates(thoughtsDir string) error {
 
 	if copied > 0 {
 		fmt.Println(ui.SuccessF("Copied %d template(s) to thoughts/.templates/", copied))
+	}
+
+	return nil
+}
+
+// refreshThoughtsSetup updates templates and CLAUDE.md with current config.
+// This is used when thoughts/ is already initialized and user wants to update
+// generated files to reflect changes in their category configuration.
+func refreshThoughtsSetup(thoughtsDir string, cfg *config.Config) error {
+	fmt.Println(ui.Header("Refreshing Thoughts Setup"))
+	fmt.Println()
+
+	var updated int
+
+	// Re-copy templates (always overwrite to get latest)
+	if err := copyTemplates(thoughtsDir); err != nil {
+		fmt.Println(ui.WarningF("Could not update templates: %v", err))
+	} else {
+		updated++
+	}
+
+	// Regenerate CLAUDE.md with current config
+	claudePath := filepath.Join(thoughtsDir, "CLAUDE.md")
+	if fs.Exists(claudePath) {
+		// Get project name from existing mapping
+		currentRepo, err := os.Getwd()
+		if err != nil {
+			return fmt.Errorf("failed to get current directory: %w", err)
+		}
+
+		mapping := cfg.RepoMappings[currentRepo]
+		if mapping == nil {
+			fmt.Println(ui.Warning("No repo mapping found - CLAUDE.md not updated"))
+		} else {
+			content := thts.GenerateClaudeMD(mapping.Repo, cfg.User)
+			if err := os.WriteFile(claudePath, []byte(content), 0644); err != nil {
+				fmt.Println(ui.WarningF("Could not update CLAUDE.md: %v", err))
+			} else {
+				fmt.Println(ui.Success("Updated thoughts/CLAUDE.md"))
+				updated++
+			}
+		}
+	}
+
+	fmt.Println()
+	if updated > 0 {
+		fmt.Println(ui.Success("Refresh complete."))
+	} else {
+		fmt.Println(ui.Info("Nothing to refresh."))
 	}
 
 	return nil

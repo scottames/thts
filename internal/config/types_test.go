@@ -750,3 +750,590 @@ func TestDeleteProfile(t *testing.T) {
 		cfg.DeleteProfile("any")
 	})
 }
+
+func TestGetDefaultScope(t *testing.T) {
+	tests := []struct {
+		name string
+		cfg  *Config
+		want Scope
+	}{
+		{
+			name: "returns configured scope",
+			cfg:  &Config{DefaultScope: ScopeShared},
+			want: ScopeShared,
+		},
+		{
+			name: "returns user when configured as user",
+			cfg:  &Config{DefaultScope: ScopeUser},
+			want: ScopeUser,
+		},
+		{
+			name: "defaults to user when empty",
+			cfg:  &Config{DefaultScope: ""},
+			want: ScopeUser,
+		},
+		{
+			name: "defaults to user for new config",
+			cfg:  &Config{},
+			want: ScopeUser,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.cfg.GetDefaultScope()
+			if got != tt.want {
+				t.Errorf("GetDefaultScope() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestGetCategories(t *testing.T) {
+	t.Run("returns default categories when none configured", func(t *testing.T) {
+		cfg := &Config{}
+
+		categories := cfg.GetCategories()
+
+		if categories == nil {
+			t.Fatal("expected categories, got nil")
+		}
+		for _, name := range []string{"notes", "plans", "research", "decisions", "handoffs"} {
+			if _, exists := categories[name]; !exists {
+				t.Errorf("expected category %q to exist", name)
+			}
+		}
+	})
+
+	t.Run("returns default categories when empty map", func(t *testing.T) {
+		cfg := &Config{Categories: map[string]*Category{}}
+
+		categories := cfg.GetCategories()
+
+		if categories == nil {
+			t.Fatal("expected categories, got nil")
+		}
+		if _, exists := categories["notes"]; !exists {
+			t.Error("expected category 'notes' to exist")
+		}
+	})
+
+	t.Run("returns custom categories when configured", func(t *testing.T) {
+		cfg := &Config{
+			Categories: map[string]*Category{
+				"custom": {Description: "Custom category"},
+			},
+		}
+
+		categories := cfg.GetCategories()
+
+		if categories == nil {
+			t.Fatal("expected categories, got nil")
+		}
+		if _, exists := categories["custom"]; !exists {
+			t.Error("expected category 'custom' to exist")
+		}
+		if _, exists := categories["notes"]; exists {
+			t.Error("expected category 'notes' to not exist (custom replaces defaults)")
+		}
+	})
+}
+
+func TestGetCategoriesForProfile(t *testing.T) {
+	t.Run("returns profile categories when set", func(t *testing.T) {
+		cfg := &Config{
+			Categories: map[string]*Category{
+				"global": {Description: "Global category"},
+			},
+			Profiles: map[string]*ProfileConfig{
+				"work": {
+					ThoughtsRepo: "~/work",
+					Categories: map[string]*Category{
+						"tickets": {Description: "Work tickets"},
+					},
+				},
+			},
+		}
+
+		categories := cfg.GetCategoriesForProfile("work")
+
+		if categories == nil {
+			t.Fatal("expected categories, got nil")
+		}
+		if _, exists := categories["tickets"]; !exists {
+			t.Error("expected category 'tickets' to exist")
+		}
+		if _, exists := categories["global"]; exists {
+			t.Error("expected category 'global' to not exist (profile overrides)")
+		}
+	})
+
+	t.Run("returns global categories when profile has none", func(t *testing.T) {
+		cfg := &Config{
+			Categories: map[string]*Category{
+				"global": {Description: "Global category"},
+			},
+			Profiles: map[string]*ProfileConfig{
+				"work": {
+					ThoughtsRepo: "~/work",
+					// No categories set
+				},
+			},
+		}
+
+		categories := cfg.GetCategoriesForProfile("work")
+
+		if categories == nil {
+			t.Fatal("expected categories, got nil")
+		}
+		if _, exists := categories["global"]; !exists {
+			t.Error("expected category 'global' to exist")
+		}
+	})
+
+	t.Run("returns global categories when profile has empty map", func(t *testing.T) {
+		cfg := &Config{
+			Categories: map[string]*Category{
+				"global": {Description: "Global category"},
+			},
+			Profiles: map[string]*ProfileConfig{
+				"work": {
+					ThoughtsRepo: "~/work",
+					Categories:   map[string]*Category{},
+				},
+			},
+		}
+
+		categories := cfg.GetCategoriesForProfile("work")
+
+		if categories == nil {
+			t.Fatal("expected categories, got nil")
+		}
+		if _, exists := categories["global"]; !exists {
+			t.Error("expected category 'global' to exist")
+		}
+	})
+
+	t.Run("returns default categories when profile not found", func(t *testing.T) {
+		cfg := &Config{}
+
+		categories := cfg.GetCategoriesForProfile("nonexistent")
+
+		if categories == nil {
+			t.Fatal("expected categories, got nil")
+		}
+		if _, exists := categories["notes"]; !exists {
+			t.Error("expected category 'notes' to exist")
+		}
+	})
+
+	t.Run("returns defaults when no global categories and profile has none", func(t *testing.T) {
+		cfg := &Config{
+			Profiles: map[string]*ProfileConfig{
+				"work": {ThoughtsRepo: "~/work"},
+			},
+		}
+
+		categories := cfg.GetCategoriesForProfile("work")
+
+		if categories == nil {
+			t.Fatal("expected categories, got nil")
+		}
+		if _, exists := categories["notes"]; !exists {
+			t.Error("expected category 'notes' to exist")
+		}
+	})
+}
+
+func TestGetCategory(t *testing.T) {
+	t.Run("returns category when exists", func(t *testing.T) {
+		cfg := &Config{
+			Categories: map[string]*Category{
+				"custom": {Description: "Custom category"},
+			},
+		}
+
+		cat := cfg.GetCategory("custom")
+
+		if cat == nil {
+			t.Fatal("expected category, got nil")
+		}
+		if cat.Description != "Custom category" {
+			t.Errorf("Description = %q, want %q", cat.Description, "Custom category")
+		}
+	})
+
+	t.Run("returns nil when category not found", func(t *testing.T) {
+		cfg := &Config{
+			Categories: map[string]*Category{
+				"custom": {Description: "Custom category"},
+			},
+		}
+
+		cat := cfg.GetCategory("nonexistent")
+
+		if cat != nil {
+			t.Errorf("expected nil, got %+v", cat)
+		}
+	})
+
+	t.Run("returns default category when no custom categories", func(t *testing.T) {
+		cfg := &Config{}
+
+		cat := cfg.GetCategory("notes")
+
+		if cat == nil {
+			t.Fatal("expected category, got nil")
+		}
+		if cat.Description != "Quick notes, gotchas, learnings" {
+			t.Errorf("Description = %q, want %q", cat.Description, "Quick notes, gotchas, learnings")
+		}
+	})
+}
+
+func TestGetTemplate(t *testing.T) {
+	tests := []struct {
+		name            string
+		cfg             *Config
+		categoryName    string
+		subCategoryName string
+		want            string
+	}{
+		{
+			name:            "returns sub-category template when set",
+			categoryName:    "plans",
+			subCategoryName: "complete",
+			cfg: &Config{
+				Categories: map[string]*Category{
+					"plans": {
+						Description: "Plans",
+						Template:    "plan.md",
+						SubCategories: map[string]*SubCategory{
+							"complete": {
+								Description: "Complete plans",
+								Template:    "complete-plan.md",
+							},
+						},
+					},
+				},
+			},
+			want: "complete-plan.md",
+		},
+		{
+			name:            "falls back to category template when sub-category has none",
+			categoryName:    "plans",
+			subCategoryName: "active",
+			cfg: &Config{
+				Categories: map[string]*Category{
+					"plans": {
+						Description: "Plans",
+						Template:    "plan.md",
+						SubCategories: map[string]*SubCategory{
+							"active": {
+								Description: "Active plans",
+								// No template
+							},
+						},
+					},
+				},
+			},
+			want: "plan.md",
+		},
+		{
+			name:            "falls back to category template when sub-category not found",
+			categoryName:    "plans",
+			subCategoryName: "nonexistent",
+			cfg: &Config{
+				Categories: map[string]*Category{
+					"plans": {
+						Description: "Plans",
+						Template:    "plan.md",
+					},
+				},
+			},
+			want: "plan.md",
+		},
+		{
+			name:            "returns category template without sub-category",
+			categoryName:    "plans",
+			subCategoryName: "",
+			cfg: &Config{
+				Categories: map[string]*Category{
+					"plans": {
+						Description: "Plans",
+						Template:    "plan.md",
+					},
+				},
+			},
+			want: "plan.md",
+		},
+		{
+			name:            "falls back to defaultTemplate when category has none",
+			categoryName:    "notes",
+			subCategoryName: "",
+			cfg: &Config{
+				DefaultTemplate: "my-default.md",
+				Categories: map[string]*Category{
+					"notes": {
+						Description: "Notes",
+						// No template
+					},
+				},
+			},
+			want: "my-default.md",
+		},
+		{
+			name:            "falls back to default.md when no templates configured",
+			categoryName:    "notes",
+			subCategoryName: "",
+			cfg: &Config{
+				Categories: map[string]*Category{
+					"notes": {
+						Description: "Notes",
+					},
+				},
+			},
+			want: "default.md",
+		},
+		{
+			name:            "falls back to default.md when category not found",
+			categoryName:    "nonexistent",
+			subCategoryName: "",
+			cfg:             &Config{},
+			want:            "default.md",
+		},
+		{
+			name:            "uses default categories and their templates",
+			categoryName:    "research",
+			subCategoryName: "",
+			cfg:             &Config{},
+			want:            "research.md",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.cfg.GetTemplate(tt.categoryName, tt.subCategoryName)
+			if got != tt.want {
+				t.Errorf("GetTemplate(%q, %q) = %q, want %q", tt.categoryName, tt.subCategoryName, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestDefaultCategories(t *testing.T) {
+	categories := DefaultCategories()
+
+	if categories == nil {
+		t.Fatal("expected categories, got nil")
+	}
+
+	// Check all expected categories exist
+	expectedCategories := []string{"research", "plans", "handoffs", "decisions", "notes"}
+	for _, name := range expectedCategories {
+		if _, exists := categories[name]; !exists {
+			t.Errorf("expected category %q to exist", name)
+		}
+	}
+
+	// Verify descriptions are set
+	for name, cat := range categories {
+		if cat.Description == "" {
+			t.Errorf("category %q should have description", name)
+		}
+	}
+
+	// Verify specific templates are set correctly
+	if categories["research"].Template != "research.md" {
+		t.Errorf("research.Template = %q, want %q", categories["research"].Template, "research.md")
+	}
+	if categories["plans"].Template != "plan.md" {
+		t.Errorf("plans.Template = %q, want %q", categories["plans"].Template, "plan.md")
+	}
+	if categories["decisions"].Template != "decision.md" {
+		t.Errorf("decisions.Template = %q, want %q", categories["decisions"].Template, "decision.md")
+	}
+	if categories["notes"].Template != "note.md" {
+		t.Errorf("notes.Template = %q, want %q", categories["notes"].Template, "note.md")
+	}
+	if categories["handoffs"].Template != "" {
+		t.Errorf("handoffs.Template = %q, want empty", categories["handoffs"].Template)
+	}
+}
+
+func TestCategoryWithSubCategories(t *testing.T) {
+	cfg := &Config{
+		Categories: map[string]*Category{
+			"plans": {
+				Description: "Plans",
+				Template:    "plan.md",
+				SubCategories: map[string]*SubCategory{
+					"todo": {
+						Description: "Plans not yet started",
+					},
+					"active": {
+						Description: "Currently being implemented",
+					},
+					"complete": {
+						Description: "Finished plans",
+						Trigger:     "When implementation is verified complete",
+						Template:    "complete-plan.md",
+					},
+				},
+			},
+		},
+	}
+
+	cat := cfg.GetCategory("plans")
+	if cat == nil {
+		t.Fatal("expected category, got nil")
+	}
+	if cat.SubCategories == nil {
+		t.Fatal("expected sub-categories, got nil")
+	}
+	if len(cat.SubCategories) != 3 {
+		t.Errorf("len(SubCategories) = %d, want 3", len(cat.SubCategories))
+	}
+
+	// Verify sub-category properties
+	complete := cat.SubCategories["complete"]
+	if complete == nil {
+		t.Fatal("expected sub-category 'complete', got nil")
+	}
+	if complete.Description != "Finished plans" {
+		t.Errorf("Description = %q, want %q", complete.Description, "Finished plans")
+	}
+	if complete.Trigger != "When implementation is verified complete" {
+		t.Errorf("Trigger = %q, want %q", complete.Trigger, "When implementation is verified complete")
+	}
+	if complete.Template != "complete-plan.md" {
+		t.Errorf("Template = %q, want %q", complete.Template, "complete-plan.md")
+	}
+
+	// Verify template resolution
+	if got := cfg.GetTemplate("plans", "complete"); got != "complete-plan.md" {
+		t.Errorf("GetTemplate(plans, complete) = %q, want %q", got, "complete-plan.md")
+	}
+	if got := cfg.GetTemplate("plans", "todo"); got != "plan.md" {
+		t.Errorf("GetTemplate(plans, todo) = %q, want %q", got, "plan.md")
+	}
+	if got := cfg.GetTemplate("plans", ""); got != "plan.md" {
+		t.Errorf("GetTemplate(plans, \"\") = %q, want %q", got, "plan.md")
+	}
+}
+
+func TestCategoryGetScope(t *testing.T) {
+	tests := []struct {
+		name string
+		cat  *Category
+		want CategoryScope
+	}{
+		{
+			name: "returns shared when set",
+			cat:  &Category{Description: "Test", Scope: CategoryScopeShared},
+			want: CategoryScopeShared,
+		},
+		{
+			name: "returns user when set",
+			cat:  &Category{Description: "Test", Scope: CategoryScopeUser},
+			want: CategoryScopeUser,
+		},
+		{
+			name: "returns both when set",
+			cat:  &Category{Description: "Test", Scope: CategoryScopeBoth},
+			want: CategoryScopeBoth,
+		},
+		{
+			name: "defaults to shared when empty",
+			cat:  &Category{Description: "Test", Scope: ""},
+			want: CategoryScopeShared,
+		},
+		{
+			name: "defaults to shared for new category",
+			cat:  &Category{Description: "Test"},
+			want: CategoryScopeShared,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.cat.GetScope()
+			if got != tt.want {
+				t.Errorf("GetScope() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSubCategoryGetScope(t *testing.T) {
+	tests := []struct {
+		name        string
+		sub         *SubCategory
+		parentScope CategoryScope
+		want        CategoryScope
+	}{
+		{
+			name:        "returns own scope when set",
+			sub:         &SubCategory{Description: "Test", Scope: CategoryScopeUser},
+			parentScope: CategoryScopeShared,
+			want:        CategoryScopeUser,
+		},
+		{
+			name:        "inherits parent scope when empty",
+			sub:         &SubCategory{Description: "Test", Scope: ""},
+			parentScope: CategoryScopeShared,
+			want:        CategoryScopeShared,
+		},
+		{
+			name:        "inherits parent scope when not set",
+			sub:         &SubCategory{Description: "Test"},
+			parentScope: CategoryScopeBoth,
+			want:        CategoryScopeBoth,
+		},
+		{
+			name:        "can override parent shared with user",
+			sub:         &SubCategory{Description: "Test", Scope: CategoryScopeUser},
+			parentScope: CategoryScopeShared,
+			want:        CategoryScopeUser,
+		},
+		{
+			name:        "can override parent user with shared",
+			sub:         &SubCategory{Description: "Test", Scope: CategoryScopeShared},
+			parentScope: CategoryScopeUser,
+			want:        CategoryScopeShared,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.sub.GetScope(tt.parentScope)
+			if got != tt.want {
+				t.Errorf("GetScope(%v) = %v, want %v", tt.parentScope, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestDefaultCategoriesScope(t *testing.T) {
+	categories := DefaultCategories()
+
+	// Verify scope values are set correctly for defaults
+	expectedScopes := map[string]CategoryScope{
+		"research":  CategoryScopeShared,
+		"plans":     CategoryScopeShared,
+		"handoffs":  CategoryScopeShared,
+		"decisions": CategoryScopeShared,
+		"notes":     CategoryScopeBoth,
+	}
+
+	for name, expectedScope := range expectedScopes {
+		cat, exists := categories[name]
+		if !exists {
+			t.Errorf("expected category %q to exist", name)
+			continue
+		}
+		if cat.Scope != expectedScope {
+			t.Errorf("category %q: Scope = %v, want %v", name, cat.Scope, expectedScope)
+		}
+	}
+}

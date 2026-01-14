@@ -1,5 +1,39 @@
 package config
 
+// Scope specifies whether content goes to shared/ or {user}/ directories.
+type Scope string
+
+const (
+	ScopeUser   Scope = "user"   // Write to {user}/ directory (default)
+	ScopeShared Scope = "shared" // Write to shared/ directory
+)
+
+// CategoryScope specifies which scope(s) a category is typically used in.
+type CategoryScope string
+
+const (
+	CategoryScopeShared CategoryScope = "shared" // Category used in shared/ only
+	CategoryScopeUser   CategoryScope = "user"   // Category used in {user}/ only
+	CategoryScopeBoth   CategoryScope = "both"   // Category used in both scopes
+)
+
+// SubCategory represents a sub-category within a category.
+type SubCategory struct {
+	Description string        `yaml:"description"`
+	Template    string        `yaml:"template,omitempty"`
+	Trigger     string        `yaml:"trigger,omitempty"`
+	Scope       CategoryScope `yaml:"scope,omitempty"` // Overrides parent category scope
+}
+
+// Category represents a top-level category for organizing thoughts.
+type Category struct {
+	Description   string                  `yaml:"description"`
+	Template      string                  `yaml:"template,omitempty"`
+	Trigger       string                  `yaml:"trigger,omitempty"`
+	Scope         CategoryScope           `yaml:"scope,omitempty"` // shared, user, or both
+	SubCategories map[string]*SubCategory `yaml:"subCategories,omitempty"`
+}
+
 // RepoMapping represents a repository mapping that can be either a simple string
 // (repo name only) or a full object with profile information.
 type RepoMapping struct {
@@ -9,11 +43,12 @@ type RepoMapping struct {
 
 // ProfileConfig represents a named profile with its own thoughts repository.
 type ProfileConfig struct {
-	ThoughtsRepo  string   `yaml:"thoughtsRepo"`
-	ReposDir      string   `yaml:"reposDir"`
-	GlobalDir     string   `yaml:"globalDir"`
-	Default       bool     `yaml:"default,omitempty"`
-	DefaultAgents []string `yaml:"defaultAgents,omitempty"`
+	ThoughtsRepo  string               `yaml:"thoughtsRepo"`
+	ReposDir      string               `yaml:"reposDir"`
+	GlobalDir     string               `yaml:"globalDir"`
+	Default       bool                 `yaml:"default,omitempty"`
+	DefaultAgents []string             `yaml:"defaultAgents,omitempty"`
+	Categories    map[string]*Category `yaml:"categories,omitempty"` // Overrides global categories when set
 }
 
 // ComponentMode specifies where a component is managed.
@@ -52,8 +87,11 @@ type Config struct {
 	Editor              string                    `yaml:"editor,omitempty"`
 	AutoSyncInWorktrees bool                      `yaml:"autoSyncInWorktrees,omitempty"`
 	Gitignore           ComponentMode             `yaml:"gitignore,omitempty"`
+	DefaultScope        Scope                     `yaml:"defaultScope,omitempty"`    // "user" or "shared" - where thts add writes by default
+	DefaultTemplate     string                    `yaml:"defaultTemplate,omitempty"` // Falls back to built-in default.md
 	Sync                *SyncConfig               `yaml:"sync,omitempty"`
 	Agents              *AgentsConfig             `yaml:"agents,omitempty"`
+	Categories          map[string]*Category      `yaml:"categories,omitempty"` // Global categories
 	RepoMappings        map[string]*RepoMapping   `yaml:"repoMappings,omitempty"`
 	Profiles            map[string]*ProfileConfig `yaml:"profiles"`
 }
@@ -297,4 +335,90 @@ func (c *Config) SetAgentComponentMode(component string, mode ComponentMode) {
 	case "agents":
 		c.Agents.Agents = mode
 	}
+}
+
+// GetDefaultScope returns the default scope, defaulting to "user".
+func (c *Config) GetDefaultScope() Scope {
+	if c.DefaultScope != "" {
+		return c.DefaultScope
+	}
+	return DefaultScopeValue
+}
+
+// GetCategories returns the categories for the config, falling back to defaults.
+func (c *Config) GetCategories() map[string]*Category {
+	if len(c.Categories) > 0 {
+		return c.Categories
+	}
+	return DefaultCategories()
+}
+
+// GetCategoriesForProfile returns the categories for a profile.
+// If the profile has categories defined, those are returned (complete override).
+// Otherwise, returns global categories (or defaults if none set).
+func (c *Config) GetCategoriesForProfile(profileName string) map[string]*Category {
+	if c.Profiles != nil {
+		if profile, exists := c.Profiles[profileName]; exists {
+			if len(profile.Categories) > 0 {
+				return profile.Categories
+			}
+		}
+	}
+	return c.GetCategories()
+}
+
+// GetCategory returns a category by name, or nil if not found.
+func (c *Config) GetCategory(name string) *Category {
+	categories := c.GetCategories()
+	return categories[name]
+}
+
+// GetTemplate returns the template for a category/sub-category path.
+// Resolution order: sub-category template > category template > defaultTemplate > "default.md".
+func (c *Config) GetTemplate(categoryName, subCategoryName string) string {
+	categories := c.GetCategories()
+	cat, exists := categories[categoryName]
+	if !exists {
+		return c.getDefaultTemplate()
+	}
+
+	// Check sub-category template first
+	if subCategoryName != "" && cat.SubCategories != nil {
+		if subCat, subExists := cat.SubCategories[subCategoryName]; subExists {
+			if subCat.Template != "" {
+				return subCat.Template
+			}
+		}
+	}
+
+	// Fall back to category template
+	if cat.Template != "" {
+		return cat.Template
+	}
+
+	return c.getDefaultTemplate()
+}
+
+// getDefaultTemplate returns the default template name.
+func (c *Config) getDefaultTemplate() string {
+	if c.DefaultTemplate != "" {
+		return c.DefaultTemplate
+	}
+	return "default.md"
+}
+
+// GetScope returns the category's scope, defaulting to "shared" if not set.
+func (cat *Category) GetScope() CategoryScope {
+	if cat.Scope != "" {
+		return cat.Scope
+	}
+	return CategoryScopeShared
+}
+
+// GetScope returns the sub-category's scope, inheriting from parent if not set.
+func (sub *SubCategory) GetScope(parentScope CategoryScope) CategoryScope {
+	if sub.Scope != "" {
+		return sub.Scope
+	}
+	return parentScope
 }

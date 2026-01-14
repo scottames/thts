@@ -39,13 +39,13 @@ the canonical path (remove `searchable/` from the path).
 
 Save to thoughts/ automatically (without asking) when:
 
-| Trigger                                                          | Location                     | Template                 |
-| ---------------------------------------------------------------- | ---------------------------- | ------------------------ |
-| **Research completes** - Any research phase produces findings    | `thoughts/shared/research/`  | `.templates/research.md` |
-| **Gotchas discovered** - Non-obvious behavior, bugs, workarounds | `thoughts/shared/notes/`     | `.templates/note.md`     |
-| **Plans finalized** - After plan mode approval                   | `thoughts/shared/plans/`     | `.templates/plan.md`     |
-| **Decisions made** - Architecture/design choices with rationale  | `thoughts/shared/decisions/` | `.templates/decision.md` |
-| **Session ending** - Incomplete work that needs handoff          | Suggest `/thts-handoff`      | -                        |
+| Trigger | Location | Template |
+| ------- | -------- | -------- |
+
+{{- range .Categories}}{{if .Trigger}}
+| **{{.Trigger}}** | {{.Location}} | {{if .Template}}`.templates/{{.Template}}`{{else}}-{{end}} |
+{{- end}}{{end}}
+| **Session ending** - Incomplete work that needs handoff | Suggest `/thts-handoff` | - |
 
 **File naming:** `YYYY-MM-DD-descriptive-name.md`
 
@@ -100,15 +100,12 @@ MUST write to thoughts/ when:
 
 ## Where to Write
 
-| Content Type            | Location                     |
-| ----------------------- | ---------------------------- |
-| Implementation plans    | `thoughts/shared/plans/`     |
-| Research findings       | `thoughts/shared/research/`  |
-| Session handoffs        | `thoughts/shared/handoffs/`  |
-| Decisions/ADRs          | `thoughts/shared/decisions/` |
-| Gotchas/learnings       | `thoughts/shared/notes/`     |
-| Quick notes, scratchpad | `thoughts/{user}/notes/`     |
-| Ticket context          | `thoughts/{user}/tickets/`   |
+| Content Type | Location |
+| ------------ | -------- |
+
+{{- range .Categories}}
+| {{.Description}} | {{.Location}} |
+{{- end}}
 
 ---
 
@@ -116,12 +113,12 @@ MUST write to thoughts/ when:
 
 Read the template from `thoughts/.templates/` before writing:
 
-| Document Type | Template Path                     |
-| ------------- | --------------------------------- |
-| Research      | `thoughts/.templates/research.md` |
-| Plan          | `thoughts/.templates/plan.md`     |
-| Decision/ADR  | `thoughts/.templates/decision.md` |
-| Note/Gotcha   | `thoughts/.templates/note.md`     |
+| Document Type | Template Path |
+| ------------- | ------------- |
+
+{{- range .Categories}}{{if .Template}}
+| {{.Description}} | `thoughts/.templates/{{.Template}}` |
+{{- end}}{{end}}
 
 ---
 

@@ -12,6 +12,7 @@
   - [First-Time Setup](#first-time-setup)
   - [Initializing a Project](#initializing-a-project)
   - [Your First Notes](#your-first-notes)
+  - [Adding Thoughts with `thts add`](#adding-thoughts-with-thts-add)
 - [Directory Organization](#directory-organization)
   - [Where to Put What](#where-to-put-what)
   - [Suggested Structure](#suggested-structure)
@@ -199,6 +200,49 @@ thts status
 # Sync to thoughts repo (also happens automatically on commits)
 thts sync -m "Added architecture notes"
 ```
+
+### Adding Thoughts with `thts add`
+
+The `thts add` command creates properly formatted thought files with templates:
+
+```bash
+thts add "API design decisions"           # Creates in notes/ (default category)
+thts add --in plans "Feature roadmap"     # Creates in plans/
+thts add --in plans/active "Sprint work"  # Creates in plans/active/ subcategory
+```
+
+**What it does:**
+
+1. Creates a file named `YYYY-MM-DD-slugified-title.md`
+2. Populates it with the appropriate template from `thoughts/.templates/`
+3. Opens the file in your editor
+
+**Scope control:**
+
+```bash
+thts add --in notes "Team gotcha" --shared    # Write to shared/
+thts add --in notes "My todo" --personal      # Write to {user}/
+```
+
+Without flags, scope is determined by:
+
+1. The category's configured scope (e.g., `research` defaults to `shared`)
+2. Your `defaultScope` config setting (defaults to `user`)
+
+**Target selection:**
+
+```bash
+thts add --in notes "Note"                      # Current repo (or default global)
+thts add --profile work --in notes "Work note"  # Work profile's global dir
+thts add --repo ~/other-project --in notes "X"  # Another repo's thoughts dir
+```
+
+Target resolution order:
+
+1. `--repo` flag: use that repo's thoughts directory
+2. `--profile` flag: use that profile's global thoughts directory
+3. Current git repo: use current repo's thoughts directory (if thts initialized)
+4. Otherwise: use default profile's global directory
 
 ## Directory Organization
 
@@ -695,10 +739,12 @@ Each team member maintains their own config file for their preferred tool.
 
 ### Command Mapping
 
-| thts          | humanlayer thoughts          | Description              |
-| ------------- | ---------------------------- | ------------------------ |
-| `thts setup`  | `humanlayer thoughts setup`  | First-time configuration |
-| `thts init`   | `humanlayer thoughts init`   | Initialize in a project  |
-| `thts sync`   | `humanlayer thoughts sync`   | Sync to thoughts repo    |
-| `thts status` | `humanlayer thoughts status` | Show status              |
-| `thts uninit` | `humanlayer thoughts uninit` | Remove from project      |
+| thts          | humanlayer thoughts          | Description                  |
+| ------------- | ---------------------------- | ---------------------------- |
+| `thts setup`  | `humanlayer thoughts setup`  | First-time configuration     |
+| `thts init`   | `humanlayer thoughts init`   | Initialize in a project      |
+| `thts sync`   | `humanlayer thoughts sync`   | Sync to thoughts repo        |
+| `thts status` | `humanlayer thoughts status` | Show status                  |
+| `thts add`    | -                            | Create thought with template |
+| `thts edit`   | -                            | Open thoughts in editor      |
+| `thts uninit` | `humanlayer thoughts uninit` | Remove from project          |

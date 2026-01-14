@@ -26,6 +26,7 @@ var (
 	initInteractive  bool
 	initWithSettings bool
 	initGlobal       string
+	initRefresh      bool
 )
 
 // ModelType represents the available Claude models.
@@ -129,6 +130,7 @@ func init() {
 	initCmd.Flags().StringVar(&initGlobal, "global", "", "Install components globally (all, or: skills,commands,agents)")
 	// NoOptDefVal allows --global without value to trigger interactive mode
 	initCmd.Flags().Lookup("global").NoOptDefVal = "interactive"
+	initCmd.Flags().BoolVar(&initRefresh, "refresh", false, "Update agent files with current config (skip prompt)")
 
 	_ = initCmd.RegisterFlagCompletionFunc("agents", completeAgentTypes)
 }
@@ -155,6 +157,41 @@ func runAgentsInit(cmd *cobra.Command, args []string) error {
 	targetDir, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("failed to get current directory: %w", err)
+	}
+
+	// Check for existing agent initializations (via manifests)
+	existingAgents := detectExistingAgentManifests(targetDir)
+
+	// Handle --refresh flag or prompt for action if agents exist
+	if len(existingAgents) > 0 && !initForce {
+		if initRefresh {
+			return refreshAgentSetup(targetDir, existingAgents)
+		}
+
+		fmt.Println(ui.WarningF("Agent integration already initialized: %s",
+			strings.Join(agents.AgentTypesToStrings(existingAgents), ", ")))
+
+		var action string
+		err := huh.NewSelect[string]().
+			Title("What would you like to do?").
+			Options(
+				huh.NewOption("Refresh files with current config", "refresh"),
+				huh.NewOption("Reinitialize (may prompt for options)", "reinit"),
+				huh.NewOption("Cancel", "cancel"),
+			).
+			Value(&action).
+			Run()
+		if err != nil {
+			return err
+		}
+		switch action {
+		case "refresh":
+			return refreshAgentSetup(targetDir, existingAgents)
+		case "cancel":
+			fmt.Println("Setup cancelled.")
+			return nil
+		}
+		// "reinit" falls through to normal init
 	}
 
 	// Resolve which agents to initialize
@@ -430,18 +467,21 @@ func initAgent(projectDir string, agentType agents.AgentType, level IntegrationL
 }
 
 // copyInstructionsFile copies thts-instructions.md to the agent directory.
-func copyInstructionsFile(agentDir string, cfg *agents.AgentConfig) error {
-	content, err := fs.ReadFile(thtsfiles.Instructions, "instructions/thts-instructions.md")
-	if err != nil {
-		return fmt.Errorf("failed to read thts-instructions.md: %w", err)
-	}
-	targetPath := filepath.Join(agentDir, ThtsInstructionsFile)
-	return os.WriteFile(targetPath, content, 0644)
+// Uses templated content from the current config.
+func copyInstructionsFile(agentDir string, agentCfg *agents.AgentConfig) error {
+	cfg := config.LoadOrDefault()
+	return copyInstructionsFileWithConfig(agentDir, agentCfg, cfg)
 }
 
-// readThtsInstructions reads the embedded thts-instructions.md content.
+// readThtsInstructions returns the rendered thts-instructions.md content with current config.
 func readThtsInstructions() ([]byte, error) {
-	return fs.ReadFile(thtsfiles.Instructions, "instructions/thts-instructions.md")
+	cfg := config.LoadOrDefault()
+	data := buildInstructionsData(cfg)
+	content, err := thtsfiles.GetInstructions(data)
+	if err != nil {
+		return nil, err
+	}
+	return []byte(content), nil
 }
 
 // adjustHeaderLevels increments all markdown headers by the given offset.
@@ -1187,6 +1227,272 @@ func patternsEqual(a, b []string) bool {
 		}
 	}
 	return true
+}
+
+// detectExistingAgentManifests returns agent types that have manifests in the project.
+func detectExistingAgentManifests(projectDir string) []agents.AgentType {
+	var existing []agents.AgentType
+	for _, agentType := range agents.AllAgentTypes() {
+		cfg := agents.GetConfig(agentType)
+		manifestPath := filepath.Join(projectDir, cfg.RootDir, ManifestFile)
+		if fsutil.Exists(manifestPath) {
+			existing = append(existing, agentType)
+		}
+	}
+	return existing
+}
+
+// refreshAgentSetup updates agent files with current config for existing agents.
+// This re-copies skills, commands, agents, and updates instructions without
+// prompting for integration level (preserves existing level from manifest).
+func refreshAgentSetup(projectDir string, agentTypes []agents.AgentType) error {
+	fmt.Println(ui.Header("Refreshing Agent Integration"))
+	fmt.Println()
+
+	cfg := config.LoadOrDefault()
+
+	for _, agentType := range agentTypes {
+		agentConfig := agents.GetConfig(agentType)
+		agentDir := filepath.Join(projectDir, agentConfig.RootDir)
+
+		// Load existing manifest to get integration level
+		manifest, err := loadManifest(agentDir)
+		if err != nil {
+			fmt.Println(ui.WarningF("Could not read manifest for %s: %v", agentType, err))
+			continue
+		}
+
+		fmt.Println(ui.SubHeader(fmt.Sprintf("Refreshing %s:", agents.AgentTypeLabels[agentType])))
+
+		var filesUpdated int
+
+		// Re-copy thts-instructions.md (with templated content)
+		copyInstructions := agentConfig.InstructionsFile != ""
+		if copyInstructions && agentConfig.Type == agents.AgentClaude {
+			if checkClaudeMDSymlink(projectDir) == symlinkToLocalAgentsMD {
+				copyInstructions = false
+			}
+		}
+		if copyInstructions {
+			if err := copyInstructionsFileWithConfig(agentDir, agentConfig, cfg); err != nil {
+				fmt.Println(ui.WarningF("  Could not update instructions: %v", err))
+			} else {
+				filesUpdated++
+				fmt.Println(ui.SuccessF("  Updated %s", ThtsInstructionsFile))
+			}
+		}
+
+		// Re-copy skills (check component mode)
+		skillsMode := cfg.GetAgentComponentMode("skills")
+		if skillsMode == config.ComponentModeLocal {
+			copied, _, err := copySkills(agentDir, agentType, agentConfig)
+			if err != nil {
+				fmt.Println(ui.WarningF("  Could not update skills: %v", err))
+			} else if copied > 0 {
+				filesUpdated += copied
+				fmt.Println(ui.SuccessF("  Updated %d skill(s)", copied))
+			}
+		}
+
+		// Re-copy commands (check component mode)
+		if agentConfig.SupportsCommands && !agentConfig.CommandsGlobalOnly {
+			commandsMode := cfg.GetAgentComponentMode("commands")
+			if commandsMode == config.ComponentModeLocal {
+				copied, _, err := copyCommands(agentDir, agentType)
+				if err != nil {
+					fmt.Println(ui.WarningF("  Could not update commands: %v", err))
+				} else if copied > 0 {
+					filesUpdated += copied
+					fmt.Println(ui.SuccessF("  Updated %d command(s)", copied))
+				}
+			}
+		}
+
+		// Re-copy agents (check component mode)
+		if agentConfig.AgentsDir != "" {
+			agentsMode := cfg.GetAgentComponentMode("agents")
+			if agentsMode == config.ComponentModeLocal {
+				copied, _, err := copyAgents(agentDir, agentType, agentConfig)
+				if err != nil {
+					fmt.Println(ui.WarningF("  Could not update agents: %v", err))
+				} else if copied > 0 {
+					filesUpdated += copied
+					fmt.Println(ui.SuccessF("  Updated %d agent(s)", copied))
+				}
+			}
+		}
+
+		// Update integration (refresh marker block content if using markers)
+		if manifest.IntegrationLevel == IntegrationAlwaysOn {
+			if err := refreshIntegration(projectDir, agentDir, agentConfig, cfg); err != nil {
+				fmt.Println(ui.WarningF("  Could not update integration: %v", err))
+			}
+		}
+
+		// Update manifest timestamp
+		manifest.CreatedAt = time.Now().UTC().Format(time.RFC3339)
+		if err := writeManifest(agentDir, manifest); err != nil {
+			fmt.Println(ui.WarningF("  Could not update manifest: %v", err))
+		}
+
+		fmt.Println(ui.SuccessF("  Refreshed %d file(s)", filesUpdated))
+	}
+
+	fmt.Println()
+	fmt.Println(ui.Success("Refresh complete."))
+	return nil
+}
+
+// copyInstructionsFileWithConfig copies thts-instructions.md with templated content from config.
+func copyInstructionsFileWithConfig(agentDir string, agentCfg *agents.AgentConfig, cfg *config.Config) error {
+	// Build instructions data from config
+	data := buildInstructionsData(cfg)
+
+	// Render the template
+	content, err := thtsfiles.GetInstructions(data)
+	if err != nil {
+		return fmt.Errorf("failed to render instructions: %w", err)
+	}
+
+	targetPath := filepath.Join(agentDir, ThtsInstructionsFile)
+	return os.WriteFile(targetPath, []byte(content), 0644)
+}
+
+// buildInstructionsData creates InstructionsData from config.
+// This is a simplified version that uses the thts package's full implementation.
+func buildInstructionsData(cfg *config.Config) thtsfiles.InstructionsData {
+	categories := cfg.GetCategories()
+	var rows []thtsfiles.CategoryRow
+
+	for name, cat := range categories {
+		rows = append(rows, thtsfiles.CategoryRow{
+			Name:        name,
+			Description: cat.Description,
+			Location:    buildLocationString(name, cat.GetScope()),
+			Trigger:     cat.Trigger,
+			Template:    cat.Template,
+		})
+
+		for subName, subCat := range cat.SubCategories {
+			fullPath := fmt.Sprintf("%s/%s", name, subName)
+			rows = append(rows, thtsfiles.CategoryRow{
+				Name:        fullPath,
+				Description: subCat.Description,
+				Location:    buildLocationString(fullPath, subCat.GetScope(cat.GetScope())),
+				Trigger:     subCat.Trigger,
+				Template:    subCat.Template,
+			})
+		}
+	}
+
+	return thtsfiles.InstructionsData{
+		User:       cfg.User,
+		Categories: rows,
+	}
+}
+
+// buildLocationString creates the location string based on scope.
+func buildLocationString(path string, scope config.CategoryScope) string {
+	switch scope {
+	case config.CategoryScopeUser:
+		return fmt.Sprintf("`thoughts/{user}/%s/`", path)
+	case config.CategoryScopeBoth:
+		return fmt.Sprintf("`thoughts/shared/%s/` or `thoughts/{user}/%s/`", path, path)
+	default:
+		return fmt.Sprintf("`thoughts/shared/%s/`", path)
+	}
+}
+
+// refreshIntegration updates the integration for always-on mode.
+// For marker-based integration, it removes and re-adds the marker block with current config.
+func refreshIntegration(projectDir, agentDir string, agentCfg *agents.AgentConfig, cfg *config.Config) error {
+	if agentCfg.IntegrationType != "marker" {
+		// Config-based integration (OpenCode) doesn't need refresh for instructions
+		return nil
+	}
+
+	gitRoot, err := git.GetRepoTopLevelAt(projectDir)
+	if err != nil {
+		gitRoot = projectDir
+	}
+
+	targetFile := agentCfg.InstructionTargetFile
+	useInlineMode := agentCfg.Type != agents.AgentClaude
+
+	if agentCfg.Type == agents.AgentClaude {
+		switch checkClaudeMDSymlink(gitRoot) {
+		case symlinkToLocalAgentsMD:
+			useInlineMode = true
+			targetFile = "AGENTS.md"
+		case symlinkToElsewhere:
+			return nil // Skip - symlink elsewhere
+		}
+	}
+
+	filePath := filepath.Join(gitRoot, targetFile)
+	if !fsutil.Exists(filePath) {
+		return nil // File doesn't exist, nothing to refresh
+	}
+
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return err
+	}
+
+	// Check if markers exist
+	if !strings.Contains(string(content), ThtsMarkerStart) {
+		return nil // No markers, nothing to refresh
+	}
+
+	// Remove existing marker block
+	if err := removeMarkerBlock(filePath); err != nil {
+		return fmt.Errorf("failed to remove existing markers: %w", err)
+	}
+
+	// Build new content with current config
+	var insertContent string
+	if useInlineMode {
+		data := buildInstructionsData(cfg)
+		rendered, err := thtsfiles.GetInstructions(data)
+		if err != nil {
+			return fmt.Errorf("failed to render instructions: %w", err)
+		}
+		insertContent = fmt.Sprintf("\n%s\n%s\n%s\n",
+			ThtsMarkerStart,
+			rendered,
+			ThtsMarkerEnd)
+		insertContent = adjustHeaderLevels(insertContent, 1)
+	} else {
+		insertContent = fmt.Sprintf("\n%s\n@%s/%s\n%s\n",
+			ThtsMarkerStart,
+			agentCfg.RootDir,
+			ThtsInstructionsFile,
+			ThtsMarkerEnd)
+	}
+
+	// Re-read file after marker removal
+	updatedContent, err := os.ReadFile(filePath)
+	if err != nil {
+		return err
+	}
+
+	// Append new content
+	f, err := os.OpenFile(filePath, os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil {
+		return err
+	}
+
+	if _, err := f.WriteString(string(updatedContent) + insertContent); err != nil {
+		_ = f.Close()
+		return err
+	}
+
+	if err := f.Close(); err != nil {
+		return err
+	}
+
+	fmt.Println(ui.SuccessF("  Updated integration in %s", targetFile))
+	return nil
 }
 
 // runGlobalInit handles global installation of agent components.

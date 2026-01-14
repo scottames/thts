@@ -544,6 +544,104 @@ func TestUninitCommand(t *testing.T) {
 	})
 }
 
+func TestInitRefresh(t *testing.T) {
+	t.Run("refresh updates templates without prompting", func(t *testing.T) {
+		env := setupTestEnv(t)
+		defer env.cleanup()
+
+		// First init
+		_, err := env.runThts("init", "--name", "myproject", "--force")
+		if err != nil {
+			t.Fatalf("first init failed: %v", err)
+		}
+
+		// Verify templates were created
+		templatesDir := filepath.Join(env.projectRepo, "thoughts", ".templates")
+		if _, err := os.Stat(templatesDir); err != nil {
+			t.Errorf("templates directory not created: %v", err)
+		}
+
+		// Modify a template to verify it gets overwritten
+		noteMdPath := filepath.Join(templatesDir, "note.md")
+		if err := os.WriteFile(noteMdPath, []byte("modified content"), 0644); err != nil {
+			t.Fatalf("failed to modify template: %v", err)
+		}
+
+		// Run refresh
+		output, err := env.runThts("init", "--refresh")
+		if err != nil {
+			t.Fatalf("init --refresh failed: %v\nOutput: %s", err, output)
+		}
+
+		// Verify refresh completed
+		if !strings.Contains(output, "Refresh complete") {
+			t.Errorf("expected 'Refresh complete' message, got: %s", output)
+		}
+
+		// Verify template was restored (should not be "modified content")
+		content, err := os.ReadFile(noteMdPath)
+		if err != nil {
+			t.Fatalf("failed to read template: %v", err)
+		}
+		if strings.Contains(string(content), "modified content") {
+			t.Errorf("template should have been refreshed, still contains: %s", content)
+		}
+	})
+
+	t.Run("refresh updates CLAUDE.md", func(t *testing.T) {
+		env := setupTestEnv(t)
+		defer env.cleanup()
+
+		// First init
+		_, err := env.runThts("init", "--name", "myproject", "--force")
+		if err != nil {
+			t.Fatalf("first init failed: %v", err)
+		}
+
+		// Verify CLAUDE.md was created
+		claudeMdPath := filepath.Join(env.projectRepo, "thoughts", "CLAUDE.md")
+		if _, err := os.Stat(claudeMdPath); err != nil {
+			t.Errorf("CLAUDE.md not created: %v", err)
+		}
+
+		// Modify CLAUDE.md to verify it gets updated
+		if err := os.WriteFile(claudeMdPath, []byte("# old content"), 0644); err != nil {
+			t.Fatalf("failed to modify CLAUDE.md: %v", err)
+		}
+
+		// Run refresh
+		output, err := env.runThts("init", "--refresh")
+		if err != nil {
+			t.Fatalf("init --refresh failed: %v\nOutput: %s", err, output)
+		}
+
+		// Verify CLAUDE.md was updated (should contain project name)
+		content, err := os.ReadFile(claudeMdPath)
+		if err != nil {
+			t.Fatalf("failed to read CLAUDE.md: %v", err)
+		}
+		if !strings.Contains(string(content), "myproject") {
+			t.Errorf("CLAUDE.md should contain project name 'myproject', got: %s", content)
+		}
+	})
+
+	t.Run("refresh on non-initialized project fails gracefully", func(t *testing.T) {
+		env := setupTestEnv(t)
+		defer env.cleanup()
+
+		// Try to refresh without init
+		output, err := env.runThts("init", "--refresh")
+		// This might fail or show a warning - either is acceptable
+		// The important thing is it doesn't panic
+		if err != nil {
+			// Error is expected for non-initialized project
+			if !strings.Contains(output, "not configured") && !strings.Contains(output, "not found") {
+				t.Logf("Output on non-init refresh: %s", output)
+			}
+		}
+	})
+}
+
 func TestFullWorkflow(t *testing.T) {
 	t.Run("init -> create note -> sync -> uninit", func(t *testing.T) {
 		env := setupTestEnv(t)

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/huh"
+	thtsfiles "github.com/scottames/thts"
 	"github.com/scottames/thts/internal/config"
 	"github.com/scottames/thts/internal/ui"
 	"github.com/spf13/cobra"
@@ -160,7 +161,7 @@ func runSetup(cmd *cobra.Command, args []string) error {
 	fmt.Println()
 
 	// Ensure thoughts repo exists and is a git repo
-	if err := ensureThoughtsRepoExistsForProfile(profile); err != nil {
+	if err := ensureThoughtsRepoExistsForProfile(profileName, profile); err != nil {
 		return fmt.Errorf("failed to create thoughts repository: %w", err)
 	}
 
@@ -182,7 +183,7 @@ func runSetup(cmd *cobra.Command, args []string) error {
 }
 
 // ensureThoughtsRepoExistsForProfile creates the thoughts repo structure and initializes git if needed.
-func ensureThoughtsRepoExistsForProfile(profile *config.ProfileConfig) error {
+func ensureThoughtsRepoExistsForProfile(profileName string, profile *config.ProfileConfig) error {
 	expandedRepo := config.ExpandPath(profile.ThoughtsRepo)
 
 	// Create thoughts repo if it doesn't exist
@@ -200,6 +201,19 @@ func ensureThoughtsRepoExistsForProfile(profile *config.ProfileConfig) error {
 
 	if err := os.MkdirAll(globalDir, 0755); err != nil {
 		return fmt.Errorf("failed to create global dir: %w", err)
+	}
+
+	// Create README if it doesn't exist
+	readmePath := filepath.Join(expandedRepo, "README.md")
+	if _, err := os.Stat(readmePath); os.IsNotExist(err) {
+		readmeContent := thtsfiles.GetDefaultReadme(thtsfiles.ReadmeData{
+			Profile:   profileName,
+			ReposDir:  profile.ReposDir,
+			GlobalDir: profile.GlobalDir,
+		})
+		if err := os.WriteFile(readmePath, []byte(readmeContent), 0644); err != nil {
+			return fmt.Errorf("failed to create README: %w", err)
+		}
 	}
 
 	// Check if it's already a git repo
@@ -242,10 +256,10 @@ Thumbs.db
 	}
 
 	// Initial commit
-	gitAdd := exec.Command("git", "add", ".gitignore")
+	gitAdd := exec.Command("git", "add", ".gitignore", "README.md")
 	gitAdd.Dir = expandedRepo
 	if err := gitAdd.Run(); err != nil {
-		return fmt.Errorf("failed to add .gitignore: %w", err)
+		return fmt.Errorf("failed to add files: %w", err)
 	}
 
 	gitCommit := exec.Command("git", "commit", "-m", "Initial thoughts repository setup")
