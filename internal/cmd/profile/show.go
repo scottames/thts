@@ -10,13 +10,16 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var showJSON bool
+var (
+	showJSON bool
+	showPath bool
+)
 
 var showCmd = &cobra.Command{
-	Use:               "show <name>",
+	Use:               "show [name]",
 	Short:             "Show profile details",
-	Long:              `Show detailed information about a specific profile.`,
-	Args:              cobra.ExactArgs(1),
+	Long:              `Show detailed information about a profile. If no name is provided, shows the default profile.`,
+	Args:              cobra.MaximumNArgs(1),
 	ValidArgsFunction: completeProfileNames,
 	RunE:              runShow,
 }
@@ -38,35 +41,47 @@ func completeProfileNames(_ *cobra.Command, _ []string, _ string) ([]string, cob
 
 func init() {
 	showCmd.Flags().BoolVar(&showJSON, "json", false, "Output as JSON")
+	showCmd.Flags().BoolVar(&showPath, "path", false, "Output only the thoughts repo path")
 }
 
-func runShow(cmd *cobra.Command, args []string) error {
-	profileName := args[0]
-
+func runShow(_ *cobra.Command, args []string) error {
 	cfg, err := config.Load()
 	if err != nil {
 		if err == config.ErrConfigNotFound {
-			fmt.Println(ui.Error("Thoughts not configured."))
-			return nil
+			return fmt.Errorf("thoughts not configured, run 'thts setup' first")
 		}
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	if !cfg.ValidateProfile(profileName) {
-		fmt.Println(ui.ErrorF("Profile %q not found.", profileName))
-		fmt.Println()
-		fmt.Println(ui.Muted("Available profiles:"))
-		if len(cfg.Profiles) > 0 {
-			for name := range cfg.Profiles {
-				fmt.Printf("  - %s\n", ui.Muted(name))
-			}
-		} else {
-			fmt.Println(ui.Muted("  (none)"))
+	var profile *config.ProfileConfig
+	var profileName string
+	var isDefault bool
+
+	if len(args) == 0 {
+		// Use default profile
+		profile, profileName = cfg.GetDefaultProfile()
+		if profile == nil {
+			return fmt.Errorf("no default profile configured")
 		}
-		return nil
+		isDefault = true
+	} else {
+		// Use named profile
+		profileName = args[0]
+		if !cfg.ValidateProfile(profileName) {
+			return fmt.Errorf("profile %q not found, run 'thts profile list' to see available profiles", profileName)
+		}
+		profile = cfg.Profiles[profileName]
+		isDefault = profile.Default
 	}
 
-	profile := cfg.Profiles[profileName]
+	// Handle --path flag: output only the expanded path
+	if showPath {
+		if profile.ThoughtsRepo == "" {
+			return fmt.Errorf("profile %q has no thoughts repo configured", profileName)
+		}
+		fmt.Println(config.ExpandPath(profile.ThoughtsRepo))
+		return nil
+	}
 
 	if showJSON {
 		data, err := json.MarshalIndent(profile, "", "  ")
@@ -77,7 +92,11 @@ func runShow(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	fmt.Println(ui.Header(fmt.Sprintf("Profile: %s", profileName)))
+	headerText := fmt.Sprintf("Profile: %s", profileName)
+	if isDefault {
+		headerText += " (default)"
+	}
+	fmt.Println(ui.Header(headerText))
 	fmt.Println()
 
 	fmt.Println(ui.SubHeader("Configuration"))
