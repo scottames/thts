@@ -376,19 +376,8 @@ func resolveDefaultGlobalDir(cfg *config.Config) (string, bool, error) {
 
 // buildTargetPath constructs the full directory path for the thought file.
 func buildTargetPath(target *AddTarget) string {
-	// For global dirs, structure is: globalDir/{scope}/{category}/{subcategory}
-	// For repo dirs, structure is: thoughts/{scope}/{category}/{subcategory}
-	parts := []string{target.ThoughtsDir}
-
-	// Global dirs already point to the global folder, so we add scope
-	// Repo thoughts dirs have scope as direct children
-	if target.IsGlobal {
-		parts = append(parts, target.ScopePath)
-	} else {
-		parts = append(parts, target.ScopePath)
-	}
-
-	parts = append(parts, target.Category)
+	// Both global and repo dirs have the same structure: {base}/{scope}/{category}/{subcategory}
+	parts := []string{target.ThoughtsDir, target.ScopePath, target.Category}
 
 	if target.SubCategory != "" {
 		parts = append(parts, target.SubCategory)

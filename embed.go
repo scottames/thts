@@ -136,23 +136,23 @@ type InstructionsData struct {
 
 // GetDefaultReadme returns the default README.md content for the thoughts repository.
 // It uses Go templates to replace placeholders with the provided values.
-func GetDefaultReadme(data ReadmeData) string {
+func GetDefaultReadme(data ReadmeData) (string, error) {
 	content, err := Defaults.ReadFile("defaults/README.md")
 	if err != nil {
-		return ""
+		return "", err
 	}
 
 	tmpl, err := template.New("readme").Parse(string(content))
 	if err != nil {
-		return ""
+		return "", err
 	}
 
 	var buf bytes.Buffer
 	if err := tmpl.Execute(&buf, data); err != nil {
-		return ""
+		return "", err
 	}
 
-	return buf.String()
+	return buf.String(), nil
 }
 
 // GetInstructions returns the rendered thts-instructions.md content.

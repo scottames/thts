@@ -206,11 +206,14 @@ func ensureThoughtsRepoExistsForProfile(profileName string, profile *config.Prof
 	// Create README if it doesn't exist
 	readmePath := filepath.Join(expandedRepo, "README.md")
 	if _, err := os.Stat(readmePath); os.IsNotExist(err) {
-		readmeContent := thtsfiles.GetDefaultReadme(thtsfiles.ReadmeData{
+		readmeContent, err := thtsfiles.GetDefaultReadme(thtsfiles.ReadmeData{
 			Profile:   profileName,
 			ReposDir:  profile.ReposDir,
 			GlobalDir: profile.GlobalDir,
 		})
+		if err != nil {
+			return fmt.Errorf("failed to generate README: %w", err)
+		}
 		if err := os.WriteFile(readmePath, []byte(readmeContent), 0644); err != nil {
 			return fmt.Errorf("failed to create README: %w", err)
 		}

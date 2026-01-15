@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"os"
+	"sort"
+	"strings"
 
 	"github.com/scottames/thts/internal/config"
 	"github.com/spf13/cobra"
@@ -118,7 +120,7 @@ func completeCategoriesFromConfig(categories map[string]*config.Category, toComp
 // completeCategoryPaths returns sorted category paths matching the input.
 func completeCategoryPaths(categories map[string]*config.Category, toComplete string) []string {
 	// Check if we're completing a sub-category (input contains /)
-	if idx := indexByte(toComplete, '/'); idx >= 0 {
+	if idx := strings.IndexByte(toComplete, '/'); idx >= 0 {
 		categoryName := toComplete[:idx]
 		subPrefix := toComplete[idx+1:]
 
@@ -138,11 +140,11 @@ func completeCategoryPaths(categories map[string]*config.Category, toComplete st
 func matchingCategories(categories map[string]*config.Category, prefix string) []string {
 	var matches []string
 	for name := range categories {
-		if hasPrefix(name, prefix) {
+		if strings.HasPrefix(name, prefix) {
 			matches = append(matches, name)
 		}
 	}
-	sortStrings(matches)
+	sort.Strings(matches)
 	return matches
 }
 
@@ -150,34 +152,10 @@ func matchingCategories(categories map[string]*config.Category, prefix string) [
 func matchingSubCategories(categoryName string, subCategories map[string]*config.SubCategory, prefix string) []string {
 	var matches []string
 	for name := range subCategories {
-		if hasPrefix(name, prefix) {
+		if strings.HasPrefix(name, prefix) {
 			matches = append(matches, categoryName+"/"+name)
 		}
 	}
-	sortStrings(matches)
+	sort.Strings(matches)
 	return matches
-}
-
-// hasPrefix checks if s starts with prefix.
-func hasPrefix(s, prefix string) bool {
-	return len(s) >= len(prefix) && s[:len(prefix)] == prefix
-}
-
-// indexByte returns the index of the first instance of c in s, or -1 if not present.
-func indexByte(s string, c byte) int {
-	for i := 0; i < len(s); i++ {
-		if s[i] == c {
-			return i
-		}
-	}
-	return -1
-}
-
-// sortStrings sorts a slice of strings in place.
-func sortStrings(s []string) {
-	for i := 1; i < len(s); i++ {
-		for j := i; j > 0 && s[j] < s[j-1]; j-- {
-			s[j], s[j-1] = s[j-1], s[j]
-		}
-	}
 }
