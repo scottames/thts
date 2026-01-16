@@ -118,8 +118,9 @@ func TestSlugify(t *testing.T) {
 		{"Multiple   Spaces", "multiple-spaces"},
 		{"Under_Score_Test", "under-score-test"},
 		{"UPPERCASE", "uppercase"},
-		{"", "untitled"},
-		{"---", "untitled"},
+		{"", ""},    // empty input returns empty (caller handles this)
+		{"---", ""}, // no alphanumeric chars returns empty
+		{"!!!", ""}, // only special chars returns empty
 		{"a", "a"},
 		// Long title should be truncated to 50 chars
 		{"This is a very long title that should be truncated to fit within the maximum allowed length for filenames", "this-is-a-very-long-title-that-should-be-truncated"},
@@ -138,17 +139,26 @@ func TestSlugify(t *testing.T) {
 func TestGenerateFilename(t *testing.T) {
 	tests := []struct {
 		title      string
-		wantPrefix string // We can't test the exact date, but we can check the pattern
 		wantSuffix string
+		wantOK     bool
 	}{
-		{"My Note", "-my-note.md", ".md"},
-		{"", "-untitled.md", ".md"},
-		{"API Design", "-api-design.md", ".md"},
+		{"My Note", "-my-note.md", true},
+		{"API Design", "-api-design.md", true},
+		{"", "", false},    // empty title is invalid
+		{"---", "", false}, // title with no alphanumeric chars is invalid
+		{"!!!", "", false}, // title with only special chars is invalid
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.title, func(t *testing.T) {
-			got := generateFilename(tt.title)
+			got, ok := generateFilename(tt.title)
+			if ok != tt.wantOK {
+				t.Errorf("generateFilename(%q) ok = %v, want %v", tt.title, ok, tt.wantOK)
+				return
+			}
+			if !tt.wantOK {
+				return // Don't check the filename if we expect failure
+			}
 			if !strings.HasSuffix(got, tt.wantSuffix) {
 				t.Errorf("generateFilename(%q) = %q, want suffix %q", tt.title, got, tt.wantSuffix)
 			}
@@ -412,30 +422,37 @@ func TestGetTemplateContent(t *testing.T) {
 		thoughtsDir  string
 		templateName string
 		wantContains string
+		wantFound    bool
 	}{
 		{
 			name:         "existing template",
 			thoughtsDir:  tmpDir,
 			templateName: "note.md",
 			wantContains: "# Test",
+			wantFound:    true,
 		},
 		{
 			name:         "non-existent template returns default",
 			thoughtsDir:  tmpDir,
 			templateName: "nonexistent.md",
 			wantContains: "date:",
+			wantFound:    false,
 		},
 		{
 			name:         "non-existent dir returns default",
 			thoughtsDir:  "/nonexistent/path",
 			templateName: "note.md",
 			wantContains: "date:",
+			wantFound:    false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := getTemplateContent(tt.thoughtsDir, tt.templateName)
+			got, found := getTemplateContent(tt.thoughtsDir, tt.templateName)
+			if found != tt.wantFound {
+				t.Errorf("getTemplateContent() found = %v, want %v", found, tt.wantFound)
+			}
 			if !strings.Contains(got, tt.wantContains) {
 				t.Errorf("getTemplateContent() = %q, want to contain %q", got, tt.wantContains)
 			}
@@ -495,5 +512,206 @@ func TestResolveAddTarget_DefaultCategory(t *testing.T) {
 
 	if target.Category != "notes" {
 		t.Errorf("resolveAddTarget() category = %q, want %q", target.Category, "notes")
+	}
+}
+
+func TestValidateAddOptions_ContentMutualExclusion(t *testing.T) {
+	tests := []struct {
+		name    string
+		opts    *AddOptions
+		wantErr string
+	}{
+		{
+			name: "content only is valid",
+			opts: &AddOptions{
+				Content: "some content",
+			},
+			wantErr: "",
+		},
+		{
+			name: "from only is valid",
+			opts: &AddOptions{
+				FromFile: "file.md",
+			},
+			wantErr: "",
+		},
+		{
+			name: "stdin only is valid",
+			opts: &AddOptions{
+				FromStdin: true,
+			},
+			wantErr: "",
+		},
+		{
+			name: "no-edit only is valid",
+			opts: &AddOptions{
+				NoEdit: true,
+			},
+			wantErr: "",
+		},
+		{
+			name: "content and from mutually exclusive",
+			opts: &AddOptions{
+				Content:  "some content",
+				FromFile: "file.md",
+			},
+			wantErr: "content argument, --from, and --stdin are mutually exclusive",
+		},
+		{
+			name: "content and stdin mutually exclusive",
+			opts: &AddOptions{
+				Content:   "some content",
+				FromStdin: true,
+			},
+			wantErr: "content argument, --from, and --stdin are mutually exclusive",
+		},
+		{
+			name: "from and stdin mutually exclusive",
+			opts: &AddOptions{
+				FromFile:  "file.md",
+				FromStdin: true,
+			},
+			wantErr: "content argument, --from, and --stdin are mutually exclusive",
+		},
+		{
+			name: "all three mutually exclusive",
+			opts: &AddOptions{
+				Content:   "some content",
+				FromFile:  "file.md",
+				FromStdin: true,
+			},
+			wantErr: "content argument, --from, and --stdin are mutually exclusive",
+		},
+		{
+			name: "no-edit with content is valid",
+			opts: &AddOptions{
+				Content: "some content",
+				NoEdit:  true,
+			},
+			wantErr: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateAddOptions(tt.opts)
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Errorf("validateAddOptions() error = %v, want nil", err)
+				}
+			} else {
+				if err == nil {
+					t.Errorf("validateAddOptions() error = nil, want %q", tt.wantErr)
+				} else if err.Error() != tt.wantErr {
+					t.Errorf("validateAddOptions() error = %q, want %q", err.Error(), tt.wantErr)
+				}
+			}
+		})
+	}
+}
+
+func TestResolveContent_InlineContent(t *testing.T) {
+	opts := &AddOptions{
+		Content: "# My Thought\n\nSome content here.",
+	}
+
+	content, shouldOpenEditor, err := resolveContent(opts, "/tmp", "default.md")
+	if err != nil {
+		t.Fatalf("resolveContent() error = %v", err)
+	}
+
+	if content != "# My Thought\n\nSome content here." {
+		t.Errorf("resolveContent() content = %q, want inline content", content)
+	}
+
+	if shouldOpenEditor {
+		t.Error("resolveContent() shouldOpenEditor = true, want false for inline content")
+	}
+}
+
+func TestResolveContent_FromFile(t *testing.T) {
+	// Create a temp file with content
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "test.md")
+	testContent := "# From File\n\nFile content here."
+	if err := os.WriteFile(testFile, []byte(testContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	opts := &AddOptions{
+		FromFile: testFile,
+	}
+
+	content, shouldOpenEditor, err := resolveContent(opts, "/tmp", "default.md")
+	if err != nil {
+		t.Fatalf("resolveContent() error = %v", err)
+	}
+
+	if content != testContent {
+		t.Errorf("resolveContent() content = %q, want file content", content)
+	}
+
+	if shouldOpenEditor {
+		t.Error("resolveContent() shouldOpenEditor = true, want false for file content")
+	}
+}
+
+func TestResolveContent_FromFile_NotFound(t *testing.T) {
+	opts := &AddOptions{
+		FromFile: "/nonexistent/path/file.md",
+	}
+
+	_, _, err := resolveContent(opts, "/tmp", "default.md")
+	if err == nil {
+		t.Fatal("resolveContent() error = nil, want error for missing file")
+	}
+
+	if !strings.Contains(err.Error(), "file not found") {
+		t.Errorf("resolveContent() error = %q, want 'file not found' error", err.Error())
+	}
+}
+
+func TestResolveContent_Template(t *testing.T) {
+	// Create temp directory with .templates/
+	tmpDir := t.TempDir()
+	templatesDir := filepath.Join(tmpDir, ".templates")
+	if err := os.MkdirAll(templatesDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a test template
+	testTemplate := "---\ndate: test\n---\n\n# Template Content\n"
+	if err := os.WriteFile(filepath.Join(templatesDir, "note.md"), []byte(testTemplate), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	opts := &AddOptions{} // No content flags
+
+	content, shouldOpenEditor, err := resolveContent(opts, tmpDir, "note.md")
+	if err != nil {
+		t.Fatalf("resolveContent() error = %v", err)
+	}
+
+	if !strings.Contains(content, "# Template Content") {
+		t.Errorf("resolveContent() content = %q, want template content", content)
+	}
+
+	if !shouldOpenEditor {
+		t.Error("resolveContent() shouldOpenEditor = false, want true for template")
+	}
+}
+
+func TestResolveContent_NoEdit(t *testing.T) {
+	opts := &AddOptions{
+		NoEdit: true,
+	}
+
+	_, shouldOpenEditor, err := resolveContent(opts, "/tmp", "default.md")
+	if err != nil {
+		t.Fatalf("resolveContent() error = %v", err)
+	}
+
+	if shouldOpenEditor {
+		t.Error("resolveContent() shouldOpenEditor = true, want false with --no-edit")
 	}
 }

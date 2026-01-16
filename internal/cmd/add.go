@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -27,14 +28,19 @@ type AddOptions struct {
 	ForceShared bool   // --shared: override scope to shared/
 	ForceUser   bool   // --personal: override scope to {user}/
 
-	// Content
-	Title string // positional arg: title for the thought
+	// Title
+	Title string // --title/-t: title for the thought
 
-	// Future extensibility:
-	// Content     string // --content: inline content (future)
-	// FromFile    string // --from: read content from file (future)
-	// FromStdin   bool   // --stdin: read content from stdin (future)
-	// NoEdit      bool   // --no-edit: skip opening editor (future)
+	// Content input (mutually exclusive)
+	Content   string // positional arg: inline content
+	FromFile  string // --from: read content from file
+	FromStdin bool   // --stdin: read content from stdin
+
+	// Editor control
+	NoEdit bool // --no-edit: skip opening editor
+
+	// Output control
+	Quiet bool // --quiet/-q: only output file path to stdout
 }
 
 // AddTarget represents the resolved target location for a new thought.
@@ -56,7 +62,7 @@ type AddResult struct {
 }
 
 var addCmd = &cobra.Command{
-	Use:   "add [title]",
+	Use:   "add [content]",
 	Short: "Add a new thought to the thoughts directory",
 	Long: `Add a new thought file to the thoughts directory.
 
@@ -69,22 +75,46 @@ Target Resolution (in order):
   3. Current git repo Use current repo's thoughts directory (if initialized)
   4. Default profile  Use default profile's global directory
 
+Content Sources (mutually exclusive):
+  [content]          Positional argument
+  --from <file>      Read content from file
+  --stdin            Read content from stdin (auto-detected when piped)
+
+By default, opens the editor after creating the file. Use --no-edit to skip.
+Piped input is automatically detected - no need to specify --stdin explicitly.
+
 Examples:
-  thts add "API design decisions"
-  thts add --in plans "New feature implementation"
-  thts add --in plans/active "Sprint 12 work"
-  thts add --in notes --shared "Team gotcha"
-  thts add --profile work --in notes "Work note"`,
+  thts add -t "API design decisions"
+  thts add -t "New feature" --in plans
+  thts add -t "Sprint 12 work" --in plans/active
+  thts add -t "Team gotcha" --in notes --shared
+  thts add -t "Work note" --profile work --in notes
+  echo "Quick note" | thts add -t "piped note" --in notes
+  thts add -t "imported plan" --from draft.md --in plans
+  thts add -t "quick todo" "TODO: investigate" --in notes
+  thts add -t "placeholder" --no-edit --in notes
+  filepath=$(thts add -t "note" -q) && echo "Created: $filepath"`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runAdd,
 }
 
 func init() {
+	addCmd.Flags().StringP("title", "t", "", "title for the thought")
 	addCmd.Flags().String("in", "", "category/sub-category path (e.g., plans, plans/active)")
 	addCmd.Flags().Bool("shared", false, "write to shared/ directory")
 	addCmd.Flags().Bool("personal", false, "write to {user}/ directory")
 	addCmd.Flags().String("repo", "", "target a specific repo's thoughts directory")
 	addCmd.Flags().String("profile", "", "target a specific profile's thoughts repo")
+
+	// Content input flags (mutually exclusive)
+	addCmd.Flags().String("from", "", "read content from file")
+	addCmd.Flags().Bool("stdin", false, "read content from stdin")
+
+	// Editor control
+	addCmd.Flags().Bool("no-edit", false, "skip opening editor")
+
+	// Output control
+	addCmd.Flags().BoolP("quiet", "q", false, "only output file path (for scripting)")
 
 	// Wire up tab completion for --in flag
 	_ = addCmd.RegisterFlagCompletionFunc("in", CompleteCategories)
@@ -105,6 +135,21 @@ func runAdd(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	// Handle missing title: prompt if TTY, error otherwise
+	if opts.Title == "" {
+		title, err := ui.PromptForInput("Enter a title:", "my-thought")
+		if err != nil {
+			if err == ui.ErrNotTerminal {
+				return fmt.Errorf("title is required")
+			}
+			if err == ui.ErrEmptyInput {
+				return fmt.Errorf("title cannot be empty")
+			}
+			return err
+		}
+		opts.Title = title
+	}
+
 	// Load config
 	cfg, err := config.Load()
 	if err != nil {
@@ -121,7 +166,10 @@ func runAdd(cmd *cobra.Command, args []string) error {
 	}
 
 	// Generate filename
-	filename := generateFilename(opts.Title)
+	filename, ok := generateFilename(opts.Title)
+	if !ok {
+		return fmt.Errorf("title %q does not produce a valid filename (must contain alphanumeric characters)", opts.Title)
+	}
 
 	// Ensure target directory exists
 	dirsCreated, err := ensureTargetDir(target.FullPath)
@@ -129,25 +177,48 @@ func runAdd(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
-	// Get template content
+	// Resolve content and editor behavior
 	templateName := cfg.GetTemplate(target.Category, target.SubCategory)
-	templateContent := getTemplateContent(target.ThoughtsDir, templateName)
+	content, shouldOpenEditor, err := resolveContent(opts, target.ThoughtsDir, templateName)
+	if err != nil {
+		return err
+	}
+
+	// Warn if a configured template wasn't found (only when using template)
+	if opts.Content == "" && opts.FromFile == "" && !opts.FromStdin {
+		_, templateFound := getTemplateContent(target.ThoughtsDir, templateName)
+		if !templateFound && templateName != "default.md" {
+			// Warnings go to stderr regardless of quiet mode
+			fmt.Fprintln(os.Stderr, ui.WarningF("Template %q not found, using default", templateName))
+		}
+	}
 
 	// Create the file
 	filePath := filepath.Join(target.FullPath, filename)
-	if err := os.WriteFile(filePath, []byte(templateContent), 0644); err != nil {
+	if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
 		return fmt.Errorf("failed to create file: %w", err)
 	}
 
 	// Report what was created
-	printAddResult(filePath, target, dirsCreated, templateName)
+	if opts.Quiet {
+		// In quiet mode, only output the file path to stdout
+		fmt.Println(filePath)
+	} else {
+		printAddResult(filePath, target, dirsCreated, templateName)
+	}
 
-	// Open in editor
+	// Open editor if needed
+	if !shouldOpenEditor {
+		return nil
+	}
+
 	editor := resolveEditor(cfg)
 	if editor == "" {
-		fmt.Println()
-		fmt.Println(ui.Info("No editor configured - file created but not opened"))
-		fmt.Println(ui.Muted("Set $EDITOR or $VISUAL, or add 'editor' to your config"))
+		if !opts.Quiet {
+			fmt.Println()
+			fmt.Println(ui.Info("No editor configured - file created but not opened"))
+			fmt.Println(ui.Muted("Set $EDITOR or $VISUAL, or add 'editor' to your config"))
+		}
 		return nil
 	}
 
@@ -158,13 +229,18 @@ func runAdd(cmd *cobra.Command, args []string) error {
 func parseAddOptions(cmd *cobra.Command, args []string) (*AddOptions, error) {
 	opts := &AddOptions{}
 
-	// Title from positional arg
+	// Content from positional arg
 	if len(args) > 0 {
-		opts.Title = args[0]
+		opts.Content = args[0]
 	}
 
 	// Flags
 	var err error
+	opts.Title, err = cmd.Flags().GetString("title")
+	if err != nil {
+		return nil, err
+	}
+
 	opts.Category, err = cmd.Flags().GetString("in")
 	if err != nil {
 		return nil, err
@@ -190,6 +266,29 @@ func parseAddOptions(cmd *cobra.Command, args []string) (*AddOptions, error) {
 		return nil, err
 	}
 
+	// Content input flags
+	opts.FromFile, err = cmd.Flags().GetString("from")
+	if err != nil {
+		return nil, err
+	}
+
+	opts.FromStdin, err = cmd.Flags().GetBool("stdin")
+	if err != nil {
+		return nil, err
+	}
+
+	// Editor control
+	opts.NoEdit, err = cmd.Flags().GetBool("no-edit")
+	if err != nil {
+		return nil, err
+	}
+
+	// Output control
+	opts.Quiet, err = cmd.Flags().GetBool("quiet")
+	if err != nil {
+		return nil, err
+	}
+
 	return opts, nil
 }
 
@@ -203,6 +302,21 @@ func validateAddOptions(opts *AddOptions) error {
 	// --shared and --personal are mutually exclusive
 	if opts.ForceShared && opts.ForceUser {
 		return fmt.Errorf("--shared and --personal are mutually exclusive")
+	}
+
+	// Content sources are mutually exclusive
+	contentSources := 0
+	if opts.Content != "" {
+		contentSources++
+	}
+	if opts.FromFile != "" {
+		contentSources++
+	}
+	if opts.FromStdin {
+		contentSources++
+	}
+	if contentSources > 1 {
+		return fmt.Errorf("content argument, --from, and --stdin are mutually exclusive")
 	}
 
 	return nil
@@ -387,15 +501,16 @@ func buildTargetPath(target *AddTarget) string {
 }
 
 // generateFilename creates a date-prefixed slug filename.
-func generateFilename(title string) string {
+// Returns the filename and a boolean indicating if the slug was valid.
+func generateFilename(title string) (string, bool) {
 	date := time.Now().Format("2006-01-02")
+	slug := slugify(title)
 
-	if title == "" {
-		return date + "-untitled.md"
+	if slug == "" {
+		return "", false
 	}
 
-	slug := slugify(title)
-	return fmt.Sprintf("%s-%s.md", date, slug)
+	return fmt.Sprintf("%s-%s.md", date, slug), true
 }
 
 // slugify converts a title to a URL/filename-safe slug.
@@ -423,10 +538,6 @@ func slugify(s string) string {
 		s = s[:50]
 		// Don't end with a hyphen
 		s = strings.TrimRight(s, "-")
-	}
-
-	if s == "" {
-		return "untitled"
 	}
 
 	return s
@@ -458,12 +569,13 @@ func ensureTargetDir(targetPath string) ([]string, error) {
 }
 
 // getTemplateContent reads template content from .templates/ or returns default.
-func getTemplateContent(thoughtsDir, templateName string) string {
+// Returns the content and whether the configured template was found.
+func getTemplateContent(thoughtsDir, templateName string) (string, bool) {
 	// Try to read from .templates/ in the thoughts dir
 	templatePath := filepath.Join(thoughtsDir, ".templates", templateName)
 	content, err := os.ReadFile(templatePath)
 	if err == nil {
-		return string(content)
+		return string(content), true
 	}
 
 	// For global dirs, try parent's .templates/ (thoughts repo root)
@@ -471,11 +583,11 @@ func getTemplateContent(thoughtsDir, templateName string) string {
 	parentTemplates := filepath.Join(filepath.Dir(thoughtsDir), ".templates", templateName)
 	content, err = os.ReadFile(parentTemplates)
 	if err == nil {
-		return string(content)
+		return string(content), true
 	}
 
 	// Return a minimal default template
-	return `---
+	defaultContent := `---
 date: ` + time.Now().Format("2006-01-02") + `
 tags: []
 ---
@@ -483,6 +595,36 @@ tags: []
 #
 
 `
+	return defaultContent, false
+}
+
+// resolveContent determines the content for the new thought file.
+// Returns (content, shouldOpenEditor, error).
+func resolveContent(opts *AddOptions, thoughtsDir, templateName string) (string, bool, error) {
+	switch {
+	case opts.Content != "":
+		return opts.Content, false, nil
+	case opts.FromFile != "":
+		content, err := os.ReadFile(opts.FromFile)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return "", false, fmt.Errorf("file not found: %s", opts.FromFile)
+			}
+			return "", false, fmt.Errorf("cannot read file %s: %w", opts.FromFile, err)
+		}
+		return string(content), false, nil
+	case opts.FromStdin || !ui.IsTerminal():
+		// Explicit --stdin flag OR auto-detect piped input
+		content, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			return "", false, fmt.Errorf("cannot read from stdin: %w", err)
+		}
+		return string(content), false, nil
+	default:
+		// Use template, open editor (unless --no-edit)
+		content, _ := getTemplateContent(thoughtsDir, templateName)
+		return content, !opts.NoEdit, nil
+	}
 }
 
 // printAddResult outputs information about the created file.

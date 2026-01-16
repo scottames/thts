@@ -19,6 +19,7 @@
 - [Syncing](#syncing)
   - [Automatic Sync](#automatic-sync)
   - [Manual Sync](#manual-sync)
+  - [Opening in Editor](#opening-in-editor)
   - [Sync Modes](#sync-modes)
   - [Handling Conflicts](#handling-conflicts)
 - [Team Collaboration](#team-collaboration)
@@ -37,6 +38,7 @@
   - [Config Options](#config-options)
   - [gitIgnore Options](#gitignore-options)
 - [Shell Completion](#shell-completion)
+  - [Loading Completions](#loading-completions)
 - [Working with AI Assistants](#working-with-ai-assistants)
   - [AI Agent Integration](#ai-agent-integration)
     - [Supported Agents](#supported-agents)
@@ -206,9 +208,9 @@ thts sync -m "Added architecture notes"
 The `thts add` command creates properly formatted thought files with templates:
 
 ```bash
-thts add "API design decisions"           # Creates in notes/ (default category)
-thts add --in plans "Feature roadmap"     # Creates in plans/
-thts add --in plans/active "Sprint work"  # Creates in plans/active/ subcategory
+thts add -t "API design decisions"           # Creates in notes/ (default category)
+thts add -t "Feature roadmap" --in plans     # Creates in plans/
+thts add -t "Sprint work" --in plans/active  # Creates in plans/active/ subcategory
 ```
 
 **What it does:**
@@ -220,8 +222,8 @@ thts add --in plans/active "Sprint work"  # Creates in plans/active/ subcategory
 **Scope control:**
 
 ```bash
-thts add --in notes "Team gotcha" --shared    # Write to shared/
-thts add --in notes "My todo" --personal      # Write to {user}/
+thts add -t "Team gotcha" --in notes --shared    # Write to shared/
+thts add -t "My todo" --in notes --personal      # Write to {user}/
 ```
 
 Without flags, scope is determined by:
@@ -229,12 +231,33 @@ Without flags, scope is determined by:
 1. The category's configured scope (e.g., `research` defaults to `shared`)
 2. Your `defaultScope` config setting (defaults to `user`)
 
+**Sub-category scope inheritance:**
+
+Sub-categories inherit their parent category's scope unless explicitly
+overridden. If a category has `scope: both` (allowing either shared or user),
+sub-categories also inherit `both` and will use your `defaultScope` setting.
+
+```yaml
+categories:
+  plans:
+    scope: both # Can be shared or user
+    subCategories:
+      active: # Inherits "both" from parent
+        description: "Active plans"
+      complete:
+        scope: shared # Explicitly set to shared
+        description: "Completed plans"
+```
+
+To ensure sub-categories always go to a specific location, set their scope
+explicitly rather than relying on inheritance.
+
 **Target selection:**
 
 ```bash
-thts add --in notes "Note"                      # Current repo (or default global)
-thts add --profile work --in notes "Work note"  # Work profile's global dir
-thts add --repo ~/other-project --in notes "X"  # Another repo's thoughts dir
+thts add -t "Note" --in notes                      # Current repo (or default global)
+thts add -t "Work note" --profile work --in notes  # Work profile's global dir
+thts add -t "X" --repo ~/other-project --in notes  # Another repo's thoughts dir
 ```
 
 Target resolution order:
@@ -243,6 +266,31 @@ Target resolution order:
 2. `--profile` flag: use that profile's global thoughts directory
 3. Current git repo: use current repo's thoughts directory (if thts initialized)
 4. Otherwise: use default profile's global directory
+
+**Content input modes:**
+
+By default, `thts add` opens your editor with the template. For scripted or
+piped usage, you can provide content directly:
+
+```bash
+# Inline content (positional argument)
+thts add -t "memory-issue" "TODO: investigate memory leak" --in notes
+
+# From an existing file
+thts add -t "imported plan" --from draft.md --in plans
+
+# From stdin (piped) - auto-detected, no flag needed
+echo "Quick note about the bug" | thts add -t "bug-note" --in notes
+cat meeting-notes.txt | thts add -t "meeting-2026-01-15" --in notes
+
+# Create file without opening editor
+thts add -t "placeholder" --no-edit --in notes
+```
+
+Piped input is automatically detected - no need to specify `--stdin` explicitly.
+Content sources are mutually exclusive (positional content, `--from`, stdin).
+When using any of these, the editor is skipped automatically. Use `--no-edit`
+with the default template behavior to create a file without opening the editor.
 
 ## Directory Organization
 
@@ -306,8 +354,8 @@ thts edit                    # Open ./thoughts/ (or default profile if not in re
 thts edit --profile work     # Open specific profile's thoughts repo
 ```
 
-**Editor resolution:** Uses config `editor` field, then `$VISUAL`, then `$EDITOR`.
-Errors if none set.
+**Editor resolution:** Uses config `editor` field, then `$VISUAL`, then
+`$EDITOR`. Errors if none set.
 
 Configure a default editor in `~/.config/thts/config.yaml`:
 
