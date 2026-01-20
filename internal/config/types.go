@@ -81,6 +81,15 @@ type SyncConfig struct {
 	Mode SyncMode `yaml:"mode,omitempty"`
 }
 
+// HooksConfig holds configuration for hook-based integration.
+type HooksConfig struct {
+	// Keywords that trigger full instruction injection.
+	// Default: research, plan, decision, thoughts, handoff, notes, save,
+	// document, capture, findings, learnings, gotchas, ADR, architecture,
+	// resume, wrap up, end session
+	Keywords []string `yaml:"keywords,omitempty"`
+}
+
 // Config represents the thts configuration.
 type Config struct {
 	User                string                    `yaml:"user"`
@@ -91,6 +100,7 @@ type Config struct {
 	DefaultTemplate     string                    `yaml:"defaultTemplate,omitempty"` // Falls back to built-in default.md
 	Sync                *SyncConfig               `yaml:"sync,omitempty"`
 	Agents              *AgentsConfig             `yaml:"agents,omitempty"`
+	Hooks               *HooksConfig              `yaml:"hooks,omitempty"`
 	Categories          map[string]*Category      `yaml:"categories,omitempty"` // Global categories
 	RepoMappings        map[string]*RepoMapping   `yaml:"repoMappings,omitempty"`
 	Profiles            map[string]*ProfileConfig `yaml:"profiles"`
@@ -421,4 +431,21 @@ func (sub *SubCategory) GetScope(parentScope CategoryScope) CategoryScope {
 		return sub.Scope
 	}
 	return parentScope
+}
+
+// DefaultHookKeywords returns the default keywords that trigger instruction injection.
+func DefaultHookKeywords() []string {
+	return []string{
+		"research", "plan", "decision", "thoughts", "handoff", "notes", "save",
+		"document", "capture", "findings", "learnings", "gotchas", "ADR",
+		"architecture", "resume", "wrap up", "end session",
+	}
+}
+
+// GetHookKeywords returns the configured hook keywords or defaults.
+func (c *Config) GetHookKeywords() []string {
+	if c.Hooks != nil && len(c.Hooks.Keywords) > 0 {
+		return c.Hooks.Keywords
+	}
+	return DefaultHookKeywords()
 }

@@ -89,6 +89,18 @@ type AgentConfig struct {
 	// If non-empty, thts will ensure this key is set to InstructionTargetFile.
 	// Example: Gemini uses "contextFileName": "AGENTS.md"
 	SettingsContextKey string
+
+	// SupportsHooks indicates if this agent supports hook-based integration.
+	// Claude, Gemini, and OpenCode support hooks. Codex does not.
+	SupportsHooks bool
+
+	// HooksDir is the directory name for hooks (e.g., "hooks" for Claude/Gemini).
+	// Empty for agents using plugins (OpenCode) or no hook support (Codex).
+	HooksDir string
+
+	// PluginsDir is the directory name for plugins (e.g., "plugins" for OpenCode).
+	// Empty for agents using hooks or no plugin support.
+	PluginsDir string
 }
 
 // AgentConfigs contains the configuration for each supported agent.
@@ -108,6 +120,9 @@ var AgentConfigs = map[AgentType]*AgentConfig{
 		GlobalUsesXDG:         false,
 		SettingsFile:          "settings.json",
 		SettingsFormat:        "json",
+		SupportsHooks:         true,
+		HooksDir:              "hooks",
+		PluginsDir:            "",
 	},
 	AgentCodex: {
 		Type:                  AgentCodex,
@@ -124,11 +139,14 @@ var AgentConfigs = map[AgentType]*AgentConfig{
 		GlobalUsesXDG:         false,
 		SettingsFile:          "config.toml",
 		SettingsFormat:        "toml",
+		SupportsHooks:         false, // Codex does not support hooks
+		HooksDir:              "",
+		PluginsDir:            "",
 	},
 	AgentOpenCode: {
 		Type:                  AgentOpenCode,
 		RootDir:               ".opencode",
-		InstructionsFile:      "",
+		InstructionsFile:      "thts-instructions.md",
 		IntegrationType:       "marker",
 		InstructionTargetFile: "AGENTS.md",
 		SkillsDir:             "skill",
@@ -140,6 +158,9 @@ var AgentConfigs = map[AgentType]*AgentConfig{
 		GlobalUsesXDG:         true, // OpenCode uses ~/.config/opencode/ for global
 		SettingsFile:          "opencode.json",
 		SettingsFormat:        "json",
+		SupportsHooks:         true,
+		HooksDir:              "",
+		PluginsDir:            "plugins",
 	},
 	AgentGemini: {
 		Type:                  AgentGemini,
@@ -158,6 +179,9 @@ var AgentConfigs = map[AgentType]*AgentConfig{
 		SettingsFormat:        "json",
 		CommandsFormat:        "toml", // Gemini uses TOML for commands
 		SettingsContextKey:    "contextFileName",
+		SupportsHooks:         true,
+		HooksDir:              "hooks",
+		PluginsDir:            "",
 	},
 }
 

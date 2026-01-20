@@ -302,6 +302,23 @@ func detectInstallation(agentDir, projectDir string, agentType agents.AgentType)
 		knownFiles = append(knownFiles, agentFiles...)
 	}
 
+	// Add hook files if agent supports hooks
+	if cfg.HooksDir != "" {
+		hookFiles := []string{
+			filepath.Join(cfg.HooksDir, "thts-session-start.sh"),
+			filepath.Join(cfg.HooksDir, "thts-prompt-check.sh"),
+		}
+		knownFiles = append(knownFiles, hookFiles...)
+	}
+
+	// Add plugin files if agent supports plugins
+	if cfg.PluginsDir != "" {
+		pluginFiles := []string{
+			filepath.Join(cfg.PluginsDir, "thts-integration.ts"),
+		}
+		knownFiles = append(knownFiles, pluginFiles...)
+	}
+
 	for _, f := range knownFiles {
 		if fsutil.Exists(filepath.Join(agentDir, f)) {
 			manifest.Files = append(manifest.Files, f)
@@ -392,12 +409,46 @@ func detectInstallation(agentDir, projectDir string, agentType agents.AgentType)
 		}
 	}
 
+	// Check for hook-based integration
+	settingsLocalPath := filepath.Join(agentDir, "settings.local.json")
+	if fsutil.Exists(settingsLocalPath) {
+		data, err := os.ReadFile(settingsLocalPath)
+		if err == nil {
+			var settings map[string]any
+			if json.Unmarshal(data, &settings) == nil {
+				if hooks, ok := settings["hooks"].([]any); ok {
+					thtsHooks := getThtsHookNames(agentType, false)
+					thtsSet := make(map[string]bool)
+					for _, h := range thtsHooks {
+						thtsSet[h] = true
+					}
+					var foundHooks []string
+					for _, hook := range hooks {
+						if hookMap, ok := hook.(map[string]any); ok {
+							if cmd, ok := hookMap["command"].(string); ok && thtsSet[cmd] {
+								foundHooks = append(foundHooks, cmd)
+							}
+						}
+					}
+					if len(foundHooks) > 0 {
+						manifest.Modifications.Hooks = &HooksModification{
+							SettingsFile: "settings.local.json",
+							HookCommands: foundHooks,
+						}
+					}
+				}
+			}
+		}
+	}
+
 	// Infer integration level
-	if fsutil.Exists(filepath.Join(agentDir, "CLAUDE.local.md")) ||
+	if manifest.Modifications.Hooks != nil {
+		manifest.IntegrationLevel = IntegrationHook
+	} else if fsutil.Exists(filepath.Join(agentDir, "CLAUDE.local.md")) ||
 		fsutil.Exists(filepath.Join(agentDir, "AGENTS.local.md")) {
-		manifest.IntegrationLevel = IntegrationLocalOnly
+		manifest.IntegrationLevel = IntegrationAgentsContentLocal
 	} else if manifest.Modifications.InstructionsMD != nil {
-		manifest.IntegrationLevel = IntegrationAlwaysOn
+		manifest.IntegrationLevel = IntegrationAgentsContent
 	} else {
 		manifest.IntegrationLevel = IntegrationOnDemand
 	}
@@ -445,6 +496,13 @@ func printRemovalPlan(plan *removalPlan) {
 		}
 	}
 
+	if plan.modifications.Hooks != nil && len(plan.modifications.Hooks.HookCommands) > 0 {
+		fmt.Println("  Hooks to remove from settings:")
+		for _, cmd := range plan.modifications.Hooks.HookCommands {
+			fmt.Printf("    %s\n", cmd)
+		}
+	}
+
 	fmt.Println()
 }
 
@@ -481,6 +539,12 @@ func performRemoval(plan *removalPlan) error {
 	if cfg.SupportsCommands && cfg.CommandsDir != "" {
 		subdirs = append(subdirs, cfg.CommandsDir)
 	}
+	if cfg.HooksDir != "" {
+		subdirs = append(subdirs, cfg.HooksDir)
+	}
+	if cfg.PluginsDir != "" {
+		subdirs = append(subdirs, cfg.PluginsDir)
+	}
 	for _, subdir := range subdirs {
 		dir := filepath.Join(plan.agentDir, subdir)
 		cleanEmptyDirs(dir)
@@ -495,7 +559,16 @@ func performRemoval(plan *removalPlan) error {
 		}
 	}
 
-	// 5. Revert instruction file modification
+	// 5. Remove hooks from settings
+	if plan.modifications.Hooks != nil {
+		if err := removeHooksFromSettings(plan.agentDir, plan.modifications.Hooks); err != nil {
+			warnings = append(warnings, fmt.Sprintf("failed to remove hooks from settings: %v", err))
+		} else {
+			fmt.Println(ui.Success("Removed thts hooks from settings"))
+		}
+	}
+
+	// 6. Revert instruction file modification
 	if plan.modifications.InstructionsMD != nil {
 		if err := removeThtsIntegration(plan.modifications.InstructionsMD, plan.agentType); err != nil {
 			warnings = append(warnings, fmt.Sprintf("failed to clean instruction file: %v", err))
@@ -504,7 +577,7 @@ func performRemoval(plan *removalPlan) error {
 		}
 	}
 
-	// 6. Remove gitignore patterns
+	// 7. Remove gitignore patterns
 	if plan.modifications.Gitignore != nil {
 		for _, pattern := range plan.modifications.Gitignore.Patterns {
 			removed, err := fsutil.RemoveFromGitignore(plan.projectDir, pattern, "project")
@@ -516,7 +589,7 @@ func performRemoval(plan *removalPlan) error {
 		}
 	}
 
-	// 7. Remove manifest itself
+	// 8. Remove manifest itself
 	manifestPath := filepath.Join(plan.agentDir, ManifestFile)
 	_ = os.Remove(manifestPath)
 
@@ -731,6 +804,139 @@ func removeSettingsContextKey(agentDir string, cfg *agents.AgentConfig) error {
 	return os.WriteFile(settingsPath, append(newData, '\n'), 0644)
 }
 
+// removeHooksFromSettings removes thts hooks from settings.local.json.
+func removeHooksFromSettings(agentDir string, mod *HooksModification) error {
+	if mod == nil || mod.SettingsFile == "" {
+		return nil
+	}
+
+	settingsPath := filepath.Join(agentDir, mod.SettingsFile)
+	if !fsutil.Exists(settingsPath) {
+		return nil
+	}
+
+	data, err := os.ReadFile(settingsPath)
+	if err != nil {
+		return err
+	}
+
+	var settings map[string]any
+	if err := json.Unmarshal(data, &settings); err != nil {
+		return err
+	}
+
+	// Get existing hooks
+	hooks, ok := settings["hooks"].([]any)
+	if !ok {
+		return nil // No hooks to remove
+	}
+
+	// Build set of commands to remove
+	removeSet := make(map[string]bool)
+	for _, cmd := range mod.HookCommands {
+		removeSet[cmd] = true
+	}
+
+	// Filter out thts hooks
+	var newHooks []any
+	for _, hook := range hooks {
+		hookMap, ok := hook.(map[string]any)
+		if !ok {
+			newHooks = append(newHooks, hook)
+			continue
+		}
+		cmd, _ := hookMap["command"].(string)
+		if !removeSet[cmd] {
+			newHooks = append(newHooks, hook)
+		}
+	}
+
+	// Update or remove hooks key
+	if len(newHooks) == 0 {
+		delete(settings, "hooks")
+	} else {
+		settings["hooks"] = newHooks
+	}
+
+	// Write back (or delete if empty)
+	if len(settings) == 0 {
+		return os.Remove(settingsPath)
+	}
+
+	newData, err := json.MarshalIndent(settings, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(settingsPath, append(newData, '\n'), 0644)
+}
+
+// removeGlobalHooksFromSettings removes thts hooks from a global settings.local.json file.
+// Takes the full path to the settings file and the list of agent names that had hooks installed.
+func removeGlobalHooksFromSettings(settingsPath string, agentNames []string) error {
+	if !fsutil.Exists(settingsPath) {
+		return nil
+	}
+
+	data, err := os.ReadFile(settingsPath)
+	if err != nil {
+		return err
+	}
+
+	var settings map[string]any
+	if err := json.Unmarshal(data, &settings); err != nil {
+		return err
+	}
+
+	hooks, ok := settings["hooks"].([]any)
+	if !ok {
+		return nil // No hooks to remove
+	}
+
+	// Build set of thts hook commands to remove (global paths)
+	removeSet := make(map[string]bool)
+	for _, agentName := range agentNames {
+		agentType := agents.AgentType(agentName)
+		thtsHooks := getThtsHookNames(agentType, true) // true = global paths
+		for _, cmd := range thtsHooks {
+			removeSet[cmd] = true
+		}
+	}
+
+	// Filter out thts hooks
+	var newHooks []any
+	for _, hook := range hooks {
+		hookMap, ok := hook.(map[string]any)
+		if !ok {
+			newHooks = append(newHooks, hook)
+			continue
+		}
+		cmd, _ := hookMap["command"].(string)
+		if !removeSet[cmd] {
+			newHooks = append(newHooks, hook)
+		}
+	}
+
+	// Update or remove hooks key
+	if len(newHooks) == 0 {
+		delete(settings, "hooks")
+	} else {
+		settings["hooks"] = newHooks
+	}
+
+	// Write back (or delete if empty)
+	if len(settings) == 0 {
+		return os.Remove(settingsPath)
+	}
+
+	newData, err := json.MarshalIndent(settings, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(settingsPath, append(newData, '\n'), 0644)
+}
+
 // confirmRemoval prompts for confirmation.
 func confirmRemoval() bool {
 	var confirm bool
@@ -876,9 +1082,21 @@ func runGlobalUninit(_ *cobra.Command, _ []string) error {
 		}
 	}
 
-	// Remove files
+	// Remove files, with special handling for hooks
 	var removed int
+	hooksInfo := manifest.Components["hooks"]
+
 	for _, f := range manifest.GetAllFiles() {
+		// Special handling for settings.local.json - remove hooks from it rather than deleting
+		if hooksInfo != nil && strings.HasSuffix(f, "settings.local.json") {
+			if err := removeGlobalHooksFromSettings(f, hooksInfo.Agents); err != nil {
+				fmt.Println(ui.WarningF("  Could not remove hooks from %s: %v", config.ContractPath(f), err))
+			} else {
+				fmt.Printf("  %s Removed hooks from %s\n", ui.Success(""), config.ContractPath(f))
+			}
+			continue
+		}
+
 		if err := os.Remove(f); err != nil {
 			if !os.IsNotExist(err) {
 				fmt.Println(ui.WarningF("  Could not remove %s: %v", config.ContractPath(f), err))

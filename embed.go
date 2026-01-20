@@ -96,6 +96,21 @@ var Templates embed.FS
 //go:embed settings/*
 var Settings embed.FS
 
+// ClaudeHooks contains embedded hook scripts for Claude Code.
+//
+//go:embed hooks/claude/*.sh
+var ClaudeHooks embed.FS
+
+// GeminiHooks contains embedded hook scripts for Gemini CLI.
+//
+//go:embed hooks/gemini/*.sh
+var GeminiHooks embed.FS
+
+// OpenCodePlugins contains embedded plugin files for OpenCode.
+//
+//go:embed plugins/opencode/*.ts
+var OpenCodePlugins embed.FS
+
 // Defaults contains embedded default files for the thoughts repository.
 // Currently includes the root README.md created during setup.
 //

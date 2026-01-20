@@ -174,8 +174,8 @@ func TestAgentConfigProperties(t *testing.T) {
 	if opencode.InstructionTargetFile != "AGENTS.md" {
 		t.Errorf("OpenCode InstructionTargetFile = %q, want AGENTS.md", opencode.InstructionTargetFile)
 	}
-	if opencode.InstructionsFile != "" {
-		t.Errorf("OpenCode InstructionsFile = %q, want empty (inline in AGENTS.md)", opencode.InstructionsFile)
+	if opencode.InstructionsFile != "thts-instructions.md" {
+		t.Errorf("OpenCode InstructionsFile = %q, want thts-instructions.md (for plugin injection)", opencode.InstructionsFile)
 	}
 	if opencode.SkillsDir != "skill" {
 		t.Errorf("OpenCode SkillsDir = %q, want skill", opencode.SkillsDir)

@@ -84,16 +84,28 @@ binary and copied to agent directories by `thts agents init`.
 OpenCode uses XDG for global config (`~/.config/opencode/`).
 Gemini uses TOML format for commands and doesn't support the agents feature.
 
+### Hook Support
+
+| Agent    | Hook Support | Hook Events                             | Settings File         |
+| -------- | ------------ | --------------------------------------- | --------------------- |
+| Claude   | Yes          | `SessionStart`, `UserPromptSubmit`      | `settings.local.json` |
+| Gemini   | Yes          | `SessionStart`, `BeforeAgent`           | `settings.local.json` |
+| OpenCode | Yes (plugin) | `session.created`, `session.compacting` | N/A (plugin)          |
+| Codex    | No           | N/A                                     | N/A                   |
+
 ### Embedded Files
 
-| File                   | Purpose                       | Agent Support |
-| ---------------------- | ----------------------------- | ------------- |
-| `AGENTS.md`            | Shared thoughts/ instructions | All           |
-| `thts-integrate`       | On-demand activation skill    | All           |
-| `thts-handoff.md`      | Session handoff command       | All           |
-| `thts-resume.md`       | Resume from handoff command   | All           |
-| `thoughts-locator.md`  | Find documents agent          | All           |
-| `thoughts-analyzer.md` | Analyze documents agent       | All           |
+| File                    | Purpose                       | Agent Support  |
+| ----------------------- | ----------------------------- | -------------- |
+| `AGENTS.md`             | Shared thoughts/ instructions | All            |
+| `thts-integrate`        | On-demand activation skill    | All            |
+| `thts-handoff.md`       | Session handoff command       | All            |
+| `thts-resume.md`        | Resume from handoff command   | All            |
+| `thoughts-locator.md`   | Find documents agent          | All            |
+| `thoughts-analyzer.md`  | Analyze documents agent       | All            |
+| `thts-session-start.sh` | Hook: bootstrap instructions  | Claude, Gemini |
+| `thts-prompt-check.sh`  | Hook: keyword detection       | Claude, Gemini |
+| `thts-integration.ts`   | Plugin: instruction injection | OpenCode       |
 
 ## Reference
 

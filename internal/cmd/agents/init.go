@@ -42,10 +42,28 @@ const (
 type IntegrationLevel string
 
 const (
-	IntegrationAlwaysOn  IntegrationLevel = "always-on"
-	IntegrationLocalOnly IntegrationLevel = "local-only"
-	IntegrationOnDemand  IntegrationLevel = "on-demand"
+	IntegrationHook               IntegrationLevel = "hook"                 // NEW DEFAULT: Hook-based integration
+	IntegrationAgentsContent      IntegrationLevel = "agents-content"       // Marker injection into AGENTS.md
+	IntegrationAgentsContentLocal IntegrationLevel = "agents-content-local" // Local file, gitignored
+	IntegrationOnDemand           IntegrationLevel = "on-demand"            // Just skills/commands
+
+	// Deprecated aliases for backwards compatibility
+	IntegrationAlwaysOn  IntegrationLevel = "always-on"  // Alias for agents-content
+	IntegrationLocalOnly IntegrationLevel = "local-only" // Alias for agents-content-local
 )
+
+// normalizeIntegrationLevel converts legacy level names to current names.
+// Used when reading manifests from older thts versions.
+func normalizeIntegrationLevel(level IntegrationLevel) IntegrationLevel {
+	switch level {
+	case IntegrationAlwaysOn:
+		return IntegrationAgentsContent
+	case IntegrationLocalOnly:
+		return IntegrationAgentsContentLocal
+	default:
+		return level
+	}
+}
 
 // ManifestFile is the name of the manifest file that tracks init operations.
 const ManifestFile = "thts-manifest.json"
@@ -75,6 +93,7 @@ type Manifest struct {
 type ManifestModifications struct {
 	InstructionsMD *InstructionsMDModification `json:"instructionsMD,omitempty"`
 	Gitignore      *GitignoreModification      `json:"gitignore,omitempty"`
+	Hooks          *HooksModification          `json:"hooks,omitempty"`
 }
 
 // InstructionsMDModification tracks changes made to instruction files.
@@ -93,6 +112,12 @@ type InstructionsMDModification struct {
 // GitignoreModification tracks patterns added to .gitignore.
 type GitignoreModification struct {
 	Patterns []string `json:"patterns"`
+}
+
+// HooksModification tracks hooks added to settings files.
+type HooksModification struct {
+	SettingsFile string   `json:"settingsFile"`
+	HookCommands []string `json:"hookCommands"`
 }
 
 var initCmd = &cobra.Command{
@@ -116,6 +141,7 @@ Agent selection priority:
   4. Interactive prompt (or error in non-interactive mode)
 
 Integration levels:
+  - Hook-based (default): Loads on keyword detection, keeps CLAUDE.md clean
   - Always-on (AGENTS.md): Adds @include to project's AGENTS.md/CLAUDE.md
   - Always-on (local): Creates local instructions file (gitignored)
   - On-demand: Just installs skill/commands for manual invocation`,
@@ -296,15 +322,16 @@ func promptAgentSelection() ([]agents.AgentType, error) {
 // selectIntegrationLevel prompts user to select how thoughts/ integration is activated.
 func selectIntegrationLevel() (IntegrationLevel, error) {
 	if !initInteractive {
-		return IntegrationAlwaysOn, nil
+		return IntegrationHook, nil // New default
 	}
 
 	var level string
 	err := huh.NewSelect[string]().
 		Title("How would you like to integrate thoughts/?").
 		Options(
-			huh.NewOption("Always-on (add to AGENTS.md/CLAUDE.md) - Adds @include to instructions", string(IntegrationAlwaysOn)),
-			huh.NewOption("Always-on (local only) - Creates local instructions file (gitignored)", string(IntegrationLocalOnly)),
+			huh.NewOption("Hook-based (recommended) - Loads on keyword detection, keeps CLAUDE.md clean", string(IntegrationHook)),
+			huh.NewOption("Always-on (AGENTS.md) - Adds @include to instructions", string(IntegrationAgentsContent)),
+			huh.NewOption("Always-on (local only) - Creates local instructions file (gitignored)", string(IntegrationAgentsContentLocal)),
 			huh.NewOption("On-demand only - Just installs skill and commands", string(IntegrationOnDemand)),
 		).
 		Value(&level).
@@ -434,15 +461,26 @@ func initAgent(projectDir string, agentType agents.AgentType, level IntegrationL
 	}
 
 	// Setup integration level
-	instMod, gitignorePatterns, err := setupIntegrationLevel(projectDir, agentDir, agentConfig, level)
-	if err != nil {
-		fmt.Println(ui.WarningF("  Could not setup integration: %v", err))
-	} else {
-		if instMod != nil {
-			manifest.Modifications.InstructionsMD = instMod
+	// Normalize level for legacy manifests
+	level = normalizeIntegrationLevel(level)
+
+	if level == IntegrationHook {
+		// Hook-based integration
+		if err := setupHookIntegration(projectDir, agentDir, agentType, agentConfig, manifest); err != nil {
+			fmt.Println(ui.WarningF("  Could not setup hook integration: %v", err))
 		}
-		if len(gitignorePatterns) > 0 {
-			manifest.Modifications.Gitignore = &GitignoreModification{Patterns: gitignorePatterns}
+	} else {
+		// Traditional integration (markers or config)
+		instMod, gitignorePatterns, err := setupIntegrationLevel(projectDir, agentDir, agentConfig, level)
+		if err != nil {
+			fmt.Println(ui.WarningF("  Could not setup integration: %v", err))
+		} else {
+			if instMod != nil {
+				manifest.Modifications.InstructionsMD = instMod
+			}
+			if len(gitignorePatterns) > 0 {
+				manifest.Modifications.Gitignore = &GitignoreModification{Patterns: gitignorePatterns}
+			}
 		}
 	}
 
@@ -743,6 +781,86 @@ func getCommandsFS(agentType agents.AgentType) fs.FS {
 	}
 }
 
+// getHooksFS returns the embedded FS for hooks for an agent type.
+// Returns nil for agents that don't support hooks (e.g., Codex) or use plugins (OpenCode).
+func getHooksFS(agentType agents.AgentType) fs.FS {
+	switch agentType {
+	case agents.AgentClaude:
+		return thtsfiles.ClaudeHooks
+	case agents.AgentGemini:
+		return thtsfiles.GeminiHooks
+	default:
+		return nil
+	}
+}
+
+// getPluginsFS returns the embedded FS for plugins for an agent type.
+// Returns nil for agents that don't support plugins.
+func getPluginsFS(agentType agents.AgentType) fs.FS {
+	switch agentType {
+	case agents.AgentOpenCode:
+		return thtsfiles.OpenCodePlugins
+	default:
+		return nil
+	}
+}
+
+// copyHooks copies hook scripts for an agent type.
+// Returns 0, nil, nil if the agent doesn't support hooks.
+func copyHooks(agentDir string, agentType agents.AgentType, cfg *agents.AgentConfig) (int, []string, error) {
+	if cfg.HooksDir == "" {
+		return 0, nil, nil
+	}
+
+	hooksDir := filepath.Join(agentDir, cfg.HooksDir)
+	if err := os.MkdirAll(hooksDir, 0755); err != nil {
+		return 0, nil, err
+	}
+
+	embedFS := getHooksFS(agentType)
+	if embedFS == nil {
+		return 0, nil, nil
+	}
+
+	srcDir := fmt.Sprintf("hooks/%s", agentType)
+	return copyFlatFilesWithExt(embedFS, srcDir, hooksDir, ".sh")
+}
+
+// copyPlugins copies plugin files for an agent type.
+// Returns 0, nil, nil if the agent doesn't support plugins.
+func copyPlugins(agentDir string, agentType agents.AgentType, cfg *agents.AgentConfig) (int, []string, error) {
+	if cfg.PluginsDir == "" {
+		return 0, nil, nil
+	}
+
+	pluginsDir := filepath.Join(agentDir, cfg.PluginsDir)
+	if err := os.MkdirAll(pluginsDir, 0755); err != nil {
+		return 0, nil, err
+	}
+
+	embedFS := getPluginsFS(agentType)
+	if embedFS == nil {
+		return 0, nil, nil
+	}
+
+	srcDir := fmt.Sprintf("plugins/%s", agentType)
+	return copyFlatFilesWithExt(embedFS, srcDir, pluginsDir, ".ts")
+}
+
+// makeHooksExecutable sets executable permission on hook scripts.
+func makeHooksExecutable(agentDir string, cfg *agents.AgentConfig, files []string) error {
+	if cfg.HooksDir == "" {
+		return nil
+	}
+	for _, f := range files {
+		path := filepath.Join(agentDir, cfg.HooksDir, f)
+		if err := os.Chmod(path, 0755); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // ensureSettingsContextKey ensures the agent's settings file has the context key configured.
 // For agents like Gemini, this sets "contextFileName": "AGENTS.md" in settings.json.
 // This function is non-destructive: it preserves any existing configuration.
@@ -793,8 +911,15 @@ func ensureSettingsContextKey(agentDir string, cfg *agents.AgentConfig) error {
 func setupIntegrationLevel(projectDir, agentDir string, cfg *agents.AgentConfig, level IntegrationLevel) (*InstructionsMDModification, []string, error) {
 	var gitignorePatterns []string
 
+	// Normalize legacy level names
+	level = normalizeIntegrationLevel(level)
+
 	switch level {
-	case IntegrationAlwaysOn:
+	case IntegrationHook:
+		// Hook mode is handled separately in initAgent via setupHookIntegration
+		return nil, nil, fmt.Errorf("hook integration should be set up via setupHookIntegration")
+
+	case IntegrationAgentsContent:
 		gitRoot, err := git.GetRepoTopLevelAt(projectDir)
 		if err != nil {
 			gitRoot = projectDir
@@ -821,7 +946,7 @@ func setupIntegrationLevel(projectDir, agentDir string, cfg *agents.AgentConfig,
 			return nil, nil, fmt.Errorf("unknown integration type: %s", cfg.IntegrationType)
 		}
 
-	case IntegrationLocalOnly:
+	case IntegrationAgentsContentLocal:
 		var localFile string
 		if cfg.Type == agents.AgentClaude {
 			// For Claude, use CLAUDE.local.md
@@ -1127,6 +1252,281 @@ func buildClaudeSettings() string {
 	return string(content) + "\n"
 }
 
+// mergeHooksIntoSettings adds hook configuration to settings.local.json without clobbering existing config.
+// If isGlobal is true, uses absolute paths for hooks; otherwise uses relative paths.
+// Returns the path to the settings file and whether it was created/modified.
+func mergeHooksIntoSettings(agentDir string, agentType agents.AgentType, cfg *agents.AgentConfig, isGlobal bool) (string, bool, error) {
+	// Determine settings file (prefer local variant for hooks)
+	settingsFile := "settings.local.json"
+	if cfg.SettingsFormat == "toml" {
+		return "", false, fmt.Errorf("hook integration not supported for TOML settings (agent: %s)", agentType)
+	}
+
+	settingsPath := filepath.Join(agentDir, settingsFile)
+
+	// Load existing settings or create new
+	var settings map[string]any
+	if fsutil.Exists(settingsPath) {
+		data, err := os.ReadFile(settingsPath)
+		if err != nil {
+			return "", false, fmt.Errorf("failed to read %s: %w", settingsFile, err)
+		}
+		if err := json.Unmarshal(data, &settings); err != nil {
+			return "", false, fmt.Errorf("failed to parse %s: %w", settingsFile, err)
+		}
+	} else {
+		settings = make(map[string]any)
+	}
+
+	// Build hooks configuration based on agent type
+	hooksConfig := buildHooksConfig(agentType, cfg, isGlobal)
+	if hooksConfig == nil {
+		return "", false, nil // Agent doesn't support hooks
+	}
+
+	// Merge hooks into settings
+	existingHooks, hasHooks := settings["hooks"].([]any)
+	if !hasHooks {
+		existingHooks = []any{}
+	}
+
+	// Check if thts hooks already exist
+	thtsHookNames := getThtsHookNames(agentType, isGlobal)
+	newHooks := filterOutThtsHooks(existingHooks, thtsHookNames)
+	newHooks = append(newHooks, hooksConfig...)
+	settings["hooks"] = newHooks
+
+	// Write back with proper formatting
+	data, err := json.MarshalIndent(settings, "", "  ")
+	if err != nil {
+		return "", false, fmt.Errorf("failed to marshal settings: %w", err)
+	}
+	if err := os.WriteFile(settingsPath, append(data, '\n'), 0644); err != nil {
+		return "", false, fmt.Errorf("failed to write %s: %w", settingsFile, err)
+	}
+
+	return settingsPath, true, nil
+}
+
+// buildHooksConfig returns the hooks configuration for an agent type.
+// If isGlobal is true, uses absolute paths; otherwise uses relative paths.
+func buildHooksConfig(agentType agents.AgentType, cfg *agents.AgentConfig, isGlobal bool) []any {
+	if !cfg.SupportsHooks || cfg.HooksDir == "" {
+		return nil
+	}
+
+	// Build the path prefix based on global vs project scope
+	var pathPrefix string
+	if isGlobal {
+		// Global: use absolute path to global agent directory
+		pathPrefix = filepath.Join(config.GlobalAgentDir(string(agentType)), cfg.HooksDir)
+	} else {
+		// Project: use relative path from project root
+		pathPrefix = fmt.Sprintf("./%s/%s", cfg.RootDir, cfg.HooksDir)
+	}
+
+	switch agentType {
+	case agents.AgentClaude:
+		return []any{
+			map[string]any{
+				"event":   "SessionStart",
+				"command": filepath.Join(pathPrefix, "thts-session-start.sh"),
+			},
+			map[string]any{
+				"event":   "UserPromptSubmit",
+				"command": filepath.Join(pathPrefix, "thts-prompt-check.sh"),
+			},
+		}
+	case agents.AgentGemini:
+		return []any{
+			map[string]any{
+				"event":   "SessionStart",
+				"command": filepath.Join(pathPrefix, "thts-session-start.sh"),
+			},
+			map[string]any{
+				"event":   "BeforeAgent",
+				"command": filepath.Join(pathPrefix, "thts-prompt-check.sh"),
+			},
+		}
+	default:
+		return nil
+	}
+}
+
+// getThtsHookNames returns the command patterns for thts hooks.
+// If isGlobal is true, returns absolute paths; otherwise returns relative paths.
+func getThtsHookNames(agentType agents.AgentType, isGlobal bool) []string {
+	cfg := agents.GetConfig(agentType)
+	if cfg == nil || cfg.HooksDir == "" {
+		return nil
+	}
+
+	var pathPrefix string
+	if isGlobal {
+		pathPrefix = filepath.Join(config.GlobalAgentDir(string(agentType)), cfg.HooksDir)
+	} else {
+		pathPrefix = fmt.Sprintf("./%s/%s", cfg.RootDir, cfg.HooksDir)
+	}
+
+	return []string{
+		filepath.Join(pathPrefix, "thts-session-start.sh"),
+		filepath.Join(pathPrefix, "thts-prompt-check.sh"),
+	}
+}
+
+// filterOutThtsHooks removes existing thts hooks from a hooks array.
+func filterOutThtsHooks(hooks []any, thtsNames []string) []any {
+	var filtered []any
+	thtsSet := make(map[string]bool)
+	for _, name := range thtsNames {
+		thtsSet[name] = true
+	}
+
+	for _, hook := range hooks {
+		hookMap, ok := hook.(map[string]any)
+		if !ok {
+			filtered = append(filtered, hook)
+			continue
+		}
+		cmd, _ := hookMap["command"].(string)
+		if !thtsSet[cmd] {
+			filtered = append(filtered, hook)
+		}
+	}
+	return filtered
+}
+
+// setupHookIntegration sets up hook-based integration for an agent.
+// Returns files created and any error.
+func setupHookIntegration(projectDir, agentDir string, agentType agents.AgentType, cfg *agents.AgentConfig, manifest *Manifest) error {
+	// Check if agent supports hooks
+	if !cfg.SupportsHooks {
+		// Fall back to agents-content with warning
+		fmt.Println(ui.WarningF("  %s does not support hooks, falling back to agents-content mode", agents.AgentTypeLabels[agentType]))
+		_, _, err := setupIntegrationLevel(projectDir, agentDir, cfg, IntegrationAgentsContent)
+		if err != nil {
+			return err
+		}
+		manifest.IntegrationLevel = IntegrationAgentsContent
+		return nil
+	}
+
+	// Copy hook scripts or plugins
+	if cfg.HooksDir != "" {
+		copied, files, err := copyHooks(agentDir, agentType, cfg)
+		if err != nil {
+			return fmt.Errorf("failed to copy hooks: %w", err)
+		}
+		if copied > 0 {
+			// Make hooks executable
+			if err := makeHooksExecutable(agentDir, cfg, files); err != nil {
+				return fmt.Errorf("failed to make hooks executable: %w", err)
+			}
+			for _, f := range files {
+				manifest.Files = append(manifest.Files, filepath.Join(cfg.HooksDir, f))
+			}
+			fmt.Println(ui.SuccessF("  Copied %d hook script(s)", copied))
+		}
+	}
+
+	if cfg.PluginsDir != "" {
+		copied, files, err := copyPlugins(agentDir, agentType, cfg)
+		if err != nil {
+			return fmt.Errorf("failed to copy plugins: %w", err)
+		}
+		if copied > 0 {
+			for _, f := range files {
+				manifest.Files = append(manifest.Files, filepath.Join(cfg.PluginsDir, f))
+			}
+			fmt.Println(ui.SuccessF("  Copied %d plugin(s)", copied))
+		}
+	}
+
+	// Merge hooks into settings.local.json (Claude/Gemini only)
+	if cfg.HooksDir != "" {
+		settingsPath, modified, err := mergeHooksIntoSettings(agentDir, agentType, cfg, false)
+		if err != nil {
+			return fmt.Errorf("failed to configure hooks in settings: %w", err)
+		}
+		if modified {
+			manifest.Files = append(manifest.Files, filepath.Base(settingsPath))
+			fmt.Println(ui.SuccessF("  Configured hooks in %s", filepath.Base(settingsPath)))
+		}
+	}
+
+	// Add gitignore pattern for settings.local.json
+	pattern := filepath.Join(cfg.RootDir, "settings.local.json")
+	added, err := fsutil.AddToGitignore(projectDir, pattern, "project")
+	if err != nil {
+		fmt.Println(ui.WarningF("  Could not update .gitignore: %v", err))
+	} else if added {
+		if manifest.Modifications.Gitignore == nil {
+			manifest.Modifications.Gitignore = &GitignoreModification{}
+		}
+		manifest.Modifications.Gitignore.Patterns = append(manifest.Modifications.Gitignore.Patterns, pattern)
+		fmt.Println(ui.InfoF("  Updated .gitignore to exclude %s", filepath.Base(pattern)))
+	}
+
+	// Track hooks in manifest for uninit
+	if cfg.HooksDir != "" {
+		manifest.Modifications.Hooks = &HooksModification{
+			SettingsFile: "settings.local.json",
+			HookCommands: getThtsHookNames(agentType, false),
+		}
+	}
+
+	fmt.Println(ui.Info("  Hook mode: instructions load on keyword detection"))
+	return nil
+}
+
+// installGlobalHooks installs hook scripts to the global agent directory.
+// Returns the list of installed files as full paths.
+func installGlobalHooks(globalDir string, agentType agents.AgentType, cfg *agents.AgentConfig) ([]string, error) {
+	var installedFiles []string
+
+	// Copy hook scripts (Claude/Gemini)
+	if cfg.HooksDir != "" {
+		_, hookFiles, err := copyHooks(globalDir, agentType, cfg)
+		if err != nil {
+			return nil, fmt.Errorf("failed to copy hooks: %w", err)
+		}
+		if len(hookFiles) > 0 {
+			// Make hooks executable
+			if err := makeHooksExecutable(globalDir, cfg, hookFiles); err != nil {
+				return nil, fmt.Errorf("failed to make hooks executable: %w", err)
+			}
+			// Convert to full paths
+			for _, f := range hookFiles {
+				installedFiles = append(installedFiles, filepath.Join(globalDir, cfg.HooksDir, f))
+			}
+		}
+	}
+
+	// Copy plugins (OpenCode)
+	if cfg.PluginsDir != "" {
+		_, pluginFiles, err := copyPlugins(globalDir, agentType, cfg)
+		if err != nil {
+			return nil, fmt.Errorf("failed to copy plugins: %w", err)
+		}
+		for _, f := range pluginFiles {
+			installedFiles = append(installedFiles, filepath.Join(globalDir, cfg.PluginsDir, f))
+		}
+	}
+
+	// Merge hooks into global settings.local.json
+	if cfg.HooksDir != "" {
+		settingsPath, modified, err := mergeHooksIntoSettings(globalDir, agentType, cfg, true)
+		if err != nil {
+			return nil, fmt.Errorf("failed to configure hooks in settings: %w", err)
+		}
+		if modified {
+			installedFiles = append(installedFiles, settingsPath)
+		}
+	}
+
+	return installedFiles, nil
+}
+
 // writeManifest writes the manifest file tracking init operations.
 func writeManifest(agentDir string, manifest *Manifest) error {
 	manifest.Version = 1
@@ -1203,13 +1603,17 @@ func getGitignorePatterns(agentType agents.AgentType) []string {
 
 	// Use wildcards for clean patterns:
 	// - thts-* matches thts-manifest.json, thts-instructions.md in root
-	// - */thts-* matches skills/thts-integrate*, commands/thts-*
+	// - */thts-* matches skills/thts-integrate*, commands/thts-*, hooks/thts-*, plugins/thts-*
 	// - */thoughts-* matches agents/thoughts-*
-	return []string{
+	// - settings.local.json for hook configuration
+	patterns := []string{
 		cfg.RootDir + "/thts-*",
 		cfg.RootDir + "/*/thts-*",
 		cfg.RootDir + "/*/thoughts-*",
+		cfg.RootDir + "/settings.local.json",
 	}
+
+	return patterns
 }
 
 // patternsEqual checks if two pattern slices are equal.
@@ -1322,8 +1726,35 @@ func refreshAgentSetup(projectDir string, agentTypes []agents.AgentType) error {
 			}
 		}
 
-		// Update integration (refresh marker block content if using markers)
-		if manifest.IntegrationLevel == IntegrationAlwaysOn {
+		// Update integration based on level
+		level := normalizeIntegrationLevel(manifest.IntegrationLevel)
+		switch level {
+		case IntegrationHook:
+			// Refresh hook scripts
+			if agentConfig.HooksDir != "" {
+				copied, files, err := copyHooks(agentDir, agentType, agentConfig)
+				if err != nil {
+					fmt.Println(ui.WarningF("  Could not update hooks: %v", err))
+				} else if copied > 0 {
+					if err := makeHooksExecutable(agentDir, agentConfig, files); err != nil {
+						fmt.Println(ui.WarningF("  Could not make hooks executable: %v", err))
+					}
+					filesUpdated += copied
+					fmt.Println(ui.SuccessF("  Updated %d hook script(s)", copied))
+				}
+			}
+			// Refresh plugins
+			if agentConfig.PluginsDir != "" {
+				copied, _, err := copyPlugins(agentDir, agentType, agentConfig)
+				if err != nil {
+					fmt.Println(ui.WarningF("  Could not update plugins: %v", err))
+				} else if copied > 0 {
+					filesUpdated += copied
+					fmt.Println(ui.SuccessF("  Updated %d plugin(s)", copied))
+				}
+			}
+		case IntegrationAgentsContent:
+			// Refresh marker block content
 			if err := refreshIntegration(projectDir, agentDir, agentConfig, cfg); err != nil {
 				fmt.Println(ui.WarningF("  Could not update integration: %v", err))
 			}
@@ -1572,7 +2003,7 @@ func parseGlobalComponents(value string) ([]string, error) {
 	}
 
 	if value == "all" {
-		return []string{"skills", "commands", "agents"}, nil
+		return []string{"skills", "commands", "agents", "hooks"}, nil
 	}
 
 	// Parse comma-separated list
@@ -1581,6 +2012,7 @@ func parseGlobalComponents(value string) ([]string, error) {
 		"skills":   true,
 		"commands": true,
 		"agents":   true,
+		"hooks":    true,
 	}
 
 	for _, c := range strings.Split(value, ",") {
@@ -1589,7 +2021,7 @@ func parseGlobalComponents(value string) ([]string, error) {
 			continue
 		}
 		if !validComponents[c] {
-			return nil, fmt.Errorf("invalid component: %s (valid: skills, commands, agents)", c)
+			return nil, fmt.Errorf("invalid component: %s (valid: skills, commands, agents, hooks)", c)
 		}
 		components = append(components, c)
 	}
@@ -1600,7 +2032,7 @@ func parseGlobalComponents(value string) ([]string, error) {
 // promptGlobalComponentSelection shows an interactive multi-select for components.
 func promptGlobalComponentSelection() ([]string, error) {
 	if !isTerminal() {
-		return nil, fmt.Errorf("interactive mode requires a terminal. Specify components: --global all or --global skills,commands,agents")
+		return nil, fmt.Errorf("interactive mode requires a terminal. Specify components: --global all or --global skills,commands,agents,hooks")
 	}
 
 	var selected []string
@@ -1608,6 +2040,7 @@ func promptGlobalComponentSelection() ([]string, error) {
 		huh.NewOption("Skills (thts-integrate)", "skills"),
 		huh.NewOption("Commands/Prompts (thts-handoff, thts-resume)", "commands"),
 		huh.NewOption("Agents (thoughts-locator, thoughts-analyzer)", "agents"),
+		huh.NewOption("Hooks (keyword detection for thoughts/ loading)", "hooks"),
 	}
 
 	err := huh.NewMultiSelect[string]().
@@ -1671,6 +2104,12 @@ func installGlobalComponent(component string, agentTypes []agents.AgentType, man
 			}
 		case "agents":
 			_, files, err = copyAgents(globalDir, agentType, agentCfg)
+		case "hooks":
+			if !agentCfg.SupportsHooks {
+				fmt.Printf("  %s hooks: %s does not support hooks\n", ui.Warning(""), agents.AgentTypeLabels[agentType])
+				continue
+			}
+			files, err = installGlobalHooks(globalDir, agentType, agentCfg)
 		default:
 			return fmt.Errorf("unknown component: %s", component)
 		}
@@ -1694,6 +2133,9 @@ func installGlobalComponent(component string, agentTypes []agents.AgentType, man
 				fullPath = filepath.Join(globalDir, agentCfg.CommandsDir, f)
 			case "agents":
 				fullPath = filepath.Join(globalDir, agentCfg.AgentsDir, f)
+			case "hooks":
+				// Hooks files are already full paths from installGlobalHooks
+				fullPath = f
 			}
 			allFiles = append(allFiles, fullPath)
 		}

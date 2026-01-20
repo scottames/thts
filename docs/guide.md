@@ -659,16 +659,67 @@ thts agents init --global skills,commands  # Install specific components
 - Codex prompts (they only work globally)
 - When you don't want to modify project files
 
+#### Prerequisites
+
+Hook-based integration requires:
+
+- **jq** - JSON parser for hook scripts (required)
+- **yq** - YAML parser for custom keyword configuration (optional)
+
+Install on common systems:
+
+```bash
+# macOS
+brew install jq yq
+
+# Ubuntu/Debian
+sudo apt install jq
+pip install yq
+
+# Fedora
+sudo dnf install jq yq
+```
+
 #### Integration Levels
 
 When you run `thts agents init`, you'll be asked how to activate the
 integration:
 
-| Level                  | Description                                      | Best For                   |
-| ---------------------- | ------------------------------------------------ | -------------------------- |
-| **Always-on (shared)** | Adds include to project's instruction file       | Teams sharing agent config |
-| **Always-on (local)**  | Creates local-only instruction file (gitignored) | Personal always-on         |
-| **On-demand only**     | Just installs skill/commands                     | Manual activation          |
+| Level                        | Config Value           | Description                                | Best For                     |
+| ---------------------------- | ---------------------- | ------------------------------------------ | ---------------------------- |
+| **Hook-based (recommended)** | `hook`                 | Loads instructions on keyword detection    | Clean CLAUDE.md, low context |
+| **Always-on (shared)**       | `agents-content`       | Adds include to project's instruction file | Teams sharing agent config   |
+| **Always-on (local)**        | `agents-content-local` | Creates local-only instruction file        | Personal always-on           |
+| **On-demand only**           | `on-demand`            | Just installs skill/commands               | Manual activation            |
+
+**Hook-based integration** (default) keeps your CLAUDE.md/AGENTS.md clean by:
+
+1. Injecting a minimal bootstrap (~6 lines) at session start
+2. Loading full instructions (~200 lines) only when keywords are detected
+3. Keywords include: research, plan, decision, thoughts, handoff, notes, etc.
+
+**Note:** Codex does not support hooks and will automatically fall back to
+always-on mode with a warning.
+
+#### Customizing Hook Keywords
+
+The keywords that trigger full instruction loading can be customized in
+`~/.config/thts/config.yaml`:
+
+```yaml
+hooks:
+  keywords:
+    - research
+    - plan
+    - decision
+    - thoughts
+    - handoff
+    # Add your own keywords...
+```
+
+Default keywords: research, plan, decision, thoughts, handoff, notes, save,
+document, capture, findings, learnings, gotchas, ADR, architecture, resume, wrap
+up, end session
 
 #### What Gets Installed
 

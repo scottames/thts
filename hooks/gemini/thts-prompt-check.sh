@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# thts prompt check hook - keyword detection for full instruction injection
+# Requires: jq
+# Optional: yq (for custom keyword configuration)
+
+set -euo pipefail
+
+# Default keywords that trigger full instruction injection
+DEFAULT_KEYWORDS="research|plan|decision|thoughts|handoff|notes|save|document|capture|findings|learnings|gotchas|ADR|architecture|resume|wrap up|end session"
+
+# Load keywords from config if yq is available and config exists
+load_keywords() {
+	local config_file="${HOME}/.config/thts/config.yaml"
+
+	# Use defaults if yq not available or config doesn't exist
+	if ! command -v yq &>/dev/null || [[ ! -f "$config_file" ]]; then
+		echo "$DEFAULT_KEYWORDS"
+		return
+	fi
+
+	# Try to read custom keywords from config
+	local custom_keywords
+	custom_keywords=$(yq -r '.hooks.keywords // [] | join("|")' "$config_file" 2>/dev/null || echo "")
+
+	# Use custom keywords if configured, otherwise defaults
+	if [[ -n "$custom_keywords" ]]; then
+		echo "$custom_keywords"
+	else
+		echo "$DEFAULT_KEYWORDS"
+	fi
+}
+
+# Read prompt info from stdin (JSON)
+INPUT=$(cat)
+PROMPT=$(echo "$INPUT" | jq -r '.prompt // empty')
+SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty')
+CWD=$(echo "$INPUT" | jq -r '.cwd // empty')
+
+# Check if already expanded this session
+EXPANDED_FILE="/tmp/thts-expanded-${SESSION_ID}"
+if [[ -f "$EXPANDED_FILE" ]]; then
+	exit 0
+fi
+
+# Load keywords (from config or defaults)
+KEYWORDS=$(load_keywords)
+
+# Check for keywords (case-insensitive)
+if echo "$PROMPT" | grep -qiE "$KEYWORDS"; then
+	# Mark as expanded
+	touch "$EXPANDED_FILE"
+
+	# Output full instructions
+	INSTRUCTIONS_FILE="${CWD}/.gemini/thts-instructions.md"
+	if [[ -f "$INSTRUCTIONS_FILE" ]]; then
+		echo "## thts Integration (Full Instructions)"
+		echo ""
+		cat "$INSTRUCTIONS_FILE"
+	fi
+fi
