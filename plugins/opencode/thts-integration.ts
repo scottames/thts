@@ -1,23 +1,16 @@
 // thts integration plugin for OpenCode
 // Injects thoughts/ instructions at session start
 
-import { Plugin } from "opencode";
+import type { Plugin } from "@opencode-ai/plugin";
 import * as fs from "fs";
 import * as path from "path";
 
-const plugin: Plugin = {
-  name: "thts-integration",
-  version: "1.0.0",
+export const ThtsIntegration: Plugin = async ({ directory }) => {
+  const cwd = directory || process.cwd();
+  const instructionsPath = path.join(cwd, ".opencode", "thts-instructions.md");
 
-  hooks: {
-    "session.created": async (context) => {
-      const cwd = context.cwd || process.cwd();
-      const instructionsPath = path.join(
-        cwd,
-        ".opencode",
-        "thts-instructions.md",
-      );
-
+  return {
+    "session.created": async () => {
       if (fs.existsSync(instructionsPath)) {
         const content = fs.readFileSync(instructionsPath, "utf-8");
         return {
@@ -29,19 +22,11 @@ const plugin: Plugin = {
           ],
         };
       }
-
       return {};
     },
 
-    "experimental.session.compacting": async (context) => {
+    "session.compacting": async () => {
       // Re-inject instructions during context compaction to preserve them
-      const cwd = context.cwd || process.cwd();
-      const instructionsPath = path.join(
-        cwd,
-        ".opencode",
-        "thts-instructions.md",
-      );
-
       if (fs.existsSync(instructionsPath)) {
         const content = fs.readFileSync(instructionsPath, "utf-8");
         return {
@@ -53,10 +38,7 @@ const plugin: Plugin = {
           ],
         };
       }
-
       return {};
     },
-  },
+  };
 };
-
-export default plugin;

@@ -544,6 +544,141 @@ func TestUninitCommand(t *testing.T) {
 	})
 }
 
+func TestInitCheck(t *testing.T) {
+	t.Run("returns exit code 1 when not initialized", func(t *testing.T) {
+		env := setupTestEnv(t)
+		defer env.cleanup()
+
+		// Run: thts init --check (without init first)
+		_, err := env.runThts("init", "--check")
+		if err == nil {
+			t.Error("expected error when repo not initialized")
+		}
+
+		// Check exit code is 1
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			if exitErr.ExitCode() != 1 {
+				t.Errorf("expected exit code 1, got %d", exitErr.ExitCode())
+			}
+		} else {
+			t.Errorf("expected ExitError, got %T", err)
+		}
+	})
+
+	t.Run("returns exit code 0 when initialized", func(t *testing.T) {
+		env := setupTestEnv(t)
+		defer env.cleanup()
+
+		// Initialize first
+		_, err := env.runThts("init", "--name", "myproject", "--force")
+		if err != nil {
+			t.Fatalf("init failed: %v", err)
+		}
+
+		// Run: thts init --check (should succeed)
+		_, err = env.runThts("init", "--check")
+		if err != nil {
+			t.Errorf("expected no error when repo is initialized, got: %v", err)
+		}
+	})
+
+	t.Run("returns exit code 1 with partial setup", func(t *testing.T) {
+		env := setupTestEnv(t)
+		defer env.cleanup()
+
+		// Create thoughts directory but not the symlinks
+		thoughtsDir := filepath.Join(env.projectRepo, "thoughts")
+		if err := os.MkdirAll(thoughtsDir, 0755); err != nil {
+			t.Fatalf("failed to create thoughts dir: %v", err)
+		}
+		// Create only one symlink (incomplete setup)
+		userDir := filepath.Join(thoughtsDir, "testuser")
+		if err := os.Symlink("/tmp/fake", userDir); err != nil {
+			t.Fatalf("failed to create symlink: %v", err)
+		}
+
+		// Run: thts init --check (should fail)
+		_, err := env.runThts("init", "--check")
+		if err == nil {
+			t.Error("expected error with incomplete setup")
+		}
+
+		// Check exit code is 1
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			if exitErr.ExitCode() != 1 {
+				t.Errorf("expected exit code 1, got %d", exitErr.ExitCode())
+			}
+		}
+	})
+
+	t.Run("works from subdirectory", func(t *testing.T) {
+		env := setupTestEnv(t)
+		defer env.cleanup()
+
+		// Initialize first
+		_, err := env.runThts("init", "--name", "myproject", "--force")
+		if err != nil {
+			t.Fatalf("init failed: %v", err)
+		}
+
+		// Create a subdirectory
+		subDir := filepath.Join(env.projectRepo, "some", "nested", "dir")
+		if err := os.MkdirAll(subDir, 0755); err != nil {
+			t.Fatalf("failed to create subdir: %v", err)
+		}
+
+		// Run: thts init --check from subdirectory (should succeed)
+		_, err = env.runThtsInDir(subDir, "init", "--check")
+		if err != nil {
+			t.Errorf("expected no error when checking from subdir, got: %v", err)
+		}
+	})
+
+	t.Run("returns exit code 1 outside git repo", func(t *testing.T) {
+		env := setupTestEnv(t)
+		defer env.cleanup()
+
+		// Create a non-git directory
+		nonGitDir := filepath.Join(env.root, "non-git")
+		if err := os.MkdirAll(nonGitDir, 0755); err != nil {
+			t.Fatalf("failed to create non-git dir: %v", err)
+		}
+
+		// Run: thts init --check (should fail)
+		_, err := env.runThtsInDir(nonGitDir, "init", "--check")
+		if err == nil {
+			t.Error("expected error when not in git repo")
+		}
+
+		// Check exit code is 1
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			if exitErr.ExitCode() != 1 {
+				t.Errorf("expected exit code 1, got %d", exitErr.ExitCode())
+			}
+		}
+	})
+
+	t.Run("silent output for hook consumption", func(t *testing.T) {
+		env := setupTestEnv(t)
+		defer env.cleanup()
+
+		// Initialize first
+		_, err := env.runThts("init", "--name", "myproject", "--force")
+		if err != nil {
+			t.Fatalf("init failed: %v", err)
+		}
+
+		// Run: thts init --check (should produce no output)
+		output, err := env.runThts("init", "--check")
+		if err != nil {
+			t.Errorf("expected no error, got: %v", err)
+		}
+		if len(strings.TrimSpace(output)) > 0 {
+			t.Errorf("expected silent output, got: %q", output)
+		}
+	})
+}
+
 func TestInitRefresh(t *testing.T) {
 	t.Run("refresh updates templates without prompting", func(t *testing.T) {
 		env := setupTestEnv(t)

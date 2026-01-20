@@ -82,12 +82,13 @@ func TestHookIntegration_Claude(t *testing.T) {
 		t.Fatalf("failed to parse settings: %v", err)
 	}
 
-	hooks, ok := settings["hooks"].([]any)
+	hooks, ok := settings["hooks"].(map[string]any)
 	if !ok {
-		t.Fatal("settings should contain hooks array")
+		t.Fatal("settings should contain hooks map")
 	}
+	// Should have 2 events: SessionStart and UserPromptSubmit
 	if len(hooks) != 2 {
-		t.Errorf("expected 2 hooks, got %d", len(hooks))
+		t.Errorf("expected 2 hook events, got %d", len(hooks))
 	}
 
 	// Verify manifest was updated
@@ -284,12 +285,15 @@ func TestMergeHooksIntoSettings_PreservesExisting(t *testing.T) {
 		t.Fatalf("failed to create agent dir: %v", err)
 	}
 
-	// Write existing settings with custom hooks
+	// Write existing settings with custom hooks (new map format)
 	existingSettings := map[string]any{
-		"hooks": []any{
-			map[string]any{
-				"event":   "SessionStart",
-				"command": "./custom-hook.sh",
+		"hooks": map[string]any{
+			"SessionStart": []any{
+				map[string]any{
+					"hooks": []any{
+						map[string]any{"type": "command", "command": "./custom-hook.sh"},
+					},
+				},
 			},
 		},
 		"someOtherSetting": "value",
@@ -336,40 +340,59 @@ func TestMergeHooksIntoSettings_PreservesExisting(t *testing.T) {
 		t.Error("expected someOtherSetting to be preserved")
 	}
 
-	// Should have 3 hooks now (1 custom + 2 thts)
-	hooks, ok := settings["hooks"].([]any)
+	// Should have hooks as map (new format)
+	hooks, ok := settings["hooks"].(map[string]any)
 	if !ok {
-		t.Fatal("settings should contain hooks array")
+		t.Fatal("settings should contain hooks map")
 	}
-	if len(hooks) != 3 {
-		t.Errorf("expected 3 hooks (1 custom + 2 thts), got %d", len(hooks))
+
+	// Should have 2 events: SessionStart (custom + thts) and UserPromptSubmit (thts only)
+	if len(hooks) != 2 {
+		t.Errorf("expected 2 hook events (SessionStart, UserPromptSubmit), got %d", len(hooks))
+	}
+
+	// SessionStart should have 2 hook configs (1 custom + 1 thts)
+	sessionHooks, ok := hooks["SessionStart"].([]any)
+	if !ok {
+		t.Fatal("expected SessionStart hooks to be array")
+	}
+	if len(sessionHooks) != 2 {
+		t.Errorf("expected 2 SessionStart hooks (1 custom + 1 thts), got %d", len(sessionHooks))
 	}
 }
 
-func TestFilterOutThtsHooks(t *testing.T) {
-	thtsNames := []string{
+func TestFilterOutThtsHooksFromMap(t *testing.T) {
+	thtsEvents := []string{"SessionStart", "UserPromptSubmit"}
+	thtsCommands := []string{
 		"./.claude/hooks/thts-session-start.sh",
 		"./.claude/hooks/thts-prompt-check.sh",
 	}
 
-	hooks := []any{
-		map[string]any{"event": "SessionStart", "command": "./.claude/hooks/thts-session-start.sh"},
-		map[string]any{"event": "SessionStart", "command": "./custom-hook.sh"},
-		map[string]any{"event": "UserPromptSubmit", "command": "./.claude/hooks/thts-prompt-check.sh"},
+	// New map format: event names as keys, each containing array of hook configs
+	hooks := map[string]any{
+		"SessionStart": []any{
+			map[string]any{"hooks": []any{map[string]any{"type": "command", "command": "./.claude/hooks/thts-session-start.sh"}}},
+			map[string]any{"hooks": []any{map[string]any{"type": "command", "command": "./custom-hook.sh"}}},
+		},
+		"UserPromptSubmit": []any{
+			map[string]any{"hooks": []any{map[string]any{"type": "command", "command": "./.claude/hooks/thts-prompt-check.sh"}}},
+		},
 	}
 
-	filtered := filterOutThtsHooks(hooks, thtsNames)
+	filtered := filterOutThtsHooksFromMap(hooks, thtsEvents, thtsCommands)
 
-	// Should only have the custom hook
-	if len(filtered) != 1 {
-		t.Errorf("expected 1 hook after filtering, got %d", len(filtered))
-	}
-	hookMap, ok := filtered[0].(map[string]any)
+	// Should have SessionStart with only the custom hook, UserPromptSubmit should be gone
+	sessionHooks, ok := filtered["SessionStart"].([]any)
 	if !ok {
-		t.Fatal("expected hook to be a map")
+		t.Fatal("expected SessionStart to remain with custom hook")
 	}
-	if hookMap["command"] != "./custom-hook.sh" {
-		t.Errorf("expected custom hook to remain, got %v", hookMap["command"])
+	if len(sessionHooks) != 1 {
+		t.Errorf("expected 1 hook in SessionStart after filtering, got %d", len(sessionHooks))
+	}
+
+	// UserPromptSubmit should be removed (only had thts hook)
+	if _, exists := filtered["UserPromptSubmit"]; exists {
+		t.Error("expected UserPromptSubmit to be removed (only had thts hooks)")
 	}
 }
 
@@ -434,38 +457,58 @@ func TestBuildHooksConfig_Global(t *testing.T) {
 		t.Fatal("expected non-nil config for Claude")
 	}
 
-	// Build hooks config for global
+	// Build hooks config for global (new map format: event names as keys)
 	hooksConfig := buildHooksConfig(agents.AgentClaude, cfg, true)
 	if len(hooksConfig) != 2 {
-		t.Errorf("expected 2 hooks for Claude, got %d", len(hooksConfig))
+		t.Errorf("expected 2 hook events for Claude, got %d", len(hooksConfig))
 	}
 
-	// Verify commands are absolute paths
-	for _, hook := range hooksConfig {
-		hookMap, ok := hook.(map[string]any)
+	// Verify commands are absolute paths (new format: hooks[event][0].hooks[0].command)
+	for event, eventHooks := range hooksConfig {
+		hooksList, ok := eventHooks.([]any)
 		if !ok {
-			t.Fatal("expected hook to be a map")
+			t.Fatalf("expected hooks for %s to be array", event)
 		}
-		cmd, ok := hookMap["command"].(string)
-		if !ok {
-			t.Fatal("expected command to be a string")
-		}
-		if !filepath.IsAbs(cmd) {
-			t.Errorf("expected absolute path in global hook command, got %s", cmd)
+		for _, hookConfig := range hooksList {
+			hookConfigMap, ok := hookConfig.(map[string]any)
+			if !ok {
+				t.Fatal("expected hook config to be a map")
+			}
+			innerHooks, ok := hookConfigMap["hooks"].([]any)
+			if !ok {
+				t.Fatal("expected hook config to have 'hooks' array")
+			}
+			for _, innerHook := range innerHooks {
+				innerHookMap := innerHook.(map[string]any)
+				cmd, ok := innerHookMap["command"].(string)
+				if !ok {
+					t.Fatal("expected command to be a string")
+				}
+				if !filepath.IsAbs(cmd) {
+					t.Errorf("expected absolute path in global hook command, got %s", cmd)
+				}
+			}
 		}
 	}
 
 	// Build hooks config for project (should be relative)
 	projectConfig := buildHooksConfig(agents.AgentClaude, cfg, false)
-	for _, hook := range projectConfig {
-		hookMap := hook.(map[string]any)
-		cmd := hookMap["command"].(string)
-		if filepath.IsAbs(cmd) {
-			t.Errorf("expected relative path in project hook command, got %s", cmd)
-		}
-		// Relative paths should contain .claude/hooks but not start with /
-		if !strings.Contains(cmd, ".claude/hooks/thts-") {
-			t.Errorf("expected project hook command to contain '.claude/hooks/thts-', got %s", cmd)
+	for event, eventHooks := range projectConfig {
+		hooksList := eventHooks.([]any)
+		for _, hookConfig := range hooksList {
+			hookConfigMap := hookConfig.(map[string]any)
+			innerHooks := hookConfigMap["hooks"].([]any)
+			for _, innerHook := range innerHooks {
+				innerHookMap := innerHook.(map[string]any)
+				cmd := innerHookMap["command"].(string)
+				if filepath.IsAbs(cmd) {
+					t.Errorf("expected relative path in project hook command for %s, got %s", event, cmd)
+				}
+				// Relative paths should contain .claude/hooks but not start with /
+				if !strings.Contains(cmd, ".claude/hooks/thts-") {
+					t.Errorf("expected project hook command to contain '.claude/hooks/thts-', got %s", cmd)
+				}
+			}
 		}
 	}
 }
@@ -485,7 +528,7 @@ func TestInstallGlobalHooks(t *testing.T) {
 		t.Fatalf("installGlobalHooks failed: %v", err)
 	}
 
-	// Should have installed hook files + settings.local.json
+	// Should have installed hook files + settings.json (global uses main settings file)
 	if len(files) < 2 {
 		t.Errorf("expected at least 2 installed files, got %d", len(files))
 	}
@@ -503,10 +546,10 @@ func TestInstallGlobalHooks(t *testing.T) {
 		t.Error("expected hook to be executable")
 	}
 
-	// Verify settings.local.json was created with hooks
-	settingsPath := filepath.Join(tmpDir, "settings.local.json")
+	// Verify settings.json was created with hooks (global uses main settings file, not .local)
+	settingsPath := filepath.Join(tmpDir, cfg.SettingsFile)
 	if !fsutil.Exists(settingsPath) {
-		t.Error("expected settings.local.json to exist")
+		t.Errorf("expected %s to exist", cfg.SettingsFile)
 	}
 
 	data, err := os.ReadFile(settingsPath)
@@ -519,20 +562,28 @@ func TestInstallGlobalHooks(t *testing.T) {
 		t.Fatalf("failed to parse settings: %v", err)
 	}
 
-	hooks, ok := settings["hooks"].([]any)
+	hooks, ok := settings["hooks"].(map[string]any)
 	if !ok {
-		t.Fatal("expected settings to contain hooks array")
+		t.Fatal("expected settings to contain hooks map")
 	}
+	// Should have 2 events: SessionStart and UserPromptSubmit
 	if len(hooks) != 2 {
-		t.Errorf("expected 2 hooks in settings, got %d", len(hooks))
+		t.Errorf("expected 2 hook events in settings, got %d", len(hooks))
 	}
 
-	// Verify hooks have absolute paths
-	for _, hook := range hooks {
-		hookMap := hook.(map[string]any)
-		cmd := hookMap["command"].(string)
-		if !filepath.IsAbs(cmd) {
-			t.Errorf("expected absolute path in global settings hook, got %s", cmd)
+	// Verify hooks have absolute paths (new format: hooks[event][0].hooks[0].command)
+	for event, eventHooks := range hooks {
+		hooksList := eventHooks.([]any)
+		for _, hookConfig := range hooksList {
+			hookConfigMap := hookConfig.(map[string]any)
+			innerHooks := hookConfigMap["hooks"].([]any)
+			for _, innerHook := range innerHooks {
+				innerHookMap := innerHook.(map[string]any)
+				cmd := innerHookMap["command"].(string)
+				if !filepath.IsAbs(cmd) {
+					t.Errorf("expected absolute path in global settings hook for %s, got %s", event, cmd)
+				}
+			}
 		}
 	}
 }

@@ -7,6 +7,15 @@ set -euo pipefail
 # Read session info from stdin (JSON)
 INPUT=$(cat)
 SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty')
+CWD=$(echo "$INPUT" | jq -r '.cwd // empty')
+
+# Check if thts is available and repo is initialized
+if ! command -v thts &>/dev/null; then
+	exit 0
+fi
+if ! (cd "$CWD" && thts init --check) 2>/dev/null; then
+	exit 0
+fi
 
 # Mark session as not expanded yet
 EXPANDED_FILE="/tmp/thts-expanded-${SESSION_ID}"

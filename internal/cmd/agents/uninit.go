@@ -861,7 +861,7 @@ func removeHooksFromSettings(agentDir string, mod *HooksModification) error {
 	return os.WriteFile(settingsPath, append(newData, '\n'), 0644)
 }
 
-// removeGlobalHooksFromSettings removes thts hooks from a global settings.local.json file.
+// removeGlobalHooksFromSettings removes thts hooks from a settings file (settings.json or settings.local.json).
 // Takes the full path to the settings file and the list of agent names that had hooks installed.
 // Handles the new hooks format (map with event names as keys).
 func removeGlobalHooksFromSettings(settingsPath string, agentNames []string) error {
@@ -1124,8 +1124,9 @@ func runGlobalUninit(_ *cobra.Command, _ []string) error {
 	hooksInfo := manifest.Components["hooks"]
 
 	for _, f := range manifest.GetAllFiles() {
-		// Special handling for settings.local.json - remove hooks from it rather than deleting
-		if hooksInfo != nil && strings.HasSuffix(f, "settings.local.json") {
+		// Special handling for settings files - remove hooks from them rather than deleting
+		// Matches settings.json (global) and settings.local.json (project-level)
+		if hooksInfo != nil && (strings.HasSuffix(f, "settings.json") || strings.HasSuffix(f, "settings.local.json")) {
 			if err := removeGlobalHooksFromSettings(f, hooksInfo.Agents); err != nil {
 				fmt.Println(ui.WarningF("  Could not remove hooks from %s: %v", config.ContractPath(f), err))
 			} else {

@@ -23,6 +23,7 @@ var (
 	initForce       bool
 	initInteractive bool
 	initRefresh     bool
+	initCheck       bool
 )
 
 var initCmd = &cobra.Command{
@@ -51,6 +52,8 @@ func init() {
 		BoolVarP(&initInteractive, "interactive", "i", false, "Force interactive project name selection")
 	initCmd.Flags().
 		BoolVar(&initRefresh, "refresh", false, "Update templates and instructions with current config (skip prompt)")
+	initCmd.Flags().
+		BoolVar(&initCheck, "check", false, "Check if repo is initialized (exit 0=yes, 1=no)")
 
 	_ = initCmd.RegisterFlagCompletionFunc("profile", CompleteProfiles)
 
@@ -58,6 +61,13 @@ func init() {
 }
 
 func runInit(cmd *cobra.Command, args []string) error {
+	// Handle --check flag first (silent operation for scripts)
+	if initCheck {
+		cmd.SilenceUsage = true
+		cmd.SilenceErrors = true
+		return runInitCheck()
+	}
+
 	// Check if we're in a git repository
 	if !git.IsInGitRepo() {
 		return fmt.Errorf("not in a git repository")
@@ -592,6 +602,44 @@ func copyTemplates(thoughtsDir string) error {
 
 	if copied > 0 {
 		fmt.Println(ui.SuccessF("Copied %d template(s) to thoughts/.templates/", copied))
+	}
+
+	return nil
+}
+
+// ExitCodeError is an error that carries an exit code.
+type ExitCodeError struct {
+	Code int
+}
+
+func (e ExitCodeError) Error() string {
+	return fmt.Sprintf("exit code %d", e.Code)
+}
+
+// ExitCode returns the exit code for this error.
+func (e ExitCodeError) ExitCode() int {
+	return e.Code
+}
+
+// runInitCheck checks if the current repository is initialized with thts.
+// Returns nil (exit 0) if initialized, ExitCodeError(1) if not.
+func runInitCheck() error {
+	// Find git root from cwd (works from any subdirectory)
+	repoRoot, err := git.GetRepoTopLevel()
+	if err != nil {
+		return ExitCodeError{Code: 1}
+	}
+
+	// Load config to get user
+	cfg, err := config.Load()
+	if err != nil {
+		return ExitCodeError{Code: 1}
+	}
+
+	// Check if initialized
+	thoughtsDir := filepath.Join(repoRoot, "thoughts")
+	if !isValidThoughtsSetup(thoughtsDir, cfg.User) {
+		return ExitCodeError{Code: 1}
 	}
 
 	return nil

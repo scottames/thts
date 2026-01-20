@@ -36,6 +36,14 @@ PROMPT=$(echo "$INPUT" | jq -r '.prompt // empty')
 SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // empty')
 CWD=$(echo "$INPUT" | jq -r '.cwd // empty')
 
+# Check if thts is available and repo is initialized
+if ! command -v thts &>/dev/null; then
+	exit 0
+fi
+if ! (cd "$CWD" && thts init --check) 2>/dev/null; then
+	exit 0
+fi
+
 # Check if already expanded this session
 EXPANDED_FILE="/tmp/thts-expanded-${SESSION_ID}"
 if [[ -f "$EXPANDED_FILE" ]]; then

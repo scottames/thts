@@ -26,6 +26,10 @@ to personal and shared notes within any project.`,
 func Execute() {
 	err := rootCmd.Execute()
 	if err != nil {
+		// Check for custom exit code errors
+		if exitErr, ok := err.(interface{ ExitCode() int }); ok {
+			os.Exit(exitErr.ExitCode())
+		}
 		os.Exit(1)
 	}
 }

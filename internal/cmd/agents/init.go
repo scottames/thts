@@ -1204,14 +1204,23 @@ func buildClaudeSettings() string {
 	return string(content) + "\n"
 }
 
-// mergeHooksIntoSettings adds hook configuration to settings.local.json without clobbering existing config.
-// If isGlobal is true, uses absolute paths for hooks; otherwise uses relative paths.
+// mergeHooksIntoSettings adds hook configuration to the appropriate settings file without clobbering existing config.
+// For project-level: uses settings.local.json (personal, gitignored)
+// For global-level: uses the main settings file (e.g., settings.json) since there's no .local variant globally
 // Returns the path to the settings file and whether it was created/modified.
 func mergeHooksIntoSettings(agentDir string, agentType agents.AgentType, cfg *agents.AgentConfig, isGlobal bool) (string, bool, error) {
-	// Determine settings file (prefer local variant for hooks)
-	settingsFile := "settings.local.json"
 	if cfg.SettingsFormat == "toml" {
 		return "", false, fmt.Errorf("hook integration not supported for TOML settings (agent: %s)", agentType)
+	}
+
+	// Determine settings file based on scope
+	// - Global: use main settings file (no .local variant exists at global level)
+	// - Project: use settings.local.json (personal config, gitignored)
+	var settingsFile string
+	if isGlobal {
+		settingsFile = cfg.SettingsFile
+	} else {
+		settingsFile = "settings.local.json"
 	}
 
 	settingsPath := filepath.Join(agentDir, settingsFile)
@@ -1245,10 +1254,20 @@ func mergeHooksIntoSettings(agentDir string, agentType agents.AgentType, cfg *ag
 	// Get the event names that thts uses
 	thtsEventNames := getThtsHookEventNames(agentType)
 
-	// Remove existing thts hooks, then add new ones
+	// Remove existing thts hooks, then merge in new ones
 	mergedHooks := filterOutThtsHooksFromMap(existingHooks, thtsEventNames, getThtsHookNames(agentType, isGlobal))
-	for event, hooks := range hooksConfig {
-		mergedHooks[event] = hooks
+	for event, newHooks := range hooksConfig {
+		newHooksList, ok := newHooks.([]any)
+		if !ok {
+			mergedHooks[event] = newHooks
+			continue
+		}
+		// Append thts hooks to existing hooks for this event (preserves user's custom hooks)
+		if existingEventHooks, exists := mergedHooks[event].([]any); exists {
+			mergedHooks[event] = append(existingEventHooks, newHooksList...)
+		} else {
+			mergedHooks[event] = newHooks
+		}
 	}
 	settings["hooks"] = mergedHooks
 
