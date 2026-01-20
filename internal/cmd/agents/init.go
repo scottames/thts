@@ -1271,6 +1271,23 @@ func mergeHooksIntoSettings(agentDir string, agentType agents.AgentType, cfg *ag
 	}
 	settings["hooks"] = mergedHooks
 
+	// Gemini requires explicit hook enabling at both tools and hooks level
+	// See: https://geminicli.com/docs/hooks/
+	if agentType == agents.AgentGemini {
+		// Enable hooks at the tools level
+		tools, _ := settings["tools"].(map[string]any)
+		if tools == nil {
+			tools = make(map[string]any)
+		}
+		tools["enableHooks"] = true
+		settings["tools"] = tools
+
+		// Enable hooks at the hooks level (merge with existing hooks map)
+		if hooksMap, ok := settings["hooks"].(map[string]any); ok {
+			hooksMap["enabled"] = true
+		}
+	}
+
 	// Write back with proper formatting
 	data, err := json.MarshalIndent(settings, "", "  ")
 	if err != nil {
