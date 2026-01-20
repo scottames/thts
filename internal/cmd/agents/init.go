@@ -1236,17 +1236,21 @@ func mergeHooksIntoSettings(agentDir string, agentType agents.AgentType, cfg *ag
 		return "", false, nil // Agent doesn't support hooks
 	}
 
-	// Merge hooks into settings
-	existingHooks, hasHooks := settings["hooks"].([]any)
+	// Merge hooks into settings (hooks is a map with event names as keys)
+	existingHooks, hasHooks := settings["hooks"].(map[string]any)
 	if !hasHooks {
-		existingHooks = []any{}
+		existingHooks = make(map[string]any)
 	}
 
-	// Check if thts hooks already exist
-	thtsHookNames := getThtsHookNames(agentType, isGlobal)
-	newHooks := filterOutThtsHooks(existingHooks, thtsHookNames)
-	newHooks = append(newHooks, hooksConfig...)
-	settings["hooks"] = newHooks
+	// Get the event names that thts uses
+	thtsEventNames := getThtsHookEventNames(agentType)
+
+	// Remove existing thts hooks, then add new ones
+	mergedHooks := filterOutThtsHooksFromMap(existingHooks, thtsEventNames, getThtsHookNames(agentType, isGlobal))
+	for event, hooks := range hooksConfig {
+		mergedHooks[event] = hooks
+	}
+	settings["hooks"] = mergedHooks
 
 	// Write back with proper formatting
 	data, err := json.MarshalIndent(settings, "", "  ")
@@ -1262,7 +1266,8 @@ func mergeHooksIntoSettings(agentDir string, agentType agents.AgentType, cfg *ag
 
 // buildHooksConfig returns the hooks configuration for an agent type.
 // If isGlobal is true, uses absolute paths; otherwise uses relative paths.
-func buildHooksConfig(agentType agents.AgentType, cfg *agents.AgentConfig, isGlobal bool) []any {
+// Returns a map with event names as keys (Claude Code's new hooks format).
+func buildHooksConfig(agentType agents.AgentType, cfg *agents.AgentConfig, isGlobal bool) map[string]any {
 	if !cfg.SupportsHooks || cfg.HooksDir == "" {
 		return nil
 	}
@@ -1277,28 +1282,30 @@ func buildHooksConfig(agentType agents.AgentType, cfg *agents.AgentConfig, isGlo
 		pathPrefix = fmt.Sprintf("./%s/%s", cfg.RootDir, cfg.HooksDir)
 	}
 
-	switch agentType {
-	case agents.AgentClaude:
+	// Helper to create a hook entry in the new format
+	makeHookEntry := func(command string) []any {
 		return []any{
 			map[string]any{
-				"event":   "SessionStart",
-				"command": filepath.Join(pathPrefix, "thts-session-start.sh"),
-			},
-			map[string]any{
-				"event":   "UserPromptSubmit",
-				"command": filepath.Join(pathPrefix, "thts-prompt-check.sh"),
+				"hooks": []any{
+					map[string]any{
+						"type":    "command",
+						"command": command,
+					},
+				},
 			},
 		}
+	}
+
+	switch agentType {
+	case agents.AgentClaude:
+		return map[string]any{
+			"SessionStart":     makeHookEntry(filepath.Join(pathPrefix, "thts-session-start.sh")),
+			"UserPromptSubmit": makeHookEntry(filepath.Join(pathPrefix, "thts-prompt-check.sh")),
+		}
 	case agents.AgentGemini:
-		return []any{
-			map[string]any{
-				"event":   "SessionStart",
-				"command": filepath.Join(pathPrefix, "thts-session-start.sh"),
-			},
-			map[string]any{
-				"event":   "BeforeAgent",
-				"command": filepath.Join(pathPrefix, "thts-prompt-check.sh"),
-			},
+		return map[string]any{
+			"SessionStart": makeHookEntry(filepath.Join(pathPrefix, "thts-session-start.sh")),
+			"BeforeAgent":  makeHookEntry(filepath.Join(pathPrefix, "thts-prompt-check.sh")),
 		}
 	default:
 		return nil
@@ -1326,26 +1333,78 @@ func getThtsHookNames(agentType agents.AgentType, isGlobal bool) []string {
 	}
 }
 
-// filterOutThtsHooks removes existing thts hooks from a hooks array.
-func filterOutThtsHooks(hooks []any, thtsNames []string) []any {
-	var filtered []any
-	thtsSet := make(map[string]bool)
-	for _, name := range thtsNames {
-		thtsSet[name] = true
+// getThtsHookEventNames returns the event names that thts hooks register for.
+func getThtsHookEventNames(agentType agents.AgentType) []string {
+	switch agentType {
+	case agents.AgentClaude:
+		return []string{"SessionStart", "UserPromptSubmit"}
+	case agents.AgentGemini:
+		return []string{"SessionStart", "BeforeAgent"}
+	default:
+		return nil
+	}
+}
+
+// filterOutThtsHooksFromMap removes thts hooks from a hooks map (new format).
+// It filters out thts commands from the specified events, removing events entirely if empty.
+func filterOutThtsHooksFromMap(hooks map[string]any, thtsEvents, thtsCommands []string) map[string]any {
+	result := make(map[string]any)
+	thtsCommandSet := make(map[string]bool)
+	for _, cmd := range thtsCommands {
+		thtsCommandSet[cmd] = true
 	}
 
-	for _, hook := range hooks {
-		hookMap, ok := hook.(map[string]any)
+	for event, eventHooks := range hooks {
+		hookList, ok := eventHooks.([]any)
 		if !ok {
-			filtered = append(filtered, hook)
+			result[event] = eventHooks
 			continue
 		}
-		cmd, _ := hookMap["command"].(string)
-		if !thtsSet[cmd] {
-			filtered = append(filtered, hook)
+
+		var filteredList []any
+		for _, hookEntry := range hookList {
+			entryMap, ok := hookEntry.(map[string]any)
+			if !ok {
+				filteredList = append(filteredList, hookEntry)
+				continue
+			}
+
+			// Check if this entry has thts commands
+			innerHooks, ok := entryMap["hooks"].([]any)
+			if !ok {
+				filteredList = append(filteredList, hookEntry)
+				continue
+			}
+
+			var filteredInner []any
+			for _, inner := range innerHooks {
+				innerMap, ok := inner.(map[string]any)
+				if !ok {
+					filteredInner = append(filteredInner, inner)
+					continue
+				}
+				cmd, _ := innerMap["command"].(string)
+				if !thtsCommandSet[cmd] {
+					filteredInner = append(filteredInner, inner)
+				}
+			}
+
+			if len(filteredInner) > 0 {
+				newEntry := make(map[string]any)
+				for k, v := range entryMap {
+					newEntry[k] = v
+				}
+				newEntry["hooks"] = filteredInner
+				filteredList = append(filteredList, newEntry)
+			}
+		}
+
+		if len(filteredList) > 0 {
+			result[event] = filteredList
 		}
 	}
-	return filtered
+
+	return result
 }
 
 // setupHookIntegration sets up hook-based integration for an agent.

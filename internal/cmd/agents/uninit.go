@@ -805,6 +805,7 @@ func removeSettingsContextKey(agentDir string, cfg *agents.AgentConfig) error {
 }
 
 // removeHooksFromSettings removes thts hooks from settings.local.json.
+// Handles the new hooks format (map with event names as keys).
 func removeHooksFromSettings(agentDir string, mod *HooksModification) error {
 	if mod == nil || mod.SettingsFile == "" {
 		return nil
@@ -825,8 +826,8 @@ func removeHooksFromSettings(agentDir string, mod *HooksModification) error {
 		return err
 	}
 
-	// Get existing hooks
-	hooks, ok := settings["hooks"].([]any)
+	// Get existing hooks (new format: map with event names as keys)
+	hooks, ok := settings["hooks"].(map[string]any)
 	if !ok {
 		return nil // No hooks to remove
 	}
@@ -837,19 +838,8 @@ func removeHooksFromSettings(agentDir string, mod *HooksModification) error {
 		removeSet[cmd] = true
 	}
 
-	// Filter out thts hooks
-	var newHooks []any
-	for _, hook := range hooks {
-		hookMap, ok := hook.(map[string]any)
-		if !ok {
-			newHooks = append(newHooks, hook)
-			continue
-		}
-		cmd, _ := hookMap["command"].(string)
-		if !removeSet[cmd] {
-			newHooks = append(newHooks, hook)
-		}
-	}
+	// Filter out thts hooks from each event
+	newHooks := filterOutThtsHooksFromMapForRemoval(hooks, removeSet)
 
 	// Update or remove hooks key
 	if len(newHooks) == 0 {
@@ -873,6 +863,7 @@ func removeHooksFromSettings(agentDir string, mod *HooksModification) error {
 
 // removeGlobalHooksFromSettings removes thts hooks from a global settings.local.json file.
 // Takes the full path to the settings file and the list of agent names that had hooks installed.
+// Handles the new hooks format (map with event names as keys).
 func removeGlobalHooksFromSettings(settingsPath string, agentNames []string) error {
 	if !fsutil.Exists(settingsPath) {
 		return nil
@@ -888,7 +879,7 @@ func removeGlobalHooksFromSettings(settingsPath string, agentNames []string) err
 		return err
 	}
 
-	hooks, ok := settings["hooks"].([]any)
+	hooks, ok := settings["hooks"].(map[string]any)
 	if !ok {
 		return nil // No hooks to remove
 	}
@@ -903,19 +894,8 @@ func removeGlobalHooksFromSettings(settingsPath string, agentNames []string) err
 		}
 	}
 
-	// Filter out thts hooks
-	var newHooks []any
-	for _, hook := range hooks {
-		hookMap, ok := hook.(map[string]any)
-		if !ok {
-			newHooks = append(newHooks, hook)
-			continue
-		}
-		cmd, _ := hookMap["command"].(string)
-		if !removeSet[cmd] {
-			newHooks = append(newHooks, hook)
-		}
-	}
+	// Filter out thts hooks from each event
+	newHooks := filterOutThtsHooksFromMapForRemoval(hooks, removeSet)
 
 	// Update or remove hooks key
 	if len(newHooks) == 0 {
@@ -935,6 +915,63 @@ func removeGlobalHooksFromSettings(settingsPath string, agentNames []string) err
 	}
 
 	return os.WriteFile(settingsPath, append(newData, '\n'), 0644)
+}
+
+// filterOutThtsHooksFromMapForRemoval removes thts hooks from a hooks map.
+// Takes a set of command paths to remove.
+func filterOutThtsHooksFromMapForRemoval(hooks map[string]any, removeSet map[string]bool) map[string]any {
+	result := make(map[string]any)
+
+	for event, eventHooks := range hooks {
+		hookList, ok := eventHooks.([]any)
+		if !ok {
+			result[event] = eventHooks
+			continue
+		}
+
+		var filteredList []any
+		for _, hookEntry := range hookList {
+			entryMap, ok := hookEntry.(map[string]any)
+			if !ok {
+				filteredList = append(filteredList, hookEntry)
+				continue
+			}
+
+			innerHooks, ok := entryMap["hooks"].([]any)
+			if !ok {
+				filteredList = append(filteredList, hookEntry)
+				continue
+			}
+
+			var filteredInner []any
+			for _, inner := range innerHooks {
+				innerMap, ok := inner.(map[string]any)
+				if !ok {
+					filteredInner = append(filteredInner, inner)
+					continue
+				}
+				cmd, _ := innerMap["command"].(string)
+				if !removeSet[cmd] {
+					filteredInner = append(filteredInner, inner)
+				}
+			}
+
+			if len(filteredInner) > 0 {
+				newEntry := make(map[string]any)
+				for k, v := range entryMap {
+					newEntry[k] = v
+				}
+				newEntry["hooks"] = filteredInner
+				filteredList = append(filteredList, newEntry)
+			}
+		}
+
+		if len(filteredList) > 0 {
+			result[event] = filteredList
+		}
+	}
+
+	return result
 }
 
 // confirmRemoval prompts for confirmation.
