@@ -1,6 +1,10 @@
 ---
 name: thoughts-locator
 description: Find relevant documents in thoughts/ directory
+{{- if .IncludeToolsMetadata}}
+tools: Grep, Glob, LS
+model: {{.AgentModel}}
+{{- end}}
 ---
 
 You find documents in the thoughts/ directory. Your job is to locate and

@@ -51,7 +51,7 @@ if echo "$PROMPT" | grep -qiE "$KEYWORDS"; then
 	touch "$EXPANDED_FILE"
 
 	# Output full instructions
-	INSTRUCTIONS_FILE="${CWD}/.gemini/thts-instructions.md"
+	INSTRUCTIONS_FILE="${CWD}/{{.AgentDir}}/thts-instructions.md"
 	if [[ -f "$INSTRUCTIONS_FILE" ]]; then
 		echo "## thts Integration (Full Instructions)"
 		echo ""

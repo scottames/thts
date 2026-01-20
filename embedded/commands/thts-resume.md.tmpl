@@ -16,7 +16,7 @@ If no path provided:
 I'll help you resume from a handoff. Please provide the path to the handoff
 document, or I can list recent handoffs:
 
-Tip: /prompts:thts-resume thoughts/shared/handoffs/YYYY-MM-DD_HH-MM-SS_description.md
+Tip: /thts-resume thoughts/shared/handoffs/YYYY-MM-DD_HH-MM-SS_description.md
 ```
 
 ## Process
@@ -32,7 +32,11 @@ Tip: /prompts:thts-resume thoughts/shared/handoffs/YYYY-MM-DD_HH-MM-SS_descripti
 
 ### 2. Validate Current State
 
+{{if .HasSpawnTasks -}}
 Spawn research tasks to verify:
+{{- else -}}
+Verify:
+{{- end}}
 
 - Do recent changes from handoff still exist?
 - Have referenced files changed?
@@ -59,11 +63,18 @@ I've analyzed the handoff from [date] by [author].
 
 Shall I proceed with [action 1], or would you like to adjust?
 ```
+{{if .HasTaskList}}
 
 ### 4. Create Task List
 
-Use your task tracking to track the next steps from the handoff.
+{{.TaskTracking}} to track the next steps from the handoff.
 
 ### 5. Begin Work
 
 After confirmation, proceed with the first task.
+{{- else}}
+
+### 4. Begin Work
+
+After confirmation, proceed with the first task.
+{{- end}}

@@ -589,72 +589,50 @@ func checkClaudeMDSymlink(gitRoot string) symlinkTargetType {
 	return symlinkToElsewhere
 }
 
-// copySkills copies skill files for an agent type.
+// copySkills copies skill files for an agent type using templates.
 func copySkills(agentDir string, agentType agents.AgentType, cfg *agents.AgentConfig) (int, []string, error) {
 	skillsDir := filepath.Join(agentDir, cfg.SkillsDir)
 	if err := os.MkdirAll(skillsDir, 0755); err != nil {
 		return 0, nil, err
 	}
 
-	embedFS := getSkillsFS(agentType)
-	if embedFS == nil {
-		return 0, nil, nil
-	}
-
-	srcDir := fmt.Sprintf("skills/%s", agentType)
-
-	if cfg.SkillNeedsDir {
-		// Codex/OpenCode: skills/agent/skill-name/SKILL.md
-		return copySkillsWithSubdirs(embedFS, srcDir, skillsDir)
-	}
-
-	// Claude: skills/agent/skill-name.md (flat)
-	return copyFlatFiles(embedFS, srcDir, skillsDir)
-}
-
-// copySkillsWithSubdirs copies skills that require subdirectories (Codex/OpenCode format).
-func copySkillsWithSubdirs(embedFS fs.FS, srcDir, targetDir string) (int, []string, error) {
-	entries, err := fs.ReadDir(embedFS, srcDir)
-	if err != nil {
-		return 0, nil, err
-	}
-
 	var copied int
 	var copiedPaths []string
 
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		skillName := entry.Name()
-		skillFile := filepath.Join(srcDir, skillName, "SKILL.md")
-		content, err := fs.ReadFile(embedFS, skillFile)
+	for _, skillName := range thtsfiles.GetAvailableSkills() {
+		content, err := thtsfiles.RenderSkill(agentType, skillName)
 		if err != nil {
-			continue
+			return copied, copiedPaths, fmt.Errorf("failed to render skill %s: %w", skillName, err)
 		}
 
-		targetSkillDir := filepath.Join(targetDir, skillName)
-		if err := os.MkdirAll(targetSkillDir, 0755); err != nil {
-			return copied, copiedPaths, err
+		var targetPath string
+		var relPath string
+		if cfg.SkillNeedsDir {
+			// Codex/OpenCode/Gemini: skills/skill-name/SKILL.md
+			skillDir := filepath.Join(skillsDir, skillName)
+			if err := os.MkdirAll(skillDir, 0755); err != nil {
+				return copied, copiedPaths, err
+			}
+			targetPath = filepath.Join(skillDir, "SKILL.md")
+			relPath = filepath.Join(skillName, "SKILL.md")
+		} else {
+			// Claude: skills/skill-name.md (flat)
+			targetPath = filepath.Join(skillsDir, skillName+".md")
+			relPath = skillName + ".md"
 		}
 
-		targetPath := filepath.Join(targetSkillDir, "SKILL.md")
-		if err := os.WriteFile(targetPath, content, 0644); err != nil {
+		if err := os.WriteFile(targetPath, []byte(content), 0644); err != nil {
 			return copied, copiedPaths, err
 		}
 		copied++
-		copiedPaths = append(copiedPaths, filepath.Join(skillName, "SKILL.md"))
+		copiedPaths = append(copiedPaths, relPath)
 	}
 
 	return copied, copiedPaths, nil
 }
 
-// copyFlatFiles copies markdown files from an embedded FS to a target directory.
-func copyFlatFiles(embedFS fs.FS, srcDir, targetDir string) (int, []string, error) {
-	return copyFlatFilesWithExt(embedFS, srcDir, targetDir, ".md")
-}
-
 // copyFlatFilesWithExt copies files with a specific extension from an embedded FS to a target directory.
+// This is used for plugins which are not templated.
 func copyFlatFilesWithExt(embedFS fs.FS, srcDir, targetDir, ext string) (int, []string, error) {
 	entries, err := fs.ReadDir(embedFS, srcDir)
 	if err != nil {
@@ -683,7 +661,7 @@ func copyFlatFilesWithExt(embedFS fs.FS, srcDir, targetDir, ext string) (int, []
 	return copied, copiedFiles, nil
 }
 
-// copyCommands copies command/prompt files for an agent type.
+// copyCommands copies command/prompt files for an agent type using templates.
 func copyCommands(agentDir string, agentType agents.AgentType) (int, []string, error) {
 	agentConfig := agents.GetConfig(agentType)
 	if agentConfig == nil || !agentConfig.SupportsCommands {
@@ -695,22 +673,34 @@ func copyCommands(agentDir string, agentType agents.AgentType) (int, []string, e
 		return 0, nil, err
 	}
 
-	embedFS := getCommandsFS(agentType)
-	if embedFS == nil {
-		return 0, nil, nil
-	}
-
 	// Determine file extension based on agent's command format
 	ext := ".md"
 	if agentConfig.CommandsFormat == "toml" {
 		ext = ".toml"
 	}
 
-	srcDir := fmt.Sprintf("commands/%s", agentType)
-	return copyFlatFilesWithExt(embedFS, srcDir, commandsDir, ext)
+	var copied int
+	var copiedPaths []string
+
+	for _, cmdName := range thtsfiles.GetAvailableCommands() {
+		content, err := thtsfiles.RenderCommand(agentType, cmdName)
+		if err != nil {
+			return copied, copiedPaths, fmt.Errorf("failed to render command %s: %w", cmdName, err)
+		}
+
+		filename := cmdName + ext
+		targetPath := filepath.Join(commandsDir, filename)
+		if err := os.WriteFile(targetPath, []byte(content), 0644); err != nil {
+			return copied, copiedPaths, err
+		}
+		copied++
+		copiedPaths = append(copiedPaths, filename)
+	}
+
+	return copied, copiedPaths, nil
 }
 
-// copyAgents copies agent files for an agent type.
+// copyAgents copies agent files for an agent type using templates.
 // Returns 0, nil, nil if the agent doesn't support the agents feature (AgentsDir is empty).
 func copyAgents(agentDir string, agentType agents.AgentType, cfg *agents.AgentConfig) (int, []string, error) {
 	// Skip if agent doesn't support agents (e.g., Gemini)
@@ -723,75 +713,25 @@ func copyAgents(agentDir string, agentType agents.AgentType, cfg *agents.AgentCo
 		return 0, nil, err
 	}
 
-	embedFS := getAgentsFS(agentType)
-	if embedFS == nil {
-		return 0, nil, nil
+	var copied int
+	var copiedPaths []string
+
+	for _, agentName := range thtsfiles.GetAvailableAgents() {
+		content, err := thtsfiles.RenderAgent(agentType, agentName)
+		if err != nil {
+			return copied, copiedPaths, fmt.Errorf("failed to render agent %s: %w", agentName, err)
+		}
+
+		filename := agentName + ".md"
+		targetPath := filepath.Join(agentsTargetDir, filename)
+		if err := os.WriteFile(targetPath, []byte(content), 0644); err != nil {
+			return copied, copiedPaths, err
+		}
+		copied++
+		copiedPaths = append(copiedPaths, filename)
 	}
 
-	srcDir := fmt.Sprintf("agents/%s", agentType)
-	return copyFlatFiles(embedFS, srcDir, agentsTargetDir)
-}
-
-// getSkillsFS returns the embedded FS for skills for an agent type.
-func getSkillsFS(agentType agents.AgentType) fs.FS {
-	switch agentType {
-	case agents.AgentClaude:
-		return thtsfiles.ClaudeSkills
-	case agents.AgentCodex:
-		return thtsfiles.CodexSkills
-	case agents.AgentOpenCode:
-		return thtsfiles.OpenCodeSkills
-	case agents.AgentGemini:
-		return thtsfiles.GeminiSkills
-	default:
-		return nil
-	}
-}
-
-// getAgentsFS returns the embedded FS for agents for an agent type.
-// Returns nil for agents that don't support the agents feature (e.g., Gemini).
-func getAgentsFS(agentType agents.AgentType) fs.FS {
-	switch agentType {
-	case agents.AgentClaude:
-		return thtsfiles.ClaudeAgents
-	case agents.AgentCodex:
-		return thtsfiles.CodexAgents
-	case agents.AgentOpenCode:
-		return thtsfiles.OpenCodeAgents
-	case agents.AgentGemini:
-		return nil // Gemini doesn't support agents
-	default:
-		return nil
-	}
-}
-
-// getCommandsFS returns the embedded FS for commands/prompts for an agent type.
-func getCommandsFS(agentType agents.AgentType) fs.FS {
-	switch agentType {
-	case agents.AgentClaude:
-		return thtsfiles.ClaudeCommands
-	case agents.AgentCodex:
-		return thtsfiles.CodexCommands
-	case agents.AgentOpenCode:
-		return thtsfiles.OpenCodeCommands
-	case agents.AgentGemini:
-		return thtsfiles.GeminiCommands
-	default:
-		return nil
-	}
-}
-
-// getHooksFS returns the embedded FS for hooks for an agent type.
-// Returns nil for agents that don't support hooks (e.g., Codex) or use plugins (OpenCode).
-func getHooksFS(agentType agents.AgentType) fs.FS {
-	switch agentType {
-	case agents.AgentClaude:
-		return thtsfiles.ClaudeHooks
-	case agents.AgentGemini:
-		return thtsfiles.GeminiHooks
-	default:
-		return nil
-	}
+	return copied, copiedPaths, nil
 }
 
 // getPluginsFS returns the embedded FS for plugins for an agent type.
@@ -805,7 +745,7 @@ func getPluginsFS(agentType agents.AgentType) fs.FS {
 	}
 }
 
-// copyHooks copies hook scripts for an agent type.
+// copyHooks copies hook scripts for an agent type using templates.
 // Returns 0, nil, nil if the agent doesn't support hooks.
 func copyHooks(agentDir string, agentType agents.AgentType, cfg *agents.AgentConfig) (int, []string, error) {
 	if cfg.HooksDir == "" {
@@ -817,13 +757,25 @@ func copyHooks(agentDir string, agentType agents.AgentType, cfg *agents.AgentCon
 		return 0, nil, err
 	}
 
-	embedFS := getHooksFS(agentType)
-	if embedFS == nil {
-		return 0, nil, nil
+	var copied int
+	var copiedPaths []string
+
+	for _, hookName := range thtsfiles.GetAvailableHooks() {
+		content, err := thtsfiles.RenderHook(agentType, hookName)
+		if err != nil {
+			return copied, copiedPaths, fmt.Errorf("failed to render hook %s: %w", hookName, err)
+		}
+
+		filename := hookName + ".sh"
+		targetPath := filepath.Join(hooksDir, filename)
+		if err := os.WriteFile(targetPath, []byte(content), 0755); err != nil {
+			return copied, copiedPaths, err
+		}
+		copied++
+		copiedPaths = append(copiedPaths, filename)
 	}
 
-	srcDir := fmt.Sprintf("hooks/%s", agentType)
-	return copyFlatFilesWithExt(embedFS, srcDir, hooksDir, ".sh")
+	return copied, copiedPaths, nil
 }
 
 // copyPlugins copies plugin files for an agent type.

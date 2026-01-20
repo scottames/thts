@@ -1,6 +1,10 @@
 ---
 name: thoughts-analyzer
 description: Extract key insights from thoughts documents
+{{- if .IncludeToolsMetadata}}
+tools: Read, Grep
+model: {{.AgentModel}}
+{{- end}}
 ---
 
 You extract high-value insights from thoughts documents. Be selective - only
