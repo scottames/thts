@@ -7,14 +7,3 @@ git-ignored*
 coverage.out
 coverage.html
 thoughts/
-# thts-agent-start
-.claude/thts-*
-.claude/*/thts-*
-.claude/*/thoughts-*
-.opencode/thts-*
-.opencode/*/thts-*
-.opencode/*/thoughts-*
-.gemini/thts-*
-.gemini/*/thts-*
-.gemini/*/thoughts-*
-# thts-agent-end
