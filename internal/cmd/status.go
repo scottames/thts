@@ -115,13 +115,22 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	fmt.Printf("  %s\n", branchStatus)
 
 	// Remote status
-	remoteStatus := getGitRemoteStatus(expandedRepo)
+	syncMode := cfg.GetSyncMode()
+	remoteStatus := getGitRemoteStatus(expandedRepo, syncMode)
 	fmt.Printf("  Remote: %s\n", remoteStatus)
 
 	// Last commit
 	lastCommit := getLastCommit(expandedRepo)
 	fmt.Printf("  Last commit: %s\n", lastCommit)
 	fmt.Println()
+
+	if syncMode == config.SyncModeLocal {
+		fmt.Printf("%s Run %s in %s for accurate remote status\n",
+			ui.Muted("Tip:"),
+			ui.Accent("git fetch"),
+			ui.Accent(expandedRepo))
+		fmt.Println()
+	}
 
 	// Show uncommitted changes
 	changes := getUncommittedChanges(expandedRepo)
@@ -156,7 +165,7 @@ func getGitBranchStatus(repoPath string) string {
 }
 
 // getGitRemoteStatus returns the remote sync status.
-func getGitRemoteStatus(repoPath string) string {
+func getGitRemoteStatus(repoPath string, syncMode config.SyncMode) string {
 	// Check if remote exists
 	cmd := exec.Command("git", "remote", "get-url", "origin")
 	cmd.Dir = repoPath
@@ -164,10 +173,12 @@ func getGitRemoteStatus(repoPath string) string {
 		return ui.Muted("No remote configured")
 	}
 
-	// Try to fetch (silently)
-	fetchCmd := exec.Command("git", "fetch")
-	fetchCmd.Dir = repoPath
-	_ = fetchCmd.Run() // Ignore errors
+	// Skip fetch in local mode to avoid network/SSH operations
+	if syncMode != config.SyncModeLocal {
+		fetchCmd := exec.Command("git", "fetch")
+		fetchCmd.Dir = repoPath
+		_ = fetchCmd.Run() // Ignore errors
+	}
 
 	// Check ahead/behind status
 	statusCmd := exec.Command("git", "status", "-sb")
@@ -192,6 +203,11 @@ func getGitRemoteStatus(repoPath string) string {
 		return ui.StyleWarning.Render(fmt.Sprintf("%s commits ahead of remote", aheadMatch[1]))
 	} else if behindMatch != nil {
 		return ui.StyleWarning.Render(fmt.Sprintf("%s commits behind remote", behindMatch[1]))
+	}
+
+	// In local mode, status may be stale (tip shown by caller)
+	if syncMode == config.SyncModeLocal {
+		return ui.Muted("Up to date (cached)")
 	}
 
 	return ui.StyleSuccess.Render("Up to date with remote")
