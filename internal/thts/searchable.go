@@ -3,7 +3,6 @@ package thts
 import (
 	"errors"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -162,7 +161,8 @@ func walkFollowingSymlinks(root, dir string, visited map[string]bool, files *[]s
 // isCrossFilesystemError checks if an error is due to cross-filesystem hard link attempt.
 func isCrossFilesystemError(err error) bool {
 	// Check for EXDEV (cross-device link)
-	var linkErr *fs.PathError
+	// os.Link returns *os.LinkError, not *fs.PathError
+	var linkErr *os.LinkError
 	if errors.As(err, &linkErr) {
 		if errno, ok := linkErr.Err.(syscall.Errno); ok {
 			return errno == syscall.EXDEV
