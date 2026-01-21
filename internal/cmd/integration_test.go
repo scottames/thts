@@ -832,3 +832,88 @@ func TestFullWorkflow(t *testing.T) {
 		}
 	})
 }
+
+func TestAddCommand(t *testing.T) {
+	t.Run("add with --sync flag", func(t *testing.T) {
+		env := setupTestEnv(t)
+		defer env.cleanup()
+
+		// Initialize first
+		_, err := env.runThts("init", "--name", "add-sync-test", "--force")
+		if err != nil {
+			t.Fatalf("init failed: %v", err)
+		}
+
+		// Run add with --sync flag
+		output, err := env.runThts("add", "-t", "sync-test-note", "--in", "notes", "--no-edit", "--sync")
+		if err != nil {
+			t.Fatalf("add --sync failed: %v\nOutput: %s", err, output)
+		}
+
+		// Verify output includes sync message
+		if !strings.Contains(output, "Syncing thoughts") {
+			t.Errorf("expected 'Syncing thoughts' message, got: %s", output)
+		}
+
+		// Verify the file was created (check for the success message)
+		if !strings.Contains(output, "Created") {
+			t.Errorf("expected 'Created' message, got: %s", output)
+		}
+
+		// Verify the file exists in the thoughts repo
+		// The file should be at: repos/add-sync-test/testuser/notes/YYYY-MM-DD-sync-test-note.md
+		userNotesDir := filepath.Join(env.thoughtsRepo, "repos", "add-sync-test", "testuser", "notes")
+		entries, err := os.ReadDir(userNotesDir)
+		if err != nil {
+			t.Fatalf("failed to read notes dir: %v", err)
+		}
+
+		found := false
+		for _, entry := range entries {
+			if strings.Contains(entry.Name(), "sync-test-note") {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("note file not found in %s", userNotesDir)
+		}
+
+		// Verify the commit was made in the thoughts repo
+		cmd := exec.Command("git", "log", "-1", "--pretty=format:%s")
+		cmd.Dir = env.thoughtsRepo
+		commitMsg, err := cmd.Output()
+		if err != nil {
+			t.Errorf("failed to get commit log: %v", err)
+		} else if !strings.Contains(string(commitMsg), "sync") {
+			t.Logf("commit message: %s", commitMsg)
+		}
+	})
+
+	t.Run("add with --sync and --quiet flag", func(t *testing.T) {
+		env := setupTestEnv(t)
+		defer env.cleanup()
+
+		// Initialize first
+		_, err := env.runThts("init", "--name", "add-quiet-test", "--force")
+		if err != nil {
+			t.Fatalf("init failed: %v", err)
+		}
+
+		// Run add with --sync and --quiet flags
+		output, err := env.runThts("add", "-t", "quiet-sync-note", "--in", "notes", "--no-edit", "--sync", "-q")
+		if err != nil {
+			t.Fatalf("add --sync -q failed: %v\nOutput: %s", err, output)
+		}
+
+		// In quiet mode, output should only be the file path (no "Syncing thoughts" message)
+		if strings.Contains(output, "Syncing thoughts") {
+			t.Errorf("quiet mode should not show 'Syncing thoughts' message, got: %s", output)
+		}
+
+		// Output should contain a path
+		if !strings.Contains(output, "thoughts") || !strings.Contains(output, ".md") {
+			t.Errorf("expected file path in output, got: %s", output)
+		}
+	})
+}

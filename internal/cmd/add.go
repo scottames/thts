@@ -41,6 +41,7 @@ type AddOptions struct {
 
 	// Output control
 	Quiet bool // --quiet/-q: only output file path to stdout
+	Sync  bool // --sync: sync after adding
 }
 
 // AddTarget represents the resolved target location for a new thought.
@@ -115,6 +116,7 @@ func init() {
 
 	// Output control
 	addCmd.Flags().BoolP("quiet", "q", false, "only output file path (for scripting)")
+	addCmd.Flags().Bool("sync", false, "sync thoughts after adding")
 
 	// Wire up tab completion for --in flag
 	_ = addCmd.RegisterFlagCompletionFunc("in", CompleteCategories)
@@ -207,6 +209,23 @@ func runAdd(cmd *cobra.Command, args []string) error {
 		printAddResult(filePath, target, dirsCreated, templateName)
 	}
 
+	// Sync if requested
+	if opts.Sync {
+		syncMode := cfg.GetSyncMode()
+		repoPath, err := resolveThoughtsRepoPath(cfg, opts)
+		if err != nil {
+			return fmt.Errorf("failed to resolve thoughts repo for sync: %w", err)
+		}
+
+		if !opts.Quiet {
+			fmt.Println()
+			fmt.Println(ui.Info("Syncing thoughts..."))
+		}
+		if err := syncThoughtsRepo(repoPath, "", syncMode); err != nil {
+			return fmt.Errorf("sync failed: %w", err)
+		}
+	}
+
 	// Open editor if needed
 	if !shouldOpenEditor {
 		return nil
@@ -285,6 +304,11 @@ func parseAddOptions(cmd *cobra.Command, args []string) (*AddOptions, error) {
 
 	// Output control
 	opts.Quiet, err = cmd.Flags().GetBool("quiet")
+	if err != nil {
+		return nil, err
+	}
+
+	opts.Sync, err = cmd.Flags().GetBool("sync")
 	if err != nil {
 		return nil, err
 	}
@@ -486,6 +510,63 @@ func resolveDefaultGlobalDir(cfg *config.Config) (string, bool, error) {
 	}
 
 	return globalDir, true, nil
+}
+
+// resolveThoughtsRepoPath returns the central thoughts repo path for syncing.
+// This mirrors the resolution logic in resolveThoughtsDir but returns the
+// central repo path instead of the local thoughts/ directory.
+func resolveThoughtsRepoPath(cfg *config.Config, opts *AddOptions) (string, error) {
+	// Case 1: --profile flag specified
+	if opts.ProfileName != "" {
+		if !cfg.ValidateProfile(opts.ProfileName) {
+			return "", fmt.Errorf("profile %q not found", opts.ProfileName)
+		}
+		profile := cfg.Profiles[opts.ProfileName]
+		return config.ExpandPath(profile.ThoughtsRepo), nil
+	}
+
+	// Case 2: --repo flag specified - find the repo's mapped profile
+	if opts.RepoPath != "" {
+		expandedPath := config.ExpandPath(opts.RepoPath)
+		if !filepath.IsAbs(expandedPath) {
+			cwd, err := os.Getwd()
+			if err != nil {
+				return "", fmt.Errorf("failed to get current directory: %w", err)
+			}
+			expandedPath = filepath.Join(cwd, expandedPath)
+		}
+		resolvedProfile := cfg.ResolveProfileForRepo(expandedPath)
+		if resolvedProfile == nil {
+			resolvedProfile = cfg.GetDefaultProfileResolved()
+		}
+		if resolvedProfile == nil {
+			return "", fmt.Errorf("no profile configured")
+		}
+		return config.ExpandPath(resolvedProfile.ThoughtsRepo), nil
+	}
+
+	// Case 3: In a git repo with thts initialized
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("failed to get current directory: %w", err)
+	}
+
+	if git.IsInGitRepoAt(cwd) {
+		thoughtsDir := filepath.Join(cwd, "thoughts")
+		if isValidThoughtsSetup(thoughtsDir, cfg.User) {
+			resolvedProfile := cfg.ResolveProfileForRepo(cwd)
+			if resolvedProfile != nil {
+				return config.ExpandPath(resolvedProfile.ThoughtsRepo), nil
+			}
+		}
+	}
+
+	// Case 4: Fall back to default profile
+	defaultProfile := cfg.GetDefaultProfileResolved()
+	if defaultProfile == nil {
+		return "", fmt.Errorf("no default profile configured")
+	}
+	return config.ExpandPath(defaultProfile.ThoughtsRepo), nil
 }
 
 // buildTargetPath constructs the full directory path for the thought file.

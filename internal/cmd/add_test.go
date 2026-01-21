@@ -715,3 +715,101 @@ func TestResolveContent_NoEdit(t *testing.T) {
 		t.Error("resolveContent() shouldOpenEditor = true, want false with --no-edit")
 	}
 }
+
+func TestResolveThoughtsRepoPath(t *testing.T) {
+	t.Run("profile flag specified", func(t *testing.T) {
+		cfg := &config.Config{
+			User: "testuser",
+			Profiles: map[string]*config.ProfileConfig{
+				"work": {
+					ThoughtsRepo: "/home/user/work-thoughts",
+					GlobalDir:    "global",
+				},
+				"default": {
+					ThoughtsRepo: "/home/user/thoughts",
+					GlobalDir:    "global",
+					Default:      true,
+				},
+			},
+		}
+
+		opts := &AddOptions{
+			ProfileName: "work",
+		}
+
+		repoPath, err := resolveThoughtsRepoPath(cfg, opts)
+		if err != nil {
+			t.Fatalf("resolveThoughtsRepoPath() error = %v", err)
+		}
+
+		if repoPath != "/home/user/work-thoughts" {
+			t.Errorf("resolveThoughtsRepoPath() = %q, want %q", repoPath, "/home/user/work-thoughts")
+		}
+	})
+
+	t.Run("profile flag invalid profile", func(t *testing.T) {
+		cfg := &config.Config{
+			User: "testuser",
+			Profiles: map[string]*config.ProfileConfig{
+				"default": {
+					ThoughtsRepo: "/home/user/thoughts",
+					GlobalDir:    "global",
+					Default:      true,
+				},
+			},
+		}
+
+		opts := &AddOptions{
+			ProfileName: "nonexistent",
+		}
+
+		_, err := resolveThoughtsRepoPath(cfg, opts)
+		if err == nil {
+			t.Error("resolveThoughtsRepoPath() error = nil, want error for invalid profile")
+		}
+		if !strings.Contains(err.Error(), "not found") {
+			t.Errorf("resolveThoughtsRepoPath() error = %q, want 'not found' error", err.Error())
+		}
+	})
+
+	t.Run("falls back to default profile", func(t *testing.T) {
+		cfg := &config.Config{
+			User: "testuser",
+			Profiles: map[string]*config.ProfileConfig{
+				"default": {
+					ThoughtsRepo: "/home/user/thoughts",
+					GlobalDir:    "global",
+					Default:      true,
+				},
+			},
+		}
+
+		opts := &AddOptions{} // No profile, no repo
+
+		repoPath, err := resolveThoughtsRepoPath(cfg, opts)
+		if err != nil {
+			t.Fatalf("resolveThoughtsRepoPath() error = %v", err)
+		}
+
+		if repoPath != "/home/user/thoughts" {
+			t.Errorf("resolveThoughtsRepoPath() = %q, want %q", repoPath, "/home/user/thoughts")
+		}
+	})
+
+	t.Run("no default profile configured", func(t *testing.T) {
+		cfg := &config.Config{
+			User:     "testuser",
+			Profiles: map[string]*config.ProfileConfig{},
+		}
+
+		opts := &AddOptions{}
+
+		_, err := resolveThoughtsRepoPath(cfg, opts)
+		if err == nil {
+			t.Error("resolveThoughtsRepoPath() error = nil, want error for no default profile")
+		}
+		if !strings.Contains(err.Error(), "no default profile") {
+			t.Errorf("resolveThoughtsRepoPath() error = %q, want 'no default profile' error", err.Error())
+		}
+	})
+}
