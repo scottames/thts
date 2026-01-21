@@ -2,7 +2,10 @@ package config
 
 import (
 	"sort"
+	"strings"
 	"testing"
+
+	"go.yaml.in/yaml/v3"
 )
 
 func TestDefaults(t *testing.T) {
@@ -1335,5 +1338,120 @@ func TestDefaultCategoriesScope(t *testing.T) {
 		if cat.Scope != expectedScope {
 			t.Errorf("category %q: Scope = %v, want %v", name, cat.Scope, expectedScope)
 		}
+	}
+}
+
+// TestConfigTemplateCoversAllFields ensures the YAML template documents all Config fields.
+// This test prevents drift between the Config struct and the template.
+func TestConfigTemplateCoversAllFields(t *testing.T) {
+	// Parse the embedded template
+	var templateConfig map[string]interface{}
+	if err := yaml.Unmarshal([]byte(ConfigTemplate), &templateConfig); err != nil {
+		t.Fatalf("failed to parse ConfigTemplate: %v", err)
+	}
+
+	// Expected top-level keys from Config struct (based on yaml tags)
+	// These are the configurable fields users should know about
+	expectedKeys := []string{
+		"user",
+		"autoSyncInWorktrees",
+		"gitignore",
+		"defaultScope",
+		"defaultTemplate",
+		"sync",
+		"agents",
+		"hooks",
+		"categories",
+		"profiles",
+	}
+
+	// Check that all expected keys are documented in the template
+	// Note: repoMappings is intentionally excluded as it's shown commented out
+	// and is an advanced feature
+	var missing []string
+	for _, key := range expectedKeys {
+		if _, exists := templateConfig[key]; !exists {
+			// Also check if it's in a comment (starts with #)
+			if !strings.Contains(ConfigTemplate, key+":") {
+				missing = append(missing, key)
+			}
+		}
+	}
+
+	if len(missing) > 0 {
+		t.Errorf("ConfigTemplate is missing documentation for fields: %v\n"+
+			"Update config_template.yaml to document these fields.", missing)
+	}
+
+	// Verify template can be parsed as a valid Config
+	var cfg Config
+	if err := yaml.Unmarshal([]byte(ConfigTemplate), &cfg); err != nil {
+		t.Errorf("ConfigTemplate is not valid Config YAML: %v", err)
+	}
+}
+
+func TestFullDefaults(t *testing.T) {
+	cfg := FullDefaults()
+
+	// Verify base defaults are included
+	if !cfg.AutoSyncInWorktrees {
+		t.Error("expected AutoSyncInWorktrees to be true")
+	}
+	if cfg.Gitignore != ComponentModeLocal {
+		t.Errorf("expected Gitignore to be local, got %s", cfg.Gitignore)
+	}
+
+	// Verify expanded defaults
+	if cfg.DefaultScope != ScopeUser {
+		t.Errorf("expected DefaultScope to be user, got %s", cfg.DefaultScope)
+	}
+	if cfg.DefaultTemplate != "default.md" {
+		t.Errorf("expected DefaultTemplate to be default.md, got %s", cfg.DefaultTemplate)
+	}
+
+	// Verify Sync config
+	if cfg.Sync == nil {
+		t.Fatal("expected Sync to be set")
+	}
+	if cfg.Sync.Mode != SyncModeFull {
+		t.Errorf("expected Sync.Mode to be full, got %s", cfg.Sync.Mode)
+	}
+
+	// Verify Agents config
+	if cfg.Agents == nil {
+		t.Fatal("expected Agents to be set")
+	}
+	if cfg.Agents.Skills != ComponentModeLocal {
+		t.Errorf("expected Agents.Skills to be local, got %s", cfg.Agents.Skills)
+	}
+	if cfg.Agents.Commands != ComponentModeLocal {
+		t.Errorf("expected Agents.Commands to be local, got %s", cfg.Agents.Commands)
+	}
+	if cfg.Agents.Agents != ComponentModeLocal {
+		t.Errorf("expected Agents.Agents to be local, got %s", cfg.Agents.Agents)
+	}
+
+	// Verify Hooks config
+	if cfg.Hooks == nil {
+		t.Fatal("expected Hooks to be set")
+	}
+	if len(cfg.Hooks.Keywords) == 0 {
+		t.Error("expected Hooks.Keywords to have values")
+	}
+
+	// Verify Categories
+	if cfg.Categories == nil {
+		t.Fatal("expected Categories to be set")
+	}
+	if len(cfg.Categories) == 0 {
+		t.Error("expected Categories to have values")
+	}
+
+	// Verify Profiles (inherited from Defaults)
+	if cfg.Profiles == nil {
+		t.Fatal("expected Profiles to be set")
+	}
+	if _, exists := cfg.Profiles["default"]; !exists {
+		t.Error("expected default profile to exist")
 	}
 }

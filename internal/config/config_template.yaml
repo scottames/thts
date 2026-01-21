@@ -1,0 +1,106 @@
+# thts Configuration
+# Copy this file to ~/.config/thts/config.yaml and customize
+
+# User identifier (required - set during thts setup)
+user: ""
+
+# Editor for thts edit command (optional - falls back to $EDITOR)
+# editor: vim
+
+# Automatically sync thoughts when in git worktrees
+# Set to false if you manage worktree thoughts separately
+autoSyncInWorktrees: true
+
+# Where to manage .gitignore entries
+# Options: local (per-project), global (~/.config/git/ignore), disabled
+gitignore: local
+
+# Default scope for new thoughts
+# Options: user (thoughts/{user}/), shared (thoughts/shared/)
+defaultScope: user
+
+# Default template when category doesn't specify one
+defaultTemplate: default.md
+
+# Sync behavior for remote operations
+sync:
+  # Mode: full (push+pull), pull (pull only), local (no remote)
+  mode: full
+
+# Agent integration settings
+agents:
+  # Where to install agent components
+  # Options: local (per-project), global (~/.claude/ etc), disabled
+  skills: local
+  commands: local
+  agents: local
+
+# Hook-based instruction injection
+hooks:
+  # Keywords in prompts that trigger full instruction injection
+  keywords:
+    - research
+    - plan
+    - decision
+    - thoughts
+    - handoff
+    - notes
+    - save
+    - document
+    - capture
+    - findings
+    - learnings
+    - gotchas
+    - ADR
+    - architecture
+    - resume
+    - wrap up
+    - end session
+
+# Content organization categories
+# Each category can have: description, template, trigger, scope, subCategories
+categories:
+  research:
+    description: Research findings and analysis
+    trigger: Any research phase produces findings
+    template: research.md
+    scope: shared
+  plans:
+    description: Implementation plans and design docs
+    trigger: After plan mode approval
+    template: plan.md
+    scope: shared
+  handoffs:
+    description: Session handoff documents
+    scope: shared
+  decisions:
+    description: Architecture and design decisions
+    template: decision.md
+    scope: shared
+  notes:
+    description: Quick notes, gotchas, learnings
+    trigger: Non-obvious behavior, bugs, workarounds discovered
+    template: note.md
+    scope: both
+
+# Profile configuration
+# Profiles allow different thoughts repos for different contexts
+profiles:
+  default:
+    thoughtsRepo: ~/thoughts # Path to thoughts git repository
+    reposDir: repos # Subdirectory for per-repo thoughts
+    globalDir: global # Subdirectory for cross-repo thoughts
+    default: true # Mark as default profile
+    # defaultAgents:            # Agents to auto-init (optional)
+    #   - claude
+    # categories:               # Profile-specific category overrides (optional)
+    #   tickets:
+    #     description: Work tickets
+    #     scope: user
+
+# Repository mappings (optional)
+# Map specific repos to different profiles or names
+# repoMappings:
+#   /path/to/repo:
+#     repo: custom-name
+#     profile: work

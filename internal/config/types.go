@@ -115,6 +115,9 @@ type ResolvedProfile struct {
 }
 
 // Defaults returns a Config with default values set.
+//
+// NOTE: When adding fields to Config, also update FullDefaults() and
+// config_template.yaml, then run tests to verify completeness.
 func Defaults() *Config {
 	return &Config{
 		AutoSyncInWorktrees: true,
@@ -129,6 +132,30 @@ func Defaults() *Config {
 			},
 		},
 	}
+}
+
+// FullDefaults returns a Config with ALL default values explicitly set.
+// This is useful for showing users what options exist and their defaults.
+//
+// NOTE: When adding fields to Config, also update this function and
+// config_template.yaml, then run tests to verify completeness.
+func FullDefaults() *Config {
+	// Start with base defaults to avoid duplication
+	cfg := Defaults()
+
+	// Expand implicit defaults (values from getter methods)
+	cfg.DefaultScope = DefaultScopeValue
+	cfg.DefaultTemplate = "default.md"
+	cfg.Sync = &SyncConfig{Mode: SyncModeFull}
+	cfg.Agents = &AgentsConfig{
+		Skills:   ComponentModeLocal,
+		Commands: ComponentModeLocal,
+		Agents:   ComponentModeLocal,
+	}
+	cfg.Hooks = &HooksConfig{Keywords: DefaultHookKeywords()}
+	cfg.Categories = DefaultCategories()
+
+	return cfg
 }
 
 // GetDefaultProfile returns the default profile and its name.
