@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/scottames/thts/internal/config"
@@ -122,4 +123,131 @@ func (m *GlobalManifest) GetAllFiles() []string {
 // IsEmpty returns true if no components are installed.
 func (m *GlobalManifest) IsEmpty() bool {
 	return len(m.Components) == 0
+}
+
+// FilterByAgents returns components filtered to only include files for requested agents.
+// If requested is empty, returns all components unchanged (current behavior for removing all).
+// Returns a deep copy with filtered files and agents lists.
+func (m *GlobalManifest) FilterByAgents(requested []string) map[string]*GlobalComponentInfo {
+	if len(requested) == 0 {
+		return m.Components
+	}
+
+	requestedSet := make(map[string]bool)
+	for _, a := range requested {
+		requestedSet[a] = true
+	}
+
+	filtered := make(map[string]*GlobalComponentInfo)
+	for name, info := range m.Components {
+		// Filter agents to only requested ones
+		var filteredAgents []string
+		for _, a := range info.Agents {
+			if requestedSet[a] {
+				filteredAgents = append(filteredAgents, a)
+			}
+		}
+		if len(filteredAgents) == 0 {
+			continue
+		}
+
+		// Filter files to only those belonging to requested agents
+		filteredFiles := filterFilesByAgents(info.Files, requestedSet)
+		if len(filteredFiles) == 0 {
+			continue
+		}
+
+		filtered[name] = &GlobalComponentInfo{
+			Agents:    filteredAgents,
+			Files:     filteredFiles,
+			Gitignore: info.Gitignore,
+		}
+	}
+	return filtered
+}
+
+// filterFilesByAgents filters files to only those belonging to agents in the set.
+// Determines agent ownership by checking if file path contains the agent's global directory.
+func filterFilesByAgents(files []string, agentSet map[string]bool) []string {
+	var result []string
+	for _, f := range files {
+		agent := getAgentFromPath(f)
+		if agent != "" && agentSet[agent] {
+			result = append(result, f)
+		}
+	}
+	return result
+}
+
+// getAgentFromPath determines which agent a file belongs to based on its path.
+func getAgentFromPath(filePath string) string {
+	// Check each known agent's global directory
+	agentTypes := []string{"claude", "codex", "opencode", "gemini"}
+	for _, agent := range agentTypes {
+		globalDir := config.GlobalAgentDir(agent)
+		if globalDir == "" {
+			continue
+		}
+		// Check if file is under this agent's directory
+		if strings.HasPrefix(filePath, globalDir+string(filepath.Separator)) || filePath == globalDir {
+			return agent
+		}
+	}
+	return ""
+}
+
+// RemoveAgents removes the specified agents and their files from all components.
+// Components with no remaining agents are deleted.
+// Returns true if the manifest is now empty.
+func (m *GlobalManifest) RemoveAgents(toRemove []string) bool {
+	removeSet := make(map[string]bool)
+	for _, a := range toRemove {
+		removeSet[a] = true
+	}
+
+	// Build set of agents to keep (inverse of removeSet)
+	keepSet := make(map[string]bool)
+	for _, info := range m.Components {
+		for _, a := range info.Agents {
+			if !removeSet[a] {
+				keepSet[a] = true
+			}
+		}
+	}
+
+	for name, info := range m.Components {
+		// Remove specified agents from the agents list
+		info.Agents = removeFromAgentSlice(info.Agents, removeSet)
+
+		// Remove files belonging to the removed agents (keep files for remaining agents)
+		info.Files = filterFilesByAgents(info.Files, keepSet)
+
+		// Delete component if no agents remain
+		if len(info.Agents) == 0 {
+			delete(m.Components, name)
+		}
+	}
+	return m.IsEmpty()
+}
+
+// removeFromAgentSlice removes agents in removeSet from the slice.
+func removeFromAgentSlice(agents []string, removeSet map[string]bool) []string {
+	var result []string
+	for _, a := range agents {
+		if !removeSet[a] {
+			result = append(result, a)
+		}
+	}
+	return result
+}
+
+// GetFilesForAgents returns files from components that include any of the specified agents.
+// If agents is empty, returns all files.
+func (m *GlobalManifest) GetFilesForAgents(agents []string) []string {
+	filtered := m.FilterByAgents(agents)
+	var files []string
+	for _, comp := range filtered {
+		files = append(files, comp.Files...)
+	}
+	return files
 }

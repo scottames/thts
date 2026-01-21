@@ -1081,6 +1081,20 @@ func runGlobalUninit(_ *cobra.Command, _ []string) error {
 	fmt.Println(ui.Header("Remove Global Agent Components"))
 	fmt.Println()
 
+	// Parse requested agents from -a flag
+	var requestedAgents []agents.AgentType
+	var requestedAgentStrings []string
+	if uninitAgents != "" {
+		var err error
+		requestedAgents, err = agents.ParseAgentTypes(uninitAgents)
+		if err != nil {
+			return err
+		}
+		requestedAgentStrings = agents.AgentTypesToStrings(requestedAgents)
+		fmt.Printf("%s Filtering to agents: %s\n", ui.Info(""), strings.Join(requestedAgentStrings, ", "))
+		fmt.Println()
+	}
+
 	// Load global manifest
 	manifest, err := LoadGlobalManifest()
 	if err != nil {
@@ -1091,15 +1105,32 @@ func runGlobalUninit(_ *cobra.Command, _ []string) error {
 		return nil
 	}
 
+	// Filter manifest by requested agents
+	filteredComponents := manifest.FilterByAgents(requestedAgentStrings)
+	if len(filteredComponents) == 0 {
+		if len(requestedAgents) > 0 {
+			fmt.Println(ui.Info("No matching global installation found for specified agents."))
+		} else {
+			fmt.Println(ui.Info("No global installation found."))
+		}
+		return nil
+	}
+
 	// Show what will be removed
 	fmt.Println(ui.SubHeader("Files to remove:"))
-	for component, info := range manifest.Components {
+	for component, info := range filteredComponents {
 		fmt.Printf("  %s (%d files for %s):\n", ui.Accent(component), len(info.Files), strings.Join(info.Agents, ", "))
 		for _, f := range info.Files {
 			fmt.Printf("    %s\n", ui.Muted(config.ContractPath(f)))
 		}
 	}
 	fmt.Println()
+
+	// Handle dry-run
+	if uninitDryRun {
+		fmt.Println(ui.Info("Dry run complete. No files were removed."))
+		return nil
+	}
 
 	// Confirm removal
 	if !uninitForce {
@@ -1119,34 +1150,45 @@ func runGlobalUninit(_ *cobra.Command, _ []string) error {
 		}
 	}
 
-	// Remove files, with special handling for hooks
+	// Remove files from filtered components, with special handling for hooks
 	var removed int
-	hooksInfo := manifest.Components["hooks"]
+	hooksInfo := filteredComponents["hooks"]
 
-	for _, f := range manifest.GetAllFiles() {
-		// Special handling for settings files - remove hooks from them rather than deleting
-		// Matches settings.json (global) and settings.local.json (project-level)
-		if hooksInfo != nil && (strings.HasSuffix(f, "settings.json") || strings.HasSuffix(f, "settings.local.json")) {
-			if err := removeGlobalHooksFromSettings(f, hooksInfo.Agents); err != nil {
-				fmt.Println(ui.WarningF("  Could not remove hooks from %s: %v", config.ContractPath(f), err))
+	for _, info := range filteredComponents {
+		for _, f := range info.Files {
+			// Special handling for settings files - remove hooks from them rather than deleting
+			// Matches settings.json (global) and settings.local.json (project-level)
+			if hooksInfo != nil && (strings.HasSuffix(f, "settings.json") || strings.HasSuffix(f, "settings.local.json")) {
+				// Only remove hooks for the agents we're uninstalling
+				agentsToRemove := hooksInfo.Agents
+				if len(requestedAgentStrings) > 0 {
+					agentsToRemove = intersectStrings(hooksInfo.Agents, requestedAgentStrings)
+				}
+				if err := removeGlobalHooksFromSettings(f, agentsToRemove); err != nil {
+					fmt.Println(ui.WarningF("  Could not remove hooks from %s: %v", config.ContractPath(f), err))
+				} else {
+					fmt.Printf("  %s Removed hooks from %s\n", ui.Success(""), config.ContractPath(f))
+				}
+				continue
+			}
+
+			if err := os.Remove(f); err != nil {
+				if !os.IsNotExist(err) {
+					fmt.Println(ui.WarningF("  Could not remove %s: %v", config.ContractPath(f), err))
+				}
 			} else {
-				fmt.Printf("  %s Removed hooks from %s\n", ui.Success(""), config.ContractPath(f))
+				removed++
 			}
-			continue
-		}
-
-		if err := os.Remove(f); err != nil {
-			if !os.IsNotExist(err) {
-				fmt.Println(ui.WarningF("  Could not remove %s: %v", config.ContractPath(f), err))
-			}
-		} else {
-			removed++
 		}
 	}
 	fmt.Printf("%s Removed %d file(s)\n", ui.Success(""), removed)
 
-	// Clean up empty directories
-	for _, agentType := range agents.AllAgentTypes() {
+	// Clean up empty directories for affected agents
+	agentsToClean := requestedAgents
+	if len(agentsToClean) == 0 {
+		agentsToClean = agents.AllAgentTypes()
+	}
+	for _, agentType := range agentsToClean {
 		globalDir := config.GlobalAgentDir(string(agentType))
 		if globalDir == "" {
 			continue
@@ -1154,9 +1196,36 @@ func runGlobalUninit(_ *cobra.Command, _ []string) error {
 		cleanEmptyDirs(globalDir)
 	}
 
-	// Reset config to local
+	// Update manifest: remove specified agents from all components
+	if len(requestedAgentStrings) > 0 {
+		isEmpty := manifest.RemoveAgents(requestedAgentStrings)
+		if isEmpty {
+			// Manifest is now empty, delete it
+			if err := DeleteGlobalManifest(); err != nil {
+				fmt.Println(ui.WarningF("Could not remove manifest: %v", err))
+			} else {
+				fmt.Println(ui.SuccessF("Removed manifest: %s", config.ContractPath(config.GlobalManifestPath())))
+			}
+		} else {
+			// Save updated manifest with remaining agents
+			if err := SaveGlobalManifest(manifest); err != nil {
+				fmt.Println(ui.WarningF("Could not update manifest: %v", err))
+			} else {
+				fmt.Println(ui.Success("Updated manifest with remaining agents"))
+			}
+		}
+	} else {
+		// No filter specified - remove entire manifest
+		if err := DeleteGlobalManifest(); err != nil {
+			fmt.Println(ui.WarningF("Could not remove manifest: %v", err))
+		} else {
+			fmt.Println(ui.SuccessF("Removed manifest: %s", config.ContractPath(config.GlobalManifestPath())))
+		}
+	}
+
+	// Reset config to local for affected components
 	cfg := config.LoadOrDefault()
-	for component := range manifest.Components {
+	for component := range filteredComponents {
 		cfg.SetAgentComponentMode(component, config.ComponentModeLocal)
 	}
 	if err := config.Save(cfg); err != nil {
@@ -1165,15 +1234,23 @@ func runGlobalUninit(_ *cobra.Command, _ []string) error {
 		fmt.Println(ui.Success("Reset config to local mode"))
 	}
 
-	// Remove manifest
-	if err := DeleteGlobalManifest(); err != nil {
-		fmt.Println(ui.WarningF("Could not remove manifest: %v", err))
-	} else {
-		fmt.Println(ui.SuccessF("Removed manifest: %s", config.ContractPath(config.GlobalManifestPath())))
-	}
-
 	fmt.Println()
 	fmt.Println(ui.Success("Global uninstallation complete."))
 
 	return nil
+}
+
+// intersectStrings returns the intersection of two string slices.
+func intersectStrings(a, b []string) []string {
+	bSet := make(map[string]bool)
+	for _, s := range b {
+		bSet[s] = true
+	}
+	var result []string
+	for _, s := range a {
+		if bSet[s] {
+			result = append(result, s)
+		}
+	}
+	return result
 }
