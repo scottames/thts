@@ -577,7 +577,7 @@ func copyTemplates(thoughtsDir string) error {
 	}
 
 	// Read all template files from embedded FS
-	entries, err := iofs.ReadDir(thtsfiles.Templates, "templates")
+	entries, err := iofs.ReadDir(thtsfiles.Templates, "embedded/templates")
 	if err != nil {
 		return fmt.Errorf("failed to read embedded templates: %w", err)
 	}
@@ -588,7 +588,7 @@ func copyTemplates(thoughtsDir string) error {
 			continue
 		}
 
-		content, err := iofs.ReadFile(thtsfiles.Templates, filepath.Join("templates", entry.Name()))
+		content, err := iofs.ReadFile(thtsfiles.Templates, filepath.Join("embedded/templates", entry.Name()))
 		if err != nil {
 			return fmt.Errorf("failed to read template %s: %w", entry.Name(), err)
 		}

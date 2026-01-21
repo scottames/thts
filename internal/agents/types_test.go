@@ -114,8 +114,8 @@ func TestAgentConfigProperties(t *testing.T) {
 	if claude.SkillNeedsDir {
 		t.Error("Claude skills should not require subdirectories")
 	}
-	if claude.InstructionsFile != "thts-instructions.md" {
-		t.Errorf("Claude InstructionsFile = %q, want thts-instructions.md", claude.InstructionsFile)
+	if claude.InstructionsFile != "" {
+		t.Errorf("Claude InstructionsFile = %q, want empty (uses hooks for dynamic injection)", claude.InstructionsFile)
 	}
 	if claude.CommandsDir != "commands" {
 		t.Errorf("Claude CommandsDir = %q, want commands", claude.CommandsDir)
@@ -174,8 +174,8 @@ func TestAgentConfigProperties(t *testing.T) {
 	if opencode.InstructionTargetFile != "AGENTS.md" {
 		t.Errorf("OpenCode InstructionTargetFile = %q, want AGENTS.md", opencode.InstructionTargetFile)
 	}
-	if opencode.InstructionsFile != "thts-instructions.md" {
-		t.Errorf("OpenCode InstructionsFile = %q, want thts-instructions.md (for plugin injection)", opencode.InstructionsFile)
+	if opencode.InstructionsFile != "" {
+		t.Errorf("OpenCode InstructionsFile = %q, want empty (uses plugin for dynamic injection)", opencode.InstructionsFile)
 	}
 	if opencode.SkillsDir != "skill" {
 		t.Errorf("OpenCode SkillsDir = %q, want skill", opencode.SkillsDir)

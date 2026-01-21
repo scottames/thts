@@ -108,7 +108,7 @@ var AgentConfigs = map[AgentType]*AgentConfig{
 	AgentClaude: {
 		Type:                  AgentClaude,
 		RootDir:               ".claude",
-		InstructionsFile:      "thts-instructions.md",
+		InstructionsFile:      "", // Uses hooks for dynamic injection
 		IntegrationType:       "marker",
 		InstructionTargetFile: "CLAUDE.md",
 		SkillsDir:             "skills",
@@ -146,7 +146,7 @@ var AgentConfigs = map[AgentType]*AgentConfig{
 	AgentOpenCode: {
 		Type:                  AgentOpenCode,
 		RootDir:               ".opencode",
-		InstructionsFile:      "thts-instructions.md",
+		InstructionsFile:      "", // Uses plugin for dynamic injection
 		IntegrationType:       "marker",
 		InstructionTargetFile: "AGENTS.md",
 		SkillsDir:             "skill",

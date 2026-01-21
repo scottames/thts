@@ -20,4 +20,5 @@ Supported agents: claude, codex, opencode`,
 func init() {
 	AgentsCmd.AddCommand(initCmd)
 	AgentsCmd.AddCommand(uninitCmd)
+	AgentsCmd.AddCommand(instructionsCmd)
 }

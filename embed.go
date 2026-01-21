@@ -1,6 +1,6 @@
 // Package thtsfiles provides embedded agent integration files for thts.
 // This package exists at the repo root to enable go:embed access to
-// instructions/, templates/, and embedded/ directories.
+// the embedded/ directory containing all agent integration assets.
 //
 // Template files in embedded/ are rendered at copy time with agent-specific data.
 package thtsfiles
@@ -18,37 +18,37 @@ import (
 
 // Instructions contains the shared thts-instructions.md file.
 //
-//go:embed instructions/thts-instructions.md
+//go:embed embedded/instructions/thts-instructions.md
 var Instructions embed.FS
 
 // Templates contains embedded template files for thoughts/ documents.
 // These are copied to thoughts/.templates/ during init.
 //
-//go:embed templates/*.md
+//go:embed embedded/templates/*.md
 var Templates embed.FS
 
 // Settings contains embedded default settings files for agents.
 // Files are named by agent type: codex.toml, opencode.json, etc.
 // Claude settings are built dynamically and not embedded.
 //
-//go:embed settings/*
+//go:embed embedded/settings/*
 var Settings embed.FS
 
 // OpenCodePlugins contains embedded plugin files for OpenCode.
 //
-//go:embed plugins/opencode/*.ts
+//go:embed embedded/plugins/opencode/*.ts
 var OpenCodePlugins embed.FS
 
 // Defaults contains embedded default files for the thoughts repository.
 // Currently includes the root README.md created during setup.
 //
-//go:embed defaults/*
+//go:embed embedded/defaults/*
 var Defaults embed.FS
 
 // GetDefaultSettings returns the default settings content for an agent.
 // Returns empty string if no default settings exist (e.g., Claude builds dynamically).
 func GetDefaultSettings(filename string) string {
-	content, err := Settings.ReadFile("settings/" + filename)
+	content, err := Settings.ReadFile("embedded/settings/" + filename)
 	if err != nil {
 		return ""
 	}
@@ -80,7 +80,7 @@ type InstructionsData struct {
 // GetDefaultReadme returns the default README.md content for the thoughts repository.
 // It uses Go templates to replace placeholders with the provided values.
 func GetDefaultReadme(data ReadmeData) (string, error) {
-	content, err := Defaults.ReadFile("defaults/README.md")
+	content, err := Defaults.ReadFile("embedded/defaults/README.md")
 	if err != nil {
 		return "", err
 	}
@@ -101,7 +101,7 @@ func GetDefaultReadme(data ReadmeData) (string, error) {
 // GetInstructions returns the rendered thts-instructions.md content.
 // It executes the embedded template with the provided data.
 func GetInstructions(data InstructionsData) (string, error) {
-	content, err := Instructions.ReadFile("instructions/thts-instructions.md")
+	content, err := Instructions.ReadFile("embedded/instructions/thts-instructions.md")
 	if err != nil {
 		return "", err
 	}

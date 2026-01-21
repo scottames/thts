@@ -60,7 +60,7 @@ func GetEmbedTemplateData(agentType AgentType) EmbedTemplateData {
 	switch agentType {
 	case AgentClaude:
 		data.AgentName = "Claude"
-		data.InstructionRef = "@.claude/thts-instructions.md"
+		data.InstructionRef = "injected dynamically at session start"
 		data.UseAtInclude = true
 		data.HasTaskList = true
 		data.TaskTracking = "Use TodoWrite"
@@ -70,7 +70,7 @@ func GetEmbedTemplateData(agentType AgentType) EmbedTemplateData {
 
 	case AgentCodex:
 		data.AgentName = ""
-		data.InstructionRef = "from thts-instructions.md in .codex/"
+		data.InstructionRef = "from AGENTS.md in the project root"
 		data.UseAtInclude = false
 		data.HasTaskList = true
 		data.TaskTracking = "Use your task tracking"
@@ -80,7 +80,7 @@ func GetEmbedTemplateData(agentType AgentType) EmbedTemplateData {
 
 	case AgentOpenCode:
 		data.AgentName = ""
-		data.InstructionRef = "from thts-instructions.md in .opencode/"
+		data.InstructionRef = "injected dynamically at session start"
 		data.UseAtInclude = false
 		data.HasTaskList = true
 		data.TaskTracking = "Use your task tracking"
@@ -90,7 +90,7 @@ func GetEmbedTemplateData(agentType AgentType) EmbedTemplateData {
 
 	case AgentGemini:
 		data.AgentName = ""
-		data.InstructionRef = "from AGENTS.md in the project root"
+		data.InstructionRef = "injected dynamically at session start"
 		data.UseAtInclude = false
 		data.HasTaskList = false
 		data.TaskTracking = ""
