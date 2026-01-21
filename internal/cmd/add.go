@@ -119,7 +119,7 @@ func init() {
 	addCmd.Flags().Bool("sync", false, "sync thoughts after adding")
 
 	// Wire up tab completion for --in flag
-	_ = addCmd.RegisterFlagCompletionFunc("in", CompleteCategories)
+	_ = addCmd.RegisterFlagCompletionFunc("in", CompleteCategoriesWithContext)
 	_ = addCmd.RegisterFlagCompletionFunc("profile", CompleteProfiles)
 
 	rootCmd.AddCommand(addCmd)

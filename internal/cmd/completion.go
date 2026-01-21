@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/scottames/thts/internal/config"
+	"github.com/scottames/thts/internal/git"
 	"github.com/spf13/cobra"
 )
 
@@ -109,6 +110,41 @@ func CompleteCategoriesForProfile(_ *cobra.Command, _ []string, toComplete, prof
 	}
 
 	return completeCategoriesFromConfig(cfg.GetCategoriesForProfile(profileName), toComplete)
+}
+
+// CompleteCategoriesWithContext returns categories based on command context.
+// Resolution order:
+// 1. --profile flag value if provided
+// 2. Profile mapped to current git repo (if in thts-initialized repo)
+// 3. Default profile categories
+// 4. Global config categories
+func CompleteCategoriesWithContext(cmd *cobra.Command, _ []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	cfg, err := config.Load()
+	if err != nil {
+		return completeCategoriesFromConfig(config.DefaultCategories(), toComplete)
+	}
+
+	// Check for explicit --profile flag
+	if profileName, _ := cmd.Flags().GetString("profile"); profileName != "" {
+		return completeCategoriesFromConfig(cfg.GetCategoriesForProfile(profileName), toComplete)
+	}
+
+	// Check if in a git repo with thts initialized
+	if cwd, err := os.Getwd(); err == nil {
+		if git.IsInGitRepoAt(cwd) {
+			if profile := cfg.ResolveProfileForRepo(cwd); profile != nil {
+				return completeCategoriesFromConfig(cfg.GetCategoriesForProfile(profile.ProfileName), toComplete)
+			}
+		}
+	}
+
+	// Use default profile if available
+	if defaultProfile := cfg.GetDefaultProfileResolved(); defaultProfile != nil {
+		return completeCategoriesFromConfig(cfg.GetCategoriesForProfile(defaultProfile.ProfileName), toComplete)
+	}
+
+	// Fall back to global categories
+	return completeCategoriesFromConfig(cfg.GetCategories(), toComplete)
 }
 
 // completeCategoriesFromConfig generates completions from a category map.

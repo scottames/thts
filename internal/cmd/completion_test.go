@@ -223,6 +223,130 @@ func setupTestConfig(t *testing.T, cfg *config.Config) string {
 	return configDir
 }
 
+func TestCompleteCategoriesWithContext(t *testing.T) {
+	cfg := &config.Config{
+		User: "testuser",
+		Categories: map[string]*config.Category{
+			"global-notes": {Description: "Global notes"},
+			"global-plans": {Description: "Global plans"},
+		},
+		Profiles: map[string]*config.ProfileConfig{
+			"work": {
+				ThoughtsRepo: "~/work-thoughts",
+				Default:      true,
+				Categories: map[string]*config.Category{
+					"tickets": {Description: "Jira tickets"},
+					"sprints": {Description: "Sprint planning"},
+				},
+			},
+			"personal": {
+				ThoughtsRepo: "~/personal-thoughts",
+				Categories: map[string]*config.Category{
+					"journal": {Description: "Daily journal"},
+					"ideas":   {Description: "Ideas"},
+				},
+			},
+		},
+	}
+
+	tests := []struct {
+		name           string
+		profileFlag    string
+		wantCategories []string
+	}{
+		{
+			name:        "explicit profile flag uses profile categories",
+			profileFlag: "personal",
+			wantCategories: []string{
+				"ideas",
+				"journal",
+			},
+		},
+		{
+			name:        "explicit profile flag with different profile",
+			profileFlag: "work",
+			wantCategories: []string{
+				"sprints",
+				"tickets",
+			},
+		},
+		{
+			name:        "no profile flag falls back to default profile",
+			profileFlag: "",
+			wantCategories: []string{
+				"sprints",
+				"tickets",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			configDir := setupTestConfig(t, cfg)
+			t.Setenv("XDG_CONFIG_HOME", configDir)
+
+			// Create a command with --profile flag
+			cmd := &cobra.Command{}
+			cmd.Flags().String("profile", tt.profileFlag, "test profile flag")
+
+			got, directive := CompleteCategoriesWithContext(cmd, nil, "")
+
+			if directive != cobra.ShellCompDirectiveNoFileComp {
+				t.Errorf("directive = %v, want %v", directive, cobra.ShellCompDirectiveNoFileComp)
+			}
+
+			if !slicesEqual(got, tt.wantCategories) {
+				t.Errorf("CompleteCategoriesWithContext() = %v, want %v", got, tt.wantCategories)
+			}
+		})
+	}
+}
+
+func TestCompleteCategoriesWithContext_GlobalFallback(t *testing.T) {
+	// Config with no profiles - should fall back to global categories
+	cfg := &config.Config{
+		User: "testuser",
+		Categories: map[string]*config.Category{
+			"global-notes": {Description: "Global notes"},
+			"global-plans": {Description: "Global plans"},
+		},
+	}
+
+	configDir := setupTestConfig(t, cfg)
+	t.Setenv("XDG_CONFIG_HOME", configDir)
+
+	cmd := &cobra.Command{}
+	cmd.Flags().String("profile", "", "test profile flag")
+
+	got, _ := CompleteCategoriesWithContext(cmd, nil, "")
+
+	want := []string{"global-notes", "global-plans"}
+	if !slicesEqual(got, want) {
+		t.Errorf("CompleteCategoriesWithContext() = %v, want %v", got, want)
+	}
+}
+
+func TestCompleteCategoriesWithContext_NoConfig(t *testing.T) {
+	// Use empty config dir to simulate no config
+	configDir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", configDir)
+
+	cmd := &cobra.Command{}
+	cmd.Flags().String("profile", "", "test profile flag")
+
+	got, directive := CompleteCategoriesWithContext(cmd, nil, "")
+
+	if directive != cobra.ShellCompDirectiveNoFileComp {
+		t.Errorf("directive = %v, want %v", directive, cobra.ShellCompDirectiveNoFileComp)
+	}
+
+	// Should fall back to default categories
+	wantDefaults := []string{"decisions", "handoffs", "notes", "plans", "research"}
+	if !slicesEqual(got, wantDefaults) {
+		t.Errorf("CompleteCategoriesWithContext() = %v, want default categories %v", got, wantDefaults)
+	}
+}
+
 // slicesEqual compares two string slices for equality (order matters).
 func slicesEqual(a, b []string) bool {
 	if len(a) != len(b) {
