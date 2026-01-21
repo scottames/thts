@@ -48,54 +48,55 @@ func runSync(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Get current repo path
+	// Get current directory
 	currentRepo, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("failed to get current directory: %w", err)
 	}
 
-	// Check if thoughts directory exists
+	// Determine if this repo is initialized
 	thoughtsDir := filepath.Join(currentRepo, "thoughts")
-	if !fs.Exists(thoughtsDir) {
-		fmt.Println(ui.Error("Thoughts not initialized for this repository."))
-		fmt.Printf("Run %s to set up thoughts.\n", ui.Accent("thts init"))
-		return nil
+	isInitialized := fs.Exists(thoughtsDir) && cfg.RepoMappings[currentRepo] != nil
+
+	var profileConfig *config.ResolvedProfile
+	var projectName string
+
+	if isInitialized {
+		// Use repo-specific profile
+		mapping := cfg.RepoMappings[currentRepo]
+		projectName = mapping.GetRepoName()
+		profileConfig = cfg.ResolveProfileForRepo(currentRepo)
+	} else {
+		// Use default profile directly
+		profileConfig = cfg.GetDefaultProfileResolved()
+		if profileConfig == nil {
+			fmt.Println(ui.Error("No default profile configured."))
+			fmt.Printf("Run %s to configure a default profile.\n", ui.Accent("thts setup"))
+			return nil
+		}
 	}
 
-	// Get mapping for current repo
-	mapping := cfg.RepoMappings[currentRepo]
-	if mapping == nil {
-		fmt.Println(ui.Error("This repository is not registered."))
-		fmt.Printf("Run %s to set up thoughts.\n", ui.Accent("thts init"))
-		return nil
-	}
-
-	projectName := mapping.GetRepoName()
-	if projectName == "" {
-		fmt.Println(ui.Error("Invalid repository mapping."))
-		return nil
-	}
-
-	// Resolve profile
-	profileConfig := cfg.ResolveProfileForRepo(currentRepo)
 	expandedRepo := config.ExpandPath(profileConfig.ThoughtsRepo)
 
-	// 1. Update symlinks for any new users
-	newUsers := updateSymlinksForNewUsers(thoughtsDir, profileConfig, projectName, cfg.User)
-	if len(newUsers) > 0 {
-		fmt.Println(ui.SuccessF("Added symlinks for new users: %s", strings.Join(newUsers, ", ")))
-	}
-
-	// 2. Create searchable directory with hard links
-	fmt.Println(ui.Info("Creating searchable index..."))
-	result, err := thts.CreateSearchableDir(thoughtsDir)
-	if err != nil {
-		fmt.Println(ui.WarningF("Could not create searchable directory: %v", err))
-	} else {
-		if result.CrossFilesystem {
-			fmt.Println(ui.Warning("Some files skipped (cross-filesystem - hard links not supported)"))
+	// Project-specific operations (only for initialized repos)
+	if isInitialized {
+		// 1. Update symlinks for any new users
+		newUsers := updateSymlinksForNewUsers(thoughtsDir, profileConfig, projectName, cfg.User)
+		if len(newUsers) > 0 {
+			fmt.Println(ui.SuccessF("Added symlinks for new users: %s", strings.Join(newUsers, ", ")))
 		}
-		fmt.Println(ui.MutedBullet(fmt.Sprintf("Created %d hard links in searchable directory", result.LinkedCount)))
+
+		// 2. Create searchable directory with hard links
+		fmt.Println(ui.Info("Creating searchable index..."))
+		result, err := thts.CreateSearchableDir(thoughtsDir)
+		if err != nil {
+			fmt.Println(ui.WarningF("Could not create searchable directory: %v", err))
+		} else {
+			if result.CrossFilesystem {
+				fmt.Println(ui.Warning("Some files skipped (cross-filesystem - hard links not supported)"))
+			}
+			fmt.Println(ui.MutedBullet(fmt.Sprintf("Created %d hard links in searchable directory", result.LinkedCount)))
+		}
 	}
 
 	// Determine sync mode: CLI flag overrides config
@@ -106,7 +107,11 @@ func runSync(cmd *cobra.Command, args []string) error {
 	}
 
 	// 3. Sync the thoughts repository
-	fmt.Println(ui.Info("Syncing thoughts..."))
+	if isInitialized {
+		fmt.Println(ui.InfoF("Syncing thoughts for %s...", ui.Accent(projectName)))
+	} else {
+		fmt.Println(ui.Info("Syncing thoughts repo..."))
+	}
 	if err := syncThoughtsRepo(expandedRepo, syncMessage, syncMode); err != nil {
 		return err
 	}

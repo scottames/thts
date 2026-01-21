@@ -175,6 +175,21 @@ func (c *Config) GetDefaultProfile() (*ProfileConfig, string) {
 	return nil, ""
 }
 
+// GetDefaultProfileResolved returns the default profile as a ResolvedProfile.
+// This is useful when syncing from a non-initialized directory.
+func (c *Config) GetDefaultProfileResolved() *ResolvedProfile {
+	prof, name := c.GetDefaultProfile()
+	if prof == nil {
+		return nil
+	}
+	return &ResolvedProfile{
+		ThoughtsRepo: prof.ThoughtsRepo,
+		ReposDir:     prof.ReposDir,
+		GlobalDir:    prof.GlobalDir,
+		ProfileName:  name,
+	}
+}
+
 // ResolveProfileForRepo resolves the profile configuration for a given repository path.
 func (c *Config) ResolveProfileForRepo(repoPath string) *ResolvedProfile {
 	mapping := c.RepoMappings[repoPath]
