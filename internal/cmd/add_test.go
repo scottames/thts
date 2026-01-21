@@ -716,7 +716,7 @@ func TestResolveContent_NoEdit(t *testing.T) {
 	}
 }
 
-func TestResolveThoughtsRepoPath(t *testing.T) {
+func TestResolveSyncContext(t *testing.T) {
 	t.Run("profile flag specified", func(t *testing.T) {
 		cfg := &config.Config{
 			User: "testuser",
@@ -737,13 +737,16 @@ func TestResolveThoughtsRepoPath(t *testing.T) {
 			ProfileName: "work",
 		}
 
-		repoPath, err := resolveThoughtsRepoPath(cfg, opts)
+		ctx, err := resolveSyncContext(cfg, opts)
 		if err != nil {
-			t.Fatalf("resolveThoughtsRepoPath() error = %v", err)
+			t.Fatalf("resolveSyncContext() error = %v", err)
 		}
 
-		if repoPath != "/home/user/work-thoughts" {
-			t.Errorf("resolveThoughtsRepoPath() = %q, want %q", repoPath, "/home/user/work-thoughts")
+		if ctx.RepoPath != "/home/user/work-thoughts" {
+			t.Errorf("resolveSyncContext().RepoPath = %q, want %q", ctx.RepoPath, "/home/user/work-thoughts")
+		}
+		if ctx.ProfileName != "work" {
+			t.Errorf("resolveSyncContext().ProfileName = %q, want %q", ctx.ProfileName, "work")
 		}
 	})
 
@@ -763,12 +766,12 @@ func TestResolveThoughtsRepoPath(t *testing.T) {
 			ProfileName: "nonexistent",
 		}
 
-		_, err := resolveThoughtsRepoPath(cfg, opts)
+		_, err := resolveSyncContext(cfg, opts)
 		if err == nil {
-			t.Error("resolveThoughtsRepoPath() error = nil, want error for invalid profile")
+			t.Error("resolveSyncContext() error = nil, want error for invalid profile")
 		}
 		if !strings.Contains(err.Error(), "not found") {
-			t.Errorf("resolveThoughtsRepoPath() error = %q, want 'not found' error", err.Error())
+			t.Errorf("resolveSyncContext() error = %q, want 'not found' error", err.Error())
 		}
 	})
 
@@ -786,13 +789,16 @@ func TestResolveThoughtsRepoPath(t *testing.T) {
 
 		opts := &AddOptions{} // No profile, no repo
 
-		repoPath, err := resolveThoughtsRepoPath(cfg, opts)
+		ctx, err := resolveSyncContext(cfg, opts)
 		if err != nil {
-			t.Fatalf("resolveThoughtsRepoPath() error = %v", err)
+			t.Fatalf("resolveSyncContext() error = %v", err)
 		}
 
-		if repoPath != "/home/user/thoughts" {
-			t.Errorf("resolveThoughtsRepoPath() = %q, want %q", repoPath, "/home/user/thoughts")
+		if ctx.RepoPath != "/home/user/thoughts" {
+			t.Errorf("resolveSyncContext().RepoPath = %q, want %q", ctx.RepoPath, "/home/user/thoughts")
+		}
+		if ctx.ProfileName != "default" {
+			t.Errorf("resolveSyncContext().ProfileName = %q, want %q", ctx.ProfileName, "default")
 		}
 	})
 
@@ -804,12 +810,12 @@ func TestResolveThoughtsRepoPath(t *testing.T) {
 
 		opts := &AddOptions{}
 
-		_, err := resolveThoughtsRepoPath(cfg, opts)
+		_, err := resolveSyncContext(cfg, opts)
 		if err == nil {
-			t.Error("resolveThoughtsRepoPath() error = nil, want error for no default profile")
+			t.Error("resolveSyncContext() error = nil, want error for no default profile")
 		}
 		if !strings.Contains(err.Error(), "no default profile") {
-			t.Errorf("resolveThoughtsRepoPath() error = %q, want 'no default profile' error", err.Error())
+			t.Errorf("resolveSyncContext() error = %q, want 'no default profile' error", err.Error())
 		}
 	})
 }

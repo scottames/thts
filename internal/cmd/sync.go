@@ -16,7 +16,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var syncMessage string
+var (
+	syncMessage  string
+	syncFromHook bool
+)
 
 var syncCmd = &cobra.Command{
 	Use:   "sync",
@@ -33,9 +36,23 @@ instructions for manual resolution.`,
 	RunE: runSync,
 }
 
+// syncOptions holds context needed for syncing with template rendering.
+type syncOptions struct {
+	RepoPath        string
+	Mode            config.SyncMode
+	ExplicitMessage string // User-provided message via -m flag (overrides template)
+	FromHook        bool   // Whether called from git hook
+	TriggerMessage  string // Triggering commit message (when FromHook is true)
+	ProfileName     string
+	ProjectName     string
+	User            string
+	Config          *config.Config
+}
+
 func init() {
 	syncCmd.Flags().StringVarP(&syncMessage, "message", "m", "", "Commit message (default: auto-generated)")
 	syncCmd.Flags().String("mode", "", "Sync mode: full (pull+push), pull (pull only), local (no remote ops)")
+	syncCmd.Flags().BoolVar(&syncFromHook, "from-hook", false, "Called from git hook (uses commitMessageHook template)")
 	rootCmd.AddCommand(syncCmd)
 }
 
@@ -112,7 +129,26 @@ func runSync(cmd *cobra.Command, args []string) error {
 	} else {
 		fmt.Println(ui.Info("Syncing thoughts repo..."))
 	}
-	if err := syncThoughtsRepo(expandedRepo, syncMessage, syncMode); err != nil {
+
+	// Build sync options with context for template rendering
+	opts := syncOptions{
+		RepoPath:    expandedRepo,
+		Mode:        syncMode,
+		FromHook:    syncFromHook,
+		ProfileName: profileConfig.ProfileName,
+		ProjectName: projectName,
+		User:        cfg.User,
+		Config:      cfg,
+	}
+
+	// Handle message: when from hook, the message is the triggering commit message
+	if syncFromHook {
+		opts.TriggerMessage = syncMessage
+	} else if cmd.Flags().Changed("message") {
+		opts.ExplicitMessage = syncMessage
+	}
+
+	if err := syncThoughtsRepo(opts); err != nil {
 		return err
 	}
 
@@ -120,26 +156,26 @@ func runSync(cmd *cobra.Command, args []string) error {
 }
 
 // syncThoughtsRepo performs git operations to sync the thoughts repository.
-func syncThoughtsRepo(repoPath, message string, mode config.SyncMode) error {
+func syncThoughtsRepo(opts syncOptions) error {
 	// Stage all changes
-	if err := runGitCommand(repoPath, "add", "-A"); err != nil {
+	if err := runGitCommand(opts.RepoPath, "add", "-A"); err != nil {
 		return fmt.Errorf("failed to stage changes: %w", err)
 	}
 
 	// Check if there are changes to commit
-	hasChanges, err := hasUncommittedChanges(repoPath)
+	hasChanges, err := hasUncommittedChanges(opts.RepoPath)
 	if err != nil {
 		return fmt.Errorf("failed to check git status: %w", err)
 	}
 
 	if hasChanges {
-		// Commit changes
-		commitMessage := message
-		if commitMessage == "" {
-			commitMessage = fmt.Sprintf("Sync thoughts - %s", time.Now().Format(time.RFC3339))
+		// Determine commit message
+		commitMessage, err := resolveCommitMessage(opts)
+		if err != nil {
+			return fmt.Errorf("failed to render commit message: %w", err)
 		}
 
-		if err := runGitCommand(repoPath, "commit", "-m", commitMessage); err != nil {
+		if err := runGitCommand(opts.RepoPath, "commit", "-m", commitMessage); err != nil {
 			return fmt.Errorf("failed to commit: %w", err)
 		}
 		fmt.Println(ui.Success("Thoughts committed"))
@@ -148,27 +184,55 @@ func syncThoughtsRepo(repoPath, message string, mode config.SyncMode) error {
 	}
 
 	// Skip remote operations in local mode
-	if mode == config.SyncModeLocal {
-		warnUnpushedCommits(repoPath, "local mode")
+	if opts.Mode == config.SyncModeLocal {
+		warnUnpushedCommits(opts.RepoPath, "local mode")
 		return nil
 	}
 
 	// Pull latest changes (after committing to avoid conflicts with staged changes)
-	if err := pullWithRebase(repoPath); err != nil {
+	if err := pullWithRebase(opts.RepoPath); err != nil {
 		return err
 	}
 
 	// Push only in full mode
-	if mode == config.SyncModeFull {
-		if err := pushToRemote(repoPath); err != nil {
+	if opts.Mode == config.SyncModeFull {
+		if err := pushToRemote(opts.RepoPath); err != nil {
 			// Push errors are warnings, not fatal
 			fmt.Println(ui.WarningF("%v", err))
 		}
 	} else {
-		warnUnpushedCommits(repoPath, "pull mode")
+		warnUnpushedCommits(opts.RepoPath, "pull mode")
 	}
 
 	return nil
+}
+
+// resolveCommitMessage determines the commit message based on options.
+// Priority: explicit message > template rendering (hook or manual).
+func resolveCommitMessage(opts syncOptions) (string, error) {
+	// Explicit message always wins (unless from hook)
+	if opts.ExplicitMessage != "" && !opts.FromHook {
+		return opts.ExplicitMessage, nil
+	}
+
+	// Build template data
+	data := config.CommitMessageData{
+		Date:    time.Now(),
+		Repo:    opts.ProjectName,
+		Profile: opts.ProfileName,
+		User:    opts.User,
+	}
+
+	// Choose template based on context
+	var tmpl string
+	if opts.FromHook {
+		data.CommitMessage = opts.TriggerMessage
+		tmpl = opts.Config.GetCommitMessageHook(opts.ProfileName)
+	} else {
+		tmpl = opts.Config.GetCommitMessage(opts.ProfileName)
+	}
+
+	return config.RenderCommitMessage(tmpl, data)
 }
 
 // warnUnpushedCommits prints a warning if there are unpushed commits.

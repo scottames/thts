@@ -10,7 +10,8 @@ import (
 
 // HookVersion is incremented when hooks need updating.
 // v1: Initial implementation
-const HookVersion = "1"
+// v2: Added --from-hook flag for template-based commit messages
+const HookVersion = "2"
 
 // HookResult contains information about hook installation.
 type HookResult struct {
@@ -109,8 +110,8 @@ fi
 # Get the commit message
 COMMIT_MSG=$(git log -1 --pretty=%%B)
 
-# Auto-sync thoughts after each commit
-thts sync --message "Auto-sync with commit: $COMMIT_MSG" >/dev/null 2>&1 &
+# Auto-sync thoughts after each commit (using --from-hook for template rendering)
+thts sync --from-hook --message "$COMMIT_MSG" >/dev/null 2>&1 &
 
 # Call any existing post-commit hook
 if [ -f "%s" ]; then

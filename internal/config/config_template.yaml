@@ -27,6 +27,20 @@ sync:
   # Mode: full (push+pull), pull (pull only), local (no remote)
   mode: full
 
+  # Commit message template for manual sync (thts sync)
+  # Available variables: {{.Date}}, {{.Repo}}, {{.Profile}}, {{.User}}
+  # Date supports .Format: {{.Date.Format "2006-01-02"}}
+  #  Example: "{{.Repo}} thoughts - {{.Date.Format \"2006-01-02\"}}"
+  commitMessage: 'sync: {{.Date.Format "2006-01-02T15:04:05Z07:00"}}'
+
+  # Commit message template for post-commit hook auto-sync
+  # Additional variable: {{.CommitMessage}} - the triggering commit message
+  #  Example: "synch(auto/{{.Profile}}): {{.CommitMessage}}"
+  commitMessageHook: "sync(auto): {{.CommitMessage}}"
+  #  Note: the git hook lives in each repo that `thts init` is run on, it
+  #   triggers `thts sync` with a reference to the commit message that
+  #   triggered the git hook (`{{.CommitMessage}}`)
+
 # Agent integration settings
 agents:
   # Where to install agent components
@@ -97,6 +111,9 @@ profiles:
     #   tickets:
     #     description: Work tickets
     #     scope: user
+    # sync:                     # Profile-specific sync overrides (optional)
+    #   commitMessage: "[work] {{.Repo}} - {{.Date.Format \"2006-01-02\"}}"
+    #   commitMessageHook: "[work] Auto-sync: {{.CommitMessage}}"
 
 # Repository mappings (optional)
 # Map specific repos to different profiles or names

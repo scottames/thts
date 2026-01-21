@@ -211,8 +211,7 @@ func runAdd(cmd *cobra.Command, args []string) error {
 
 	// Sync if requested
 	if opts.Sync {
-		syncMode := cfg.GetSyncMode()
-		repoPath, err := resolveThoughtsRepoPath(cfg, opts)
+		syncCtx, err := resolveSyncContext(cfg, opts)
 		if err != nil {
 			return fmt.Errorf("failed to resolve thoughts repo for sync: %w", err)
 		}
@@ -221,7 +220,15 @@ func runAdd(cmd *cobra.Command, args []string) error {
 			fmt.Println()
 			fmt.Println(ui.Info("Syncing thoughts..."))
 		}
-		if err := syncThoughtsRepo(repoPath, "", syncMode); err != nil {
+
+		syncOpts := syncOptions{
+			RepoPath:    syncCtx.RepoPath,
+			Mode:        cfg.GetSyncMode(),
+			ProfileName: syncCtx.ProfileName,
+			User:        cfg.User,
+			Config:      cfg,
+		}
+		if err := syncThoughtsRepo(syncOpts); err != nil {
 			return fmt.Errorf("sync failed: %w", err)
 		}
 	}
@@ -512,17 +519,26 @@ func resolveDefaultGlobalDir(cfg *config.Config) (string, bool, error) {
 	return globalDir, true, nil
 }
 
-// resolveThoughtsRepoPath returns the central thoughts repo path for syncing.
-// This mirrors the resolution logic in resolveThoughtsDir but returns the
-// central repo path instead of the local thoughts/ directory.
-func resolveThoughtsRepoPath(cfg *config.Config, opts *AddOptions) (string, error) {
+// addSyncContext holds the context needed for syncing from add command.
+type addSyncContext struct {
+	RepoPath    string
+	ProfileName string
+}
+
+// resolveSyncContext returns the sync context for the add command.
+// This mirrors the resolution logic in resolveThoughtsDir but returns
+// the central repo path and profile name instead of the local thoughts/ directory.
+func resolveSyncContext(cfg *config.Config, opts *AddOptions) (*addSyncContext, error) {
 	// Case 1: --profile flag specified
 	if opts.ProfileName != "" {
 		if !cfg.ValidateProfile(opts.ProfileName) {
-			return "", fmt.Errorf("profile %q not found", opts.ProfileName)
+			return nil, fmt.Errorf("profile %q not found", opts.ProfileName)
 		}
 		profile := cfg.Profiles[opts.ProfileName]
-		return config.ExpandPath(profile.ThoughtsRepo), nil
+		return &addSyncContext{
+			RepoPath:    config.ExpandPath(profile.ThoughtsRepo),
+			ProfileName: opts.ProfileName,
+		}, nil
 	}
 
 	// Case 2: --repo flag specified - find the repo's mapped profile
@@ -531,7 +547,7 @@ func resolveThoughtsRepoPath(cfg *config.Config, opts *AddOptions) (string, erro
 		if !filepath.IsAbs(expandedPath) {
 			cwd, err := os.Getwd()
 			if err != nil {
-				return "", fmt.Errorf("failed to get current directory: %w", err)
+				return nil, fmt.Errorf("failed to get current directory: %w", err)
 			}
 			expandedPath = filepath.Join(cwd, expandedPath)
 		}
@@ -540,15 +556,18 @@ func resolveThoughtsRepoPath(cfg *config.Config, opts *AddOptions) (string, erro
 			resolvedProfile = cfg.GetDefaultProfileResolved()
 		}
 		if resolvedProfile == nil {
-			return "", fmt.Errorf("no profile configured")
+			return nil, fmt.Errorf("no profile configured")
 		}
-		return config.ExpandPath(resolvedProfile.ThoughtsRepo), nil
+		return &addSyncContext{
+			RepoPath:    config.ExpandPath(resolvedProfile.ThoughtsRepo),
+			ProfileName: resolvedProfile.ProfileName,
+		}, nil
 	}
 
 	// Case 3: In a git repo with thts initialized
 	cwd, err := os.Getwd()
 	if err != nil {
-		return "", fmt.Errorf("failed to get current directory: %w", err)
+		return nil, fmt.Errorf("failed to get current directory: %w", err)
 	}
 
 	if git.IsInGitRepoAt(cwd) {
@@ -556,7 +575,10 @@ func resolveThoughtsRepoPath(cfg *config.Config, opts *AddOptions) (string, erro
 		if isValidThoughtsSetup(thoughtsDir, cfg.User) {
 			resolvedProfile := cfg.ResolveProfileForRepo(cwd)
 			if resolvedProfile != nil {
-				return config.ExpandPath(resolvedProfile.ThoughtsRepo), nil
+				return &addSyncContext{
+					RepoPath:    config.ExpandPath(resolvedProfile.ThoughtsRepo),
+					ProfileName: resolvedProfile.ProfileName,
+				}, nil
 			}
 		}
 	}
@@ -564,9 +586,12 @@ func resolveThoughtsRepoPath(cfg *config.Config, opts *AddOptions) (string, erro
 	// Case 4: Fall back to default profile
 	defaultProfile := cfg.GetDefaultProfileResolved()
 	if defaultProfile == nil {
-		return "", fmt.Errorf("no default profile configured")
+		return nil, fmt.Errorf("no default profile configured")
 	}
-	return config.ExpandPath(defaultProfile.ThoughtsRepo), nil
+	return &addSyncContext{
+		RepoPath:    config.ExpandPath(defaultProfile.ThoughtsRepo),
+		ProfileName: defaultProfile.ProfileName,
+	}, nil
 }
 
 // buildTargetPath constructs the full directory path for the thought file.

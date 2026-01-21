@@ -49,6 +49,7 @@ type ProfileConfig struct {
 	Default       bool                 `yaml:"default,omitempty"`
 	DefaultAgents []string             `yaml:"defaultAgents,omitempty"`
 	Categories    map[string]*Category `yaml:"categories,omitempty"` // Overrides global categories when set
+	Sync          *SyncConfig          `yaml:"sync,omitempty"`       // Overrides global sync settings when set
 }
 
 // ComponentMode specifies where a component is managed.
@@ -78,7 +79,9 @@ const (
 
 // SyncConfig holds configuration for sync behavior.
 type SyncConfig struct {
-	Mode SyncMode `yaml:"mode,omitempty"`
+	Mode              SyncMode `yaml:"mode,omitempty"`
+	CommitMessage     string   `yaml:"commitMessage,omitempty"`
+	CommitMessageHook string   `yaml:"commitMessageHook,omitempty"`
 }
 
 // HooksConfig holds configuration for hook-based integration.
@@ -146,7 +149,11 @@ func FullDefaults() *Config {
 	// Expand implicit defaults (values from getter methods)
 	cfg.DefaultScope = DefaultScopeValue
 	cfg.DefaultTemplate = "default.md"
-	cfg.Sync = &SyncConfig{Mode: SyncModeFull}
+	cfg.Sync = &SyncConfig{
+		Mode:              SyncModeFull,
+		CommitMessage:     DefaultCommitMessage(),
+		CommitMessageHook: DefaultCommitMessageHook(),
+	}
 	cfg.Agents = &AgentsConfig{
 		Skills:   ComponentModeLocal,
 		Commands: ComponentModeLocal,
@@ -350,6 +357,48 @@ func (c *Config) GetSyncMode() SyncMode {
 		return c.Sync.Mode
 	}
 	return SyncModeFull
+}
+
+// GetCommitMessage returns the commit message template for a profile.
+// Resolution order: profile sync.commitMessage > global sync.commitMessage > default.
+func (c *Config) GetCommitMessage(profileName string) string {
+	// Check profile-level override first
+	if c.Profiles != nil {
+		if profile, exists := c.Profiles[profileName]; exists {
+			if profile.Sync != nil && profile.Sync.CommitMessage != "" {
+				return profile.Sync.CommitMessage
+			}
+		}
+	}
+
+	// Check global sync config
+	if c.Sync != nil && c.Sync.CommitMessage != "" {
+		return c.Sync.CommitMessage
+	}
+
+	// Return default
+	return DefaultCommitMessage()
+}
+
+// GetCommitMessageHook returns the commit message template for hook auto-sync.
+// Resolution order: profile sync.commitMessageHook > global sync.commitMessageHook > default.
+func (c *Config) GetCommitMessageHook(profileName string) string {
+	// Check profile-level override first
+	if c.Profiles != nil {
+		if profile, exists := c.Profiles[profileName]; exists {
+			if profile.Sync != nil && profile.Sync.CommitMessageHook != "" {
+				return profile.Sync.CommitMessageHook
+			}
+		}
+	}
+
+	// Check global sync config
+	if c.Sync != nil && c.Sync.CommitMessageHook != "" {
+		return c.Sync.CommitMessageHook
+	}
+
+	// Return default
+	return DefaultCommitMessageHook()
 }
 
 // GetAgentComponentMode returns the mode for an agent component, defaulting to local.

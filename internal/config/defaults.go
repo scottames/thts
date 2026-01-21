@@ -36,3 +36,13 @@ func DefaultCategories() map[string]*Category {
 
 // DefaultScope is the default scope for new thoughts.
 const DefaultScopeValue = ScopeUser
+
+// DefaultCommitMessage returns the default commit message template for manual sync.
+func DefaultCommitMessage() string {
+	return `sync: {{.Date.Format "2006-01-02T15:04:05Z07:00"}}`
+}
+
+// DefaultCommitMessageHook returns the default commit message template for hook auto-sync.
+func DefaultCommitMessageHook() string {
+	return "sync(auto): {{.CommitMessage}}"
+}

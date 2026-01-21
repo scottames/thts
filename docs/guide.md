@@ -21,6 +21,7 @@
   - [Manual Sync](#manual-sync)
   - [Opening in Editor](#opening-in-editor)
   - [Sync Modes](#sync-modes)
+  - [Commit Message Templates](#commit-message-templates)
   - [Handling Conflicts](#handling-conflicts)
 - [Team Collaboration](#team-collaboration)
   - [Sharing a Thoughts Repo](#sharing-a-thoughts-repo)
@@ -44,7 +45,9 @@
     - [Supported Agents](#supported-agents)
     - [Installing Integration](#installing-integration)
     - [Global vs Project Configuration](#global-vs-project-configuration)
+    - [Prerequisites](#prerequisites)
     - [Integration Levels](#integration-levels)
+    - [Customizing Hook Keywords](#customizing-hook-keywords)
     - [What Gets Installed](#what-gets-installed)
     - [Using the Commands](#using-the-commands)
     - [Session Handoffs](#session-handoffs)
@@ -401,6 +404,53 @@ When push is skipped, you'll see a warning if there are unpushed commits:
   Run 'thts sync --mode=full' or 'git push' in ~/thoughts to push
 ```
 
+### Commit Message Templates
+
+Customize the commit messages used when syncing thoughts using Go text/template
+syntax:
+
+```yaml
+sync:
+  mode: full
+  commitMessage: '[{{.Profile}}] {{.Repo}} - {{.Date.Format "2006-01-02"}}'
+  commitMessageHook: "Auto-sync ({{.Repo}}): {{.CommitMessage}}"
+```
+
+**Available variables:**
+
+| Variable             | Description                                   |
+| -------------------- | --------------------------------------------- |
+| `{{.Date}}`          | Current time (use `.Format "..."` for custom) |
+| `{{.Repo}}`          | Repository name                               |
+| `{{.Profile}}`       | Active profile name                           |
+| `{{.User}}`          | Your username from config                     |
+| `{{.CommitMessage}}` | Triggering commit message (hook only)         |
+
+**Two templates:**
+
+- `commitMessage` - Used for manual sync (`thts sync`)
+- `commitMessageHook` - Used for post-commit hook auto-sync
+  - Note: the git hook lives in each repo that `thts init` is run on, it
+    triggers `thts sync` with a reference to the commit message that triggered
+    the git hook
+
+**Per-profile overrides:**
+
+```yaml
+profiles:
+  work:
+    thoughtsRepo: ~/work-thoughts
+    sync:
+      commitMessage: "[work] {{.Repo}} sync"
+      commitMessageHook: "[work] {{.CommitMessage}}"
+```
+
+Profile settings override global settings. If not set, defaults are used:
+
+- `commitMessage`:
+  `sync: {{.Date.Format "2006-01-02T15:04:05Z07:00"}}`
+- `commitMessageHook`: `sync(auto): {{.CommitMessage}}`
+
 ### Handling Conflicts
 
 If sync fails due to conflicts:
@@ -537,16 +587,18 @@ autoSyncInWorktrees: true
 gitIgnore: project
 ```
 
-| Option                | Description                       | Default      |
-| --------------------- | --------------------------------- | ------------ |
-| `thoughtsRepo`        | Path to thoughts repo             | `~/thoughts` |
-| `reposDir`            | Subdirectory for project thoughts | `repos`      |
-| `globalDir`           | Subdirectory for global thoughts  | `global`     |
-| `user`                | Your username (can't be "global") | `$USER`      |
-| `editor`              | Editor for `thts edit`            | `$EDITOR`    |
-| `autoSyncInWorktrees` | Auto-sync on commits in worktrees | `true`       |
-| `gitIgnore`           | Where to ignore `thoughts/`       | `project`    |
-| `sync.mode`           | Sync mode: full, pull, or local   | `full`       |
+| Option                   | Description                          | Default                      |
+| ------------------------ | ------------------------------------ | ---------------------------- |
+| `thoughtsRepo`           | Path to thoughts repo                | `~/thoughts`                 |
+| `reposDir`               | Subdirectory for project thoughts    | `repos`                      |
+| `globalDir`              | Subdirectory for global thoughts     | `global`                     |
+| `user`                   | Your username (can't be "global")    | `$USER`                      |
+| `editor`                 | Editor for `thts edit`               | `$EDITOR`                    |
+| `autoSyncInWorktrees`    | Auto-sync on commits in worktrees    | `true`                       |
+| `gitIgnore`              | Where to ignore `thoughts/`          | `project`                    |
+| `sync.mode`              | Sync mode: full, pull, or local      | `full`                       |
+| `sync.commitMessage`     | Template for manual sync messages    | (see Commit Message section) |
+| `sync.commitMessageHook` | Template for hook auto-sync messages | (see Commit Message section) |
 
 ### gitIgnore Options
 

@@ -1454,4 +1454,201 @@ func TestFullDefaults(t *testing.T) {
 	if _, exists := cfg.Profiles["default"]; !exists {
 		t.Error("expected default profile to exist")
 	}
+
+	// Verify Sync config has commit message templates
+	if cfg.Sync.CommitMessage == "" {
+		t.Error("expected Sync.CommitMessage to be set")
+	}
+	if cfg.Sync.CommitMessageHook == "" {
+		t.Error("expected Sync.CommitMessageHook to be set")
+	}
+}
+
+func TestGetCommitMessage(t *testing.T) {
+	tests := []struct {
+		name        string
+		cfg         *Config
+		profileName string
+		want        string
+	}{
+		{
+			name: "returns default when no config set",
+			cfg: &Config{
+				Profiles: map[string]*ProfileConfig{
+					"default": {ThoughtsRepo: "~/thoughts", Default: true},
+				},
+			},
+			profileName: "default",
+			want:        DefaultCommitMessage(),
+		},
+		{
+			name: "returns global commitMessage when set",
+			cfg: &Config{
+				Sync: &SyncConfig{
+					CommitMessage: "Global: {{.Repo}}",
+				},
+				Profiles: map[string]*ProfileConfig{
+					"default": {ThoughtsRepo: "~/thoughts", Default: true},
+				},
+			},
+			profileName: "default",
+			want:        "Global: {{.Repo}}",
+		},
+		{
+			name: "profile commitMessage overrides global",
+			cfg: &Config{
+				Sync: &SyncConfig{
+					CommitMessage: "Global: {{.Repo}}",
+				},
+				Profiles: map[string]*ProfileConfig{
+					"work": {
+						ThoughtsRepo: "~/work",
+						Sync: &SyncConfig{
+							CommitMessage: "Work: {{.Repo}}",
+						},
+					},
+				},
+			},
+			profileName: "work",
+			want:        "Work: {{.Repo}}",
+		},
+		{
+			name: "falls back to global when profile has no override",
+			cfg: &Config{
+				Sync: &SyncConfig{
+					CommitMessage: "Global: {{.Repo}}",
+				},
+				Profiles: map[string]*ProfileConfig{
+					"work": {
+						ThoughtsRepo: "~/work",
+						// No Sync override
+					},
+				},
+			},
+			profileName: "work",
+			want:        "Global: {{.Repo}}",
+		},
+		{
+			name: "falls back to global when profile Sync is empty",
+			cfg: &Config{
+				Sync: &SyncConfig{
+					CommitMessage: "Global: {{.Repo}}",
+				},
+				Profiles: map[string]*ProfileConfig{
+					"work": {
+						ThoughtsRepo: "~/work",
+						Sync:         &SyncConfig{}, // Empty sync config
+					},
+				},
+			},
+			profileName: "work",
+			want:        "Global: {{.Repo}}",
+		},
+		{
+			name: "returns default when profile not found",
+			cfg: &Config{
+				Profiles: map[string]*ProfileConfig{},
+			},
+			profileName: "nonexistent",
+			want:        DefaultCommitMessage(),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.cfg.GetCommitMessage(tt.profileName)
+			if got != tt.want {
+				t.Errorf("GetCommitMessage(%q) = %q, want %q", tt.profileName, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestGetCommitMessageHook(t *testing.T) {
+	tests := []struct {
+		name        string
+		cfg         *Config
+		profileName string
+		want        string
+	}{
+		{
+			name: "returns default when no config set",
+			cfg: &Config{
+				Profiles: map[string]*ProfileConfig{
+					"default": {ThoughtsRepo: "~/thoughts", Default: true},
+				},
+			},
+			profileName: "default",
+			want:        DefaultCommitMessageHook(),
+		},
+		{
+			name: "returns global commitMessageHook when set",
+			cfg: &Config{
+				Sync: &SyncConfig{
+					CommitMessageHook: "Global hook: {{.CommitMessage}}",
+				},
+				Profiles: map[string]*ProfileConfig{
+					"default": {ThoughtsRepo: "~/thoughts", Default: true},
+				},
+			},
+			profileName: "default",
+			want:        "Global hook: {{.CommitMessage}}",
+		},
+		{
+			name: "profile commitMessageHook overrides global",
+			cfg: &Config{
+				Sync: &SyncConfig{
+					CommitMessageHook: "Global hook: {{.CommitMessage}}",
+				},
+				Profiles: map[string]*ProfileConfig{
+					"work": {
+						ThoughtsRepo: "~/work",
+						Sync: &SyncConfig{
+							CommitMessageHook: "Work hook: {{.CommitMessage}}",
+						},
+					},
+				},
+			},
+			profileName: "work",
+			want:        "Work hook: {{.CommitMessage}}",
+		},
+		{
+			name: "falls back to global when profile has no override",
+			cfg: &Config{
+				Sync: &SyncConfig{
+					CommitMessageHook: "Global hook: {{.CommitMessage}}",
+				},
+				Profiles: map[string]*ProfileConfig{
+					"work": {
+						ThoughtsRepo: "~/work",
+					},
+				},
+			},
+			profileName: "work",
+			want:        "Global hook: {{.CommitMessage}}",
+		},
+		{
+			name: "commitMessage and commitMessageHook resolve independently",
+			cfg: &Config{
+				Sync: &SyncConfig{
+					CommitMessage: "Global sync",
+					// No commitMessageHook set - should use default
+				},
+				Profiles: map[string]*ProfileConfig{
+					"default": {ThoughtsRepo: "~/thoughts", Default: true},
+				},
+			},
+			profileName: "default",
+			want:        DefaultCommitMessageHook(), // Not "Global sync"
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.cfg.GetCommitMessageHook(tt.profileName)
+			if got != tt.want {
+				t.Errorf("GetCommitMessageHook(%q) = %q, want %q", tt.profileName, got, tt.want)
+			}
+		})
+	}
 }
