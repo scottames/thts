@@ -1,5 +1,53 @@
 # Changelog
 
+## [0.3.0](https://github.com/scottames/thts/compare/v0.2.0...v0.3.0) (2026-01-22)
+
+
+### Features
+
+* add support for Gemini CLI ([0127501](https://github.com/scottames/thts/commit/01275012dcaa32cf4466a9fe86155a6d14bb13bb))
+* **add:** better content position + input modes ([39989f1](https://github.com/scottames/thts/commit/39989f1fe576dd366d54b2fce0b9c302cfb7adbc))
+* **add:** better output for script handling + json output ([b56bf67](https://github.com/scottames/thts/commit/b56bf67b2c123c62cbe3015d80cac88f3085603e))
+* **add:** support add/sync in one go ([37c980e](https://github.com/scottames/thts/commit/37c980eb214b24136fcd7f599fdc5c1da114fa2b))
+* config dump-default ([3eb0047](https://github.com/scottames/thts/commit/3eb00479fda613aeb32a52bf8fdeea7b1a3f8fd5))
+* configurable categories + `add` command ([5414b83](https://github.com/scottames/thts/commit/5414b834755b97f8bad01470b7846f7cdbbb4cc5))
+* edit command ([380a8dc](https://github.com/scottames/thts/commit/380a8dcda43e676ac50140003a7e5a6a86487c21))
+* instructions via command + cleanup embedded ([7ca0fbb](https://github.com/scottames/thts/commit/7ca0fbbd21de02e8dbde474bd5fcd1f2a18125cd))
+* instructions/integration via hooks ([17ee446](https://github.com/scottames/thts/commit/17ee4460d7c8867bf5e67aae57d4446643463c75))
+* **show:** add path flag for cd magic ([5bc55dc](https://github.com/scottames/thts/commit/5bc55dcc0eea6966153efa1739ce687aea2f3fc2))
+* support setting some config via env ([85f264f](https://github.com/scottames/thts/commit/85f264ffee0c7b9798f8d8e2cb3832c11baefc63))
+* **sync:** support custom commit message template ([4822994](https://github.com/scottames/thts/commit/4822994e0d4058874968016188ffdf48b70279ff))
+* **sync:** support running in any location ([b9cc975](https://github.com/scottames/thts/commit/b9cc975810e09d9cdf9dce434a4472367678ed10))
+
+
+### Bug Fixes
+
+* agents uninit filter to agent ([827e55c](https://github.com/scottames/thts/commit/827e55c019cee7e8976295dd1b9b60a96679e09b))
+* **claude:** hooks in local settings ([18bf15e](https://github.com/scottames/thts/commit/18bf15ef575d28b2c5c714c6998211dceb051a5c))
+* **completion:** plumb add --in ([618f533](https://github.com/scottames/thts/commit/618f53311f853fa8da1dc0a7d34b804c54728b22))
+* **hooks:** explicitly enable hooks with gemini ([96137d5](https://github.com/scottames/thts/commit/96137d56d4023107623b50aee672352305218667))
+* **hooks:** only on valid repo ([9d937fc](https://github.com/scottames/thts/commit/9d937fcf6fecefdbc2310a9ece99e66eb77b67a8))
+* **searchable:** warn when cross file-system ([682d341](https://github.com/scottames/thts/commit/682d34169b39f89ff4f160fa0c86fd86adbf3800))
+* small fixes from previous ([bea5d7d](https://github.com/scottames/thts/commit/bea5d7d8fefc1dc8b9e14ece66b527820e185261))
+* **status:** respect local-only sync mode ([c9ee2a6](https://github.com/scottames/thts/commit/c9ee2a6aa4cc9b7284bc2c87690adbaeaf5ed754))
+
+
+### Miscellaneous Chores
+
+* **agents:** add note on testing ([4501520](https://github.com/scottames/thts/commit/45015201cf79489bb7c32bd2fcd01eee17b7c85d))
+* **deps:** update ⬆️ github-actions to v6 ([#7](https://github.com/scottames/thts/issues/7)) ([d9b059b](https://github.com/scottames/thts/commit/d9b059bb37bd68b963eaeb30900723f10fd59722))
+* **deps:** update ⬆️ trunk go to v1.25.6 ([#13](https://github.com/scottames/thts/issues/13)) ([8981145](https://github.com/scottames/thts/commit/89811452f817da963fc7f9164147e6392dd0894c))
+* **deps:** update dependency aqua:goreleaser/goreleaser to v2.13.3 ([#9](https://github.com/scottames/thts/issues/9)) ([f1f1540](https://github.com/scottames/thts/commit/f1f154025a70b000221e8328a9e81c6c41b5ef8d))
+* **deps:** update dependency go to v1.25.5 ([#10](https://github.com/scottames/thts/issues/10)) ([38733f3](https://github.com/scottames/thts/commit/38733f362478f022f3419a2baaf0d68f911096a4))
+* **deps:** update dependency go to v1.25.5 ([#12](https://github.com/scottames/thts/issues/12)) ([6011f80](https://github.com/scottames/thts/commit/6011f8092432aa02cfb74af3b14babb27445bf5b))
+* move repo agents config to global ([7d31db6](https://github.com/scottames/thts/commit/7d31db61ccfd15f04e8f26c5efaa7e5fea88233f))
+
+
+### Code Refactoring
+
+* **config:** use maintained yaml pkg ([c8ca795](https://github.com/scottames/thts/commit/c8ca795b7552dd18282fa50c1abf2ebc77527342))
+* DRY up hooks/agents/skills/commands ([c584bf4](https://github.com/scottames/thts/commit/c584bf407a34e642de992aed67417713acd44f58))
+
 ## [0.2.0](https://github.com/scottames/thts/compare/v0.1.1...v0.2.0) (2026-01-13)
 
 
