@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -41,6 +42,7 @@ type AddOptions struct {
 
 	// Output control
 	Quiet bool // --quiet/-q: only output file path to stdout
+	JSON  bool // --json: output result as JSON
 	Sync  bool // --sync: sync after adding
 }
 
@@ -56,10 +58,10 @@ type AddTarget struct {
 
 // AddResult holds the result of an add operation.
 type AddResult struct {
-	FilePath       string   // Full path to created file
-	DirsCreated    []string // Directories that were created
-	TemplateUsed   string   // Template filename that was used
-	OpenedInEditor bool     // Whether editor was launched
+	FilePath       string   `json:"file_path"`        // Full path to created file
+	DirsCreated    []string `json:"dirs_created"`     // Directories that were created
+	TemplateUsed   string   `json:"template_used"`    // Template filename that was used
+	OpenedInEditor bool     `json:"opened_in_editor"` // Whether editor was launched
 }
 
 var addCmd = &cobra.Command{
@@ -116,6 +118,7 @@ func init() {
 
 	// Output control
 	addCmd.Flags().BoolP("quiet", "q", false, "only output file path (for scripting)")
+	addCmd.Flags().Bool("json", false, "output result as JSON (for scripting)")
 	addCmd.Flags().Bool("sync", false, "sync thoughts after adding")
 
 	// Wire up tab completion for --in flag
@@ -123,6 +126,51 @@ func init() {
 	_ = addCmd.RegisterFlagCompletionFunc("profile", CompleteProfiles)
 
 	rootCmd.AddCommand(addCmd)
+}
+
+// executeAdd performs the core add operation without any output or editor handling.
+// It resolves the target, creates directories, and writes the file.
+// Returns the result, target (for output formatting), and any error.
+func executeAdd(cfg *config.Config, opts *AddOptions) (*AddResult, *AddTarget, error) {
+	// Resolve target location
+	target, err := resolveAddTarget(cfg, opts)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Generate filename
+	filename, ok := generateFilename(opts.Title)
+	if !ok {
+		return nil, nil, fmt.Errorf("title %q does not produce a valid filename (must contain alphanumeric characters)", opts.Title)
+	}
+
+	// Ensure target directory exists
+	dirsCreated, err := ensureTargetDir(target.FullPath)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create directory: %w", err)
+	}
+
+	// Resolve content
+	templateName := cfg.GetTemplate(target.Category, target.SubCategory)
+	content, _, err := resolveContent(opts, target.ThoughtsDir, templateName)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Create the file
+	filePath := filepath.Join(target.FullPath, filename)
+	if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
+		return nil, nil, fmt.Errorf("failed to create file: %w", err)
+	}
+
+	result := &AddResult{
+		FilePath:       filePath,
+		DirsCreated:    dirsCreated,
+		TemplateUsed:   templateName,
+		OpenedInEditor: false, // Set by caller after editor handling
+	}
+
+	return result, target, nil
 }
 
 func runAdd(cmd *cobra.Command, args []string) error {
@@ -161,94 +209,61 @@ func runAdd(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	// Resolve target location
-	target, err := resolveAddTarget(cfg, opts)
-	if err != nil {
-		return err
-	}
-
-	// Generate filename
-	filename, ok := generateFilename(opts.Title)
-	if !ok {
-		return fmt.Errorf("title %q does not produce a valid filename (must contain alphanumeric characters)", opts.Title)
-	}
-
-	// Ensure target directory exists
-	dirsCreated, err := ensureTargetDir(target.FullPath)
-	if err != nil {
-		return fmt.Errorf("failed to create directory: %w", err)
-	}
-
-	// Resolve content and editor behavior
-	templateName := cfg.GetTemplate(target.Category, target.SubCategory)
-	content, shouldOpenEditor, err := resolveContent(opts, target.ThoughtsDir, templateName)
+	// Execute the add operation
+	result, target, err := executeAdd(cfg, opts)
 	if err != nil {
 		return err
 	}
 
 	// Warn if a configured template wasn't found (only when using template)
 	if opts.Content == "" && opts.FromFile == "" && !opts.FromStdin {
-		_, templateFound := getTemplateContent(target.ThoughtsDir, templateName)
-		if !templateFound && templateName != "default.md" {
-			// Warnings go to stderr regardless of quiet mode
-			fmt.Fprintln(os.Stderr, ui.WarningF("Template %q not found, using default", templateName))
+		_, templateFound := getTemplateContent(target.ThoughtsDir, result.TemplateUsed)
+		if !templateFound && result.TemplateUsed != "default.md" {
+			// Warnings go to stderr regardless of output mode
+			fmt.Fprintln(os.Stderr, ui.WarningF("Template %q not found, using default", result.TemplateUsed))
 		}
 	}
 
-	// Create the file
-	filePath := filepath.Join(target.FullPath, filename)
-	if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
-		return fmt.Errorf("failed to create file: %w", err)
-	}
-
-	// Report what was created
-	if opts.Quiet {
-		// In quiet mode, only output the file path to stdout
-		fmt.Println(filePath)
-	} else {
-		printAddResult(filePath, target, dirsCreated, templateName)
+	// Output result based on mode
+	switch {
+	case opts.JSON:
+		if err := outputAddJSON(result); err != nil {
+			return fmt.Errorf("failed to output JSON: %w", err)
+		}
+	case opts.Quiet:
+		fmt.Println(result.FilePath)
+	default:
+		printAddResultFromStruct(result, target)
 	}
 
 	// Sync if requested
 	if opts.Sync {
-		syncCtx, err := resolveSyncContext(cfg, opts)
-		if err != nil {
-			return fmt.Errorf("failed to resolve thoughts repo for sync: %w", err)
-		}
-
-		if !opts.Quiet {
-			fmt.Println()
-			fmt.Println(ui.Info("Syncing thoughts..."))
-		}
-
-		syncOpts := syncOptions{
-			RepoPath:    syncCtx.RepoPath,
-			Mode:        cfg.GetSyncMode(),
-			ProfileName: syncCtx.ProfileName,
-			User:        cfg.User,
-			Config:      cfg,
-		}
-		if err := syncThoughtsRepo(syncOpts); err != nil {
-			return fmt.Errorf("sync failed: %w", err)
+		if err := runAddSync(cfg, opts, result); err != nil {
+			return err
 		}
 	}
 
-	// Open editor if needed
-	if !shouldOpenEditor {
+	// Determine if we should open editor
+	// Skip editor if: --json, --no-edit, or content was provided
+	if opts.JSON || opts.NoEdit || opts.Content != "" || opts.FromFile != "" || opts.FromStdin {
 		return nil
 	}
 
+	// Open editor
 	editor := resolveEditor(cfg)
 	if editor == "" {
-		if !opts.Quiet {
-			fmt.Println()
-			fmt.Println(ui.Info("No editor configured - file created but not opened"))
-			fmt.Println(ui.Muted("Set $EDITOR or $VISUAL, or add 'editor' to your config"))
-		}
+		fmt.Println()
+		fmt.Println(ui.Info("No editor configured - file created but not opened"))
+		fmt.Println(ui.Muted("Set $EDITOR or $VISUAL, or add 'editor' to your config"))
 		return nil
 	}
 
-	return openEditor(editor, filePath)
+	if err := openEditor(editor, result.FilePath); err != nil {
+		return err
+	}
+	result.OpenedInEditor = true
+
+	return nil
 }
 
 // parseAddOptions extracts AddOptions from cobra command and args.
@@ -315,6 +330,11 @@ func parseAddOptions(cmd *cobra.Command, args []string) (*AddOptions, error) {
 		return nil, err
 	}
 
+	opts.JSON, err = cmd.Flags().GetBool("json")
+	if err != nil {
+		return nil, err
+	}
+
 	opts.Sync, err = cmd.Flags().GetBool("sync")
 	if err != nil {
 		return nil, err
@@ -333,6 +353,11 @@ func validateAddOptions(opts *AddOptions) error {
 	// --shared and --personal are mutually exclusive
 	if opts.ForceShared && opts.ForceUser {
 		return fmt.Errorf("--shared and --personal are mutually exclusive")
+	}
+
+	// --json and --quiet are mutually exclusive
+	if opts.JSON && opts.Quiet {
+		return fmt.Errorf("--json and --quiet are mutually exclusive")
 	}
 
 	// Content sources are mutually exclusive
@@ -751,4 +776,51 @@ func printAddResult(filePath string, target *AddTarget, dirsCreated []string, te
 	if templateUsed != "" && templateUsed != "default.md" {
 		fmt.Printf("  Template: %s\n", ui.Muted(templateUsed))
 	}
+}
+
+// printAddResultFromStruct outputs information using the AddResult struct.
+func printAddResultFromStruct(result *AddResult, target *AddTarget) {
+	printAddResult(result.FilePath, target, result.DirsCreated, result.TemplateUsed)
+}
+
+// outputAddJSON outputs the result as JSON to stdout.
+func outputAddJSON(result *AddResult) error {
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "  ")
+	return enc.Encode(result)
+}
+
+// runAddSync handles the sync operation after add, with appropriate output handling.
+func runAddSync(cfg *config.Config, opts *AddOptions, result *AddResult) error {
+	syncCtx, err := resolveSyncContext(cfg, opts)
+	if err != nil {
+		return fmt.Errorf("failed to resolve thoughts repo for sync: %w", err)
+	}
+
+	// Sync messages go to stderr in JSON mode to keep stdout clean
+	if opts.JSON {
+		fmt.Fprintln(os.Stderr, ui.Info("Syncing thoughts..."))
+	} else if !opts.Quiet {
+		fmt.Println()
+		fmt.Println(ui.Info("Syncing thoughts..."))
+	}
+
+	syncOpts := syncOptions{
+		RepoPath:    syncCtx.RepoPath,
+		Mode:        cfg.GetSyncMode(),
+		ProfileName: syncCtx.ProfileName,
+		User:        cfg.User,
+		Config:      cfg,
+	}
+
+	// In JSON mode, send sync output to stderr to keep stdout clean for JSON
+	if opts.JSON {
+		syncOpts.Output = os.Stderr
+	}
+
+	if err := syncThoughtsRepo(syncOpts); err != nil {
+		return fmt.Errorf("sync failed: %w", err)
+	}
+
+	return nil
 }

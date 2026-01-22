@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -818,4 +819,263 @@ func TestResolveSyncContext(t *testing.T) {
 			t.Errorf("resolveSyncContext() error = %q, want 'no default profile' error", err.Error())
 		}
 	})
+}
+
+func TestValidateAddOptions_JSONQuietMutualExclusion(t *testing.T) {
+	tests := []struct {
+		name    string
+		opts    *AddOptions
+		wantErr string
+	}{
+		{
+			name: "json only is valid",
+			opts: &AddOptions{
+				JSON: true,
+			},
+			wantErr: "",
+		},
+		{
+			name: "quiet only is valid",
+			opts: &AddOptions{
+				Quiet: true,
+			},
+			wantErr: "",
+		},
+		{
+			name: "json and quiet mutually exclusive",
+			opts: &AddOptions{
+				JSON:  true,
+				Quiet: true,
+			},
+			wantErr: "--json and --quiet are mutually exclusive",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateAddOptions(tt.opts)
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Errorf("validateAddOptions() error = %v, want nil", err)
+				}
+			} else {
+				if err == nil {
+					t.Errorf("validateAddOptions() error = nil, want %q", tt.wantErr)
+				} else if err.Error() != tt.wantErr {
+					t.Errorf("validateAddOptions() error = %q, want %q", err.Error(), tt.wantErr)
+				}
+			}
+		})
+	}
+}
+
+func TestExecuteAdd(t *testing.T) {
+	t.Run("successful add with template", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		// Create thoughts directory structure with template
+		thoughtsDir := filepath.Join(tmpDir, "thoughts")
+		templatesDir := filepath.Join(thoughtsDir, ".templates")
+		sharedDir := filepath.Join(thoughtsDir, "shared")
+		if err := os.MkdirAll(templatesDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		// Create shared as a symlink (required for valid setup)
+		targetDir := filepath.Join(tmpDir, "shared-target")
+		if err := os.MkdirAll(targetDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(targetDir, sharedDir); err != nil {
+			t.Fatal(err)
+		}
+
+		// Create a template
+		templateContent := "---\ndate: test\n---\n\n# Test Template\n"
+		if err := os.WriteFile(filepath.Join(templatesDir, "note.md"), []byte(templateContent), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		cfg := &config.Config{
+			User:         "testuser",
+			DefaultScope: config.ScopeShared,
+			Profiles: map[string]*config.ProfileConfig{
+				"default": {
+					ThoughtsRepo: tmpDir,
+					GlobalDir:    "global",
+					Default:      true,
+				},
+			},
+		}
+
+		// Create global dir for fallback
+		globalDir := filepath.Join(tmpDir, "global", "shared")
+		if err := os.MkdirAll(globalDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		opts := &AddOptions{
+			Title:       "Test Note",
+			Category:    "notes",
+			ProfileName: "default",
+		}
+
+		result, target, err := executeAdd(cfg, opts)
+		if err != nil {
+			t.Fatalf("executeAdd() error = %v", err)
+		}
+
+		// Verify result
+		if result.FilePath == "" {
+			t.Error("executeAdd() FilePath is empty")
+		}
+		if !strings.HasSuffix(result.FilePath, "-test-note.md") {
+			t.Errorf("executeAdd() FilePath = %q, want suffix '-test-note.md'", result.FilePath)
+		}
+		if result.TemplateUsed != "note.md" {
+			t.Errorf("executeAdd() TemplateUsed = %q, want 'note.md'", result.TemplateUsed)
+		}
+
+		// Verify target
+		if target.Category != "notes" {
+			t.Errorf("executeAdd() target.Category = %q, want 'notes'", target.Category)
+		}
+
+		// Verify file was created
+		if _, err := os.Stat(result.FilePath); os.IsNotExist(err) {
+			t.Errorf("executeAdd() file was not created: %s", result.FilePath)
+		}
+	})
+
+	t.Run("tracks directory creation", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		// Create minimal thoughts setup
+		thoughtsDir := filepath.Join(tmpDir, "thoughts")
+		sharedDir := filepath.Join(thoughtsDir, "shared")
+		targetDir := filepath.Join(tmpDir, "shared-target")
+		if err := os.MkdirAll(targetDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.MkdirAll(thoughtsDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(targetDir, sharedDir); err != nil {
+			t.Fatal(err)
+		}
+
+		cfg := &config.Config{
+			User:         "testuser",
+			DefaultScope: config.ScopeShared,
+			Profiles: map[string]*config.ProfileConfig{
+				"default": {
+					ThoughtsRepo: tmpDir,
+					GlobalDir:    "global",
+					Default:      true,
+				},
+			},
+		}
+
+		// Create global dir
+		globalDir := filepath.Join(tmpDir, "global", "shared")
+		if err := os.MkdirAll(globalDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		opts := &AddOptions{
+			Title:       "Test Note",
+			Category:    "newcategory/subcategory", // New nested category
+			ProfileName: "default",
+			Content:     "test content",
+		}
+
+		result, _, err := executeAdd(cfg, opts)
+		if err != nil {
+			t.Fatalf("executeAdd() error = %v", err)
+		}
+
+		// Should have created directories
+		if len(result.DirsCreated) == 0 {
+			t.Error("executeAdd() DirsCreated is empty, expected directories to be created")
+		}
+	})
+
+	t.Run("error on invalid title", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		cfg := &config.Config{
+			User:         "testuser",
+			DefaultScope: config.ScopeShared,
+			Profiles: map[string]*config.ProfileConfig{
+				"default": {
+					ThoughtsRepo: tmpDir,
+					GlobalDir:    "global",
+					Default:      true,
+				},
+			},
+		}
+
+		// Create global dir
+		globalDir := filepath.Join(tmpDir, "global", "shared")
+		if err := os.MkdirAll(globalDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		opts := &AddOptions{
+			Title:       "---", // Invalid title (no alphanumeric chars)
+			ProfileName: "default",
+		}
+
+		_, _, err := executeAdd(cfg, opts)
+		if err == nil {
+			t.Error("executeAdd() error = nil, want error for invalid title")
+		}
+		if !strings.Contains(err.Error(), "does not produce a valid filename") {
+			t.Errorf("executeAdd() error = %q, want 'does not produce a valid filename' error", err.Error())
+		}
+	})
+}
+
+func TestAddResultJSONTags(t *testing.T) {
+	// Verify AddResult can be marshaled to JSON with expected field names
+	result := &AddResult{
+		FilePath:       "/path/to/file.md",
+		DirsCreated:    []string{"/path/to", "/path/to/dir"},
+		TemplateUsed:   "note.md",
+		OpenedInEditor: true,
+	}
+
+	data, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("json.Marshal() error = %v", err)
+	}
+
+	jsonStr := string(data)
+
+	// Check for snake_case field names
+	expectedFields := []string{
+		`"file_path"`,
+		`"dirs_created"`,
+		`"template_used"`,
+		`"opened_in_editor"`,
+	}
+
+	for _, field := range expectedFields {
+		if !strings.Contains(jsonStr, field) {
+			t.Errorf("JSON output missing field %s, got: %s", field, jsonStr)
+		}
+	}
+
+	// Verify it can be unmarshaled back
+	var decoded AddResult
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+
+	if decoded.FilePath != result.FilePath {
+		t.Errorf("Roundtrip FilePath = %q, want %q", decoded.FilePath, result.FilePath)
+	}
+	if decoded.OpenedInEditor != result.OpenedInEditor {
+		t.Errorf("Roundtrip OpenedInEditor = %v, want %v", decoded.OpenedInEditor, result.OpenedInEditor)
+	}
 }

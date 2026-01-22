@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -47,6 +48,33 @@ type syncOptions struct {
 	ProjectName     string
 	User            string
 	Config          *config.Config
+	Output          io.Writer // Output writer for messages (defaults to os.Stdout)
+}
+
+// syncPrint prints to the sync output writer, defaulting to stdout.
+func (o *syncOptions) print(a ...interface{}) {
+	w := o.Output
+	if w == nil {
+		w = os.Stdout
+	}
+	fmt.Fprintln(w, a...)
+}
+
+// syncPrintf prints formatted output to the sync output writer.
+func (o *syncOptions) printf(format string, a ...interface{}) {
+	w := o.Output
+	if w == nil {
+		w = os.Stdout
+	}
+	fmt.Fprintf(w, format, a...)
+}
+
+// getOutput returns the output writer, defaulting to stdout.
+func (o *syncOptions) getOutput() io.Writer {
+	if o.Output == nil {
+		return os.Stdout
+	}
+	return o.Output
 }
 
 func init() {
@@ -178,30 +206,30 @@ func syncThoughtsRepo(opts syncOptions) error {
 		if err := runGitCommand(opts.RepoPath, "commit", "-m", commitMessage); err != nil {
 			return fmt.Errorf("failed to commit: %w", err)
 		}
-		fmt.Println(ui.Success("Thoughts committed"))
+		opts.print(ui.Success("Thoughts committed"))
 	} else {
-		fmt.Println(ui.MutedBullet("No changes to commit"))
+		opts.print(ui.MutedBullet("No changes to commit"))
 	}
 
 	// Skip remote operations in local mode
 	if opts.Mode == config.SyncModeLocal {
-		warnUnpushedCommits(opts.RepoPath, "local mode")
+		warnUnpushedCommits(opts.RepoPath, "local mode", opts.getOutput())
 		return nil
 	}
 
 	// Pull latest changes (after committing to avoid conflicts with staged changes)
-	if err := pullWithRebase(opts.RepoPath); err != nil {
+	if err := pullWithRebase(opts.RepoPath, opts.getOutput()); err != nil {
 		return err
 	}
 
 	// Push only in full mode
 	if opts.Mode == config.SyncModeFull {
-		if err := pushToRemote(opts.RepoPath); err != nil {
+		if err := pushToRemote(opts.RepoPath, opts.getOutput()); err != nil {
 			// Push errors are warnings, not fatal
-			fmt.Println(ui.WarningF("%v", err))
+			opts.print(ui.WarningF("%v", err))
 		}
 	} else {
-		warnUnpushedCommits(opts.RepoPath, "pull mode")
+		warnUnpushedCommits(opts.RepoPath, "pull mode", opts.getOutput())
 	}
 
 	return nil
@@ -236,14 +264,14 @@ func resolveCommitMessage(opts syncOptions) (string, error) {
 }
 
 // warnUnpushedCommits prints a warning if there are unpushed commits.
-func warnUnpushedCommits(repoPath, reason string) {
+func warnUnpushedCommits(repoPath, reason string, w io.Writer) {
 	if count := getUnpushedCommitCount(repoPath); count > 0 {
 		noun := "commits"
 		if count == 1 {
 			noun = "commit"
 		}
-		fmt.Println(ui.WarningF("%d %s not pushed (%s)", count, noun, reason))
-		fmt.Printf("  Run %s or %s in %s to push\n",
+		fmt.Fprintln(w, ui.WarningF("%d %s not pushed (%s)", count, noun, reason))
+		fmt.Fprintf(w, "  Run %s or %s in %s to push\n",
 			ui.Accent("thts sync --mode=full"),
 			ui.Accent("git push"),
 			ui.Accent(repoPath))
@@ -271,7 +299,7 @@ func runGitCommand(dir string, args ...string) error {
 }
 
 // pullWithRebase attempts to pull with rebase, handling conflicts.
-func pullWithRebase(repoPath string) error {
+func pullWithRebase(repoPath string, w io.Writer) error {
 	// Check if remote exists first
 	cmd := exec.Command("git", "remote", "get-url", "origin")
 	cmd.Dir = repoPath
@@ -281,7 +309,7 @@ func pullWithRebase(repoPath string) error {
 	}
 
 	// Print before git pull which may require auth (e.g., yubikey touch)
-	fmt.Println(ui.MutedBullet("Pulling from remote..."))
+	fmt.Fprintln(w, ui.MutedBullet("Pulling from remote..."))
 
 	cmd = exec.Command("git", "pull", "--rebase")
 	cmd.Dir = repoPath
@@ -291,21 +319,21 @@ func pullWithRebase(repoPath string) error {
 
 		// Check for merge conflict indicators
 		if isConflictError(outputStr) {
-			fmt.Println()
-			fmt.Println(ui.Error("Sync conflict detected in thoughts repository."))
-			fmt.Println()
-			fmt.Println("To resolve:")
-			fmt.Printf("  %s\n", ui.Accent(fmt.Sprintf("cd %s", repoPath)))
-			fmt.Printf("  %s        # See conflicting files\n", ui.Accent("git status"))
-			fmt.Println("  # Fix conflicts manually")
-			fmt.Printf("  %s\n", ui.Accent("git rebase --continue"))
-			fmt.Printf("  %s          # Retry sync\n", ui.Accent("thts sync"))
-			fmt.Println()
+			fmt.Fprintln(w)
+			fmt.Fprintln(w, ui.Error("Sync conflict detected in thoughts repository."))
+			fmt.Fprintln(w)
+			fmt.Fprintln(w, "To resolve:")
+			fmt.Fprintf(w, "  %s\n", ui.Accent(fmt.Sprintf("cd %s", repoPath)))
+			fmt.Fprintf(w, "  %s        # See conflicting files\n", ui.Accent("git status"))
+			fmt.Fprintln(w, "  # Fix conflicts manually")
+			fmt.Fprintf(w, "  %s\n", ui.Accent("git rebase --continue"))
+			fmt.Fprintf(w, "  %s          # Retry sync\n", ui.Accent("thts sync"))
+			fmt.Fprintln(w)
 			return fmt.Errorf("merge conflict - manual resolution required")
 		}
 
 		// Other pull errors are warnings
-		fmt.Println(ui.WarningF("Could not pull latest changes: %s", strings.TrimSpace(outputStr)))
+		fmt.Fprintln(w, ui.WarningF("Could not pull latest changes: %s", strings.TrimSpace(outputStr)))
 	}
 
 	return nil
@@ -329,23 +357,23 @@ func isConflictError(output string) bool {
 }
 
 // pushToRemote attempts to push to the remote.
-func pushToRemote(repoPath string) error {
+func pushToRemote(repoPath string, w io.Writer) error {
 	// Check if remote exists
 	cmd := exec.Command("git", "remote", "get-url", "origin")
 	cmd.Dir = repoPath
 	if err := cmd.Run(); err != nil {
-		fmt.Println(ui.Muted("No remote configured for thoughts repository"))
+		fmt.Fprintln(w, ui.Muted("No remote configured for thoughts repository"))
 		return nil
 	}
 
 	// Skip push if nothing to push
 	if getUnpushedCommitCount(repoPath) == 0 {
-		fmt.Println(ui.MutedBullet("Nothing to push"))
+		fmt.Fprintln(w, ui.MutedBullet("Nothing to push"))
 		return nil
 	}
 
 	// Print before git push which may require auth (e.g., yubikey touch)
-	fmt.Println(ui.MutedBullet("Pushing to remote..."))
+	fmt.Fprintln(w, ui.MutedBullet("Pushing to remote..."))
 
 	cmd = exec.Command("git", "push")
 	cmd.Dir = repoPath
@@ -353,7 +381,7 @@ func pushToRemote(repoPath string) error {
 		return fmt.Errorf("could not push to remote - you may need to push manually")
 	}
 
-	fmt.Println(ui.Success("Pushed to remote"))
+	fmt.Fprintln(w, ui.Success("Pushed to remote"))
 	return nil
 }
 
