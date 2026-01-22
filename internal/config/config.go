@@ -32,20 +32,32 @@ type humanLayerConfigFile struct {
 // Load loads the thts configuration.
 // It first tries to load from ~/.config/thts/config.yaml,
 // then falls back to ~/.config/humanlayer/humanlayer.json (translated to profiles).
+// After loading, applies THTS_USER env var override if set.
 func Load() (*Config, error) {
+	var cfg *Config
+
 	// Try thts config first
 	thtsPath := ThtsConfigPath()
-	if cfg, err := loadFromPath(thtsPath); err == nil {
-		return cfg, nil
+	if c, err := loadFromPath(thtsPath); err == nil {
+		cfg = c
+	} else {
+		// Fall back to HumanLayer config (translate their format to ours)
+		hlPath := HumanLayerConfigPath()
+		if c, err := loadFromHumanLayerPath(hlPath); err == nil {
+			cfg = c
+		}
 	}
 
-	// Fall back to HumanLayer config (translate their format to ours)
-	hlPath := HumanLayerConfigPath()
-	if cfg, err := loadFromHumanLayerPath(hlPath); err == nil {
-		return cfg, nil
+	if cfg == nil {
+		return nil, ErrConfigNotFound
 	}
 
-	return nil, ErrConfigNotFound
+	// Apply THTS_USER env var override if set
+	if envUser := os.Getenv("THTS_USER"); envUser != "" {
+		cfg.User = envUser
+	}
+
+	return cfg, nil
 }
 
 // loadFromPath loads config directly from a path (thts YAML format).

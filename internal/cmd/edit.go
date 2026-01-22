@@ -45,8 +45,14 @@ func runEdit(_ *cobra.Command, _ []string) error {
 		return nil
 	}
 
+	// Resolve profile name: flag > env var
+	profileName := editProfile
+	if profileName == "" {
+		profileName = os.Getenv("THTS_PROFILE")
+	}
+
 	// Resolve path to open
-	path, err := resolveEditPath(cfg, editProfile)
+	path, err := resolveEditPath(cfg, profileName)
 	if err != nil {
 		return err
 	}

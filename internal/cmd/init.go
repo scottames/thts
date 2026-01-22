@@ -90,10 +90,16 @@ func runInit(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
+	// Resolve profile name: flag > env var
+	resolvedProfileName := initProfile
+	if resolvedProfileName == "" {
+		resolvedProfileName = os.Getenv("THTS_PROFILE")
+	}
+
 	// Validate profile if specified
-	if initProfile != "" {
-		if !cfg.ValidateProfile(initProfile) {
-			fmt.Println(ui.ErrorF("Profile %q does not exist.", initProfile))
+	if resolvedProfileName != "" {
+		if !cfg.ValidateProfile(resolvedProfileName) {
+			fmt.Println(ui.ErrorF("Profile %q does not exist.", resolvedProfileName))
 			fmt.Println()
 			fmt.Println(ui.Muted("Available profiles:"))
 			if len(cfg.Profiles) > 0 {
@@ -106,7 +112,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 			fmt.Println()
 			fmt.Printf(
 				"Create a profile first: %s\n",
-				ui.Accent(fmt.Sprintf("thts profile create %s", initProfile)),
+				ui.Accent(fmt.Sprintf("thts profile create %s", resolvedProfileName)),
 			)
 			return nil
 		}
@@ -321,15 +327,22 @@ func runInit(cmd *cobra.Command, args []string) error {
 }
 
 // resolveInitProfile resolves the profile configuration for init.
+// Priority: flag > env var > default.
 func resolveInitProfile(cfg *config.Config, repoPath string) *config.ResolvedProfile {
-	// If profile flag is set, use that profile
-	if initProfile != "" && cfg.Profiles != nil {
-		if profile, exists := cfg.Profiles[initProfile]; exists {
+	// Resolve profile name: flag takes precedence over env var
+	profileName := initProfile
+	if profileName == "" {
+		profileName = os.Getenv("THTS_PROFILE")
+	}
+
+	// If profile name is set, use that profile
+	if profileName != "" && cfg.Profiles != nil {
+		if profile, exists := cfg.Profiles[profileName]; exists {
 			return &config.ResolvedProfile{
 				ThoughtsRepo: profile.ThoughtsRepo,
 				ReposDir:     profile.ReposDir,
 				GlobalDir:    profile.GlobalDir,
-				ProfileName:  initProfile,
+				ProfileName:  profileName,
 			}
 		}
 	}

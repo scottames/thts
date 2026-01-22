@@ -144,8 +144,21 @@ func runSync(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Determine sync mode: CLI flag overrides config
+	// Determine sync mode: flag > env var > config
 	syncMode := cfg.GetSyncMode()
+
+	// Env var overrides config
+	if envMode := os.Getenv("THTS_SYNC_MODE"); envMode != "" {
+		// Validate env var value
+		switch config.SyncMode(envMode) {
+		case config.SyncModeFull, config.SyncModePull, config.SyncModeLocal:
+			syncMode = config.SyncMode(envMode)
+		default:
+			fmt.Println(ui.WarningF("Invalid THTS_SYNC_MODE %q (must be full, pull, or local), using config default", envMode))
+		}
+	}
+
+	// Flag has highest priority
 	if cmd.Flags().Changed("mode") {
 		modeFlag, _ := cmd.Flags().GetString("mode")
 		syncMode = config.SyncMode(modeFlag)

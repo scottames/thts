@@ -306,6 +306,10 @@ func parseAddOptions(cmd *cobra.Command, args []string) (*AddOptions, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Fall back to THTS_PROFILE env var if flag not set
+	if opts.ProfileName == "" {
+		opts.ProfileName = os.Getenv("THTS_PROFILE")
+	}
 
 	// Content input flags
 	opts.FromFile, err = cmd.Flags().GetString("from")

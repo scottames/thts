@@ -172,24 +172,82 @@ func TestXDGConfigHome(t *testing.T) {
 }
 
 func TestThtsConfigPath(t *testing.T) {
-	// Save and restore XDG_CONFIG_HOME
-	originalXDG := os.Getenv("XDG_CONFIG_HOME")
-	defer func() {
-		if originalXDG != "" {
-			_ = os.Setenv("XDG_CONFIG_HOME", originalXDG)
-		} else {
-			_ = os.Unsetenv("XDG_CONFIG_HOME")
+	t.Run("uses XDG_CONFIG_HOME by default", func(t *testing.T) {
+		// Save and restore env vars
+		originalXDG := os.Getenv("XDG_CONFIG_HOME")
+		originalThtsConfig := os.Getenv("THTS_CONFIG_PATH")
+		defer func() {
+			restoreEnv("XDG_CONFIG_HOME", originalXDG)
+			restoreEnv("THTS_CONFIG_PATH", originalThtsConfig)
+		}()
+
+		_ = os.Unsetenv("THTS_CONFIG_PATH")
+		if err := os.Setenv("XDG_CONFIG_HOME", "/test/config"); err != nil {
+			t.Fatalf("failed to set XDG_CONFIG_HOME: %v", err)
 		}
-	}()
+		got := ThtsConfigPath()
+		want := "/test/config/thts/config.yaml"
 
-	if err := os.Setenv("XDG_CONFIG_HOME", "/test/config"); err != nil {
-		t.Fatalf("failed to set XDG_CONFIG_HOME: %v", err)
-	}
-	got := ThtsConfigPath()
-	want := "/test/config/thts/config.yaml"
+		if got != want {
+			t.Errorf("ThtsConfigPath() = %q, want %q", got, want)
+		}
+	})
 
-	if got != want {
-		t.Errorf("ThtsConfigPath() = %q, want %q", got, want)
+	t.Run("THTS_CONFIG_PATH overrides default", func(t *testing.T) {
+		// Save and restore env vars
+		originalXDG := os.Getenv("XDG_CONFIG_HOME")
+		originalThtsConfig := os.Getenv("THTS_CONFIG_PATH")
+		defer func() {
+			restoreEnv("XDG_CONFIG_HOME", originalXDG)
+			restoreEnv("THTS_CONFIG_PATH", originalThtsConfig)
+		}()
+
+		if err := os.Setenv("XDG_CONFIG_HOME", "/test/config"); err != nil {
+			t.Fatalf("failed to set XDG_CONFIG_HOME: %v", err)
+		}
+		if err := os.Setenv("THTS_CONFIG_PATH", "/custom/path/config.yaml"); err != nil {
+			t.Fatalf("failed to set THTS_CONFIG_PATH: %v", err)
+		}
+
+		got := ThtsConfigPath()
+		want := "/custom/path/config.yaml"
+
+		if got != want {
+			t.Errorf("ThtsConfigPath() = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("THTS_CONFIG_PATH expands tilde", func(t *testing.T) {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			t.Fatalf("failed to get home directory: %v", err)
+		}
+
+		// Save and restore env vars
+		originalThtsConfig := os.Getenv("THTS_CONFIG_PATH")
+		defer func() {
+			restoreEnv("THTS_CONFIG_PATH", originalThtsConfig)
+		}()
+
+		if err := os.Setenv("THTS_CONFIG_PATH", "~/my-thts-config.yaml"); err != nil {
+			t.Fatalf("failed to set THTS_CONFIG_PATH: %v", err)
+		}
+
+		got := ThtsConfigPath()
+		want := filepath.Join(home, "my-thts-config.yaml")
+
+		if got != want {
+			t.Errorf("ThtsConfigPath() = %q, want %q", got, want)
+		}
+	})
+}
+
+// restoreEnv restores an environment variable to its original value.
+func restoreEnv(key, value string) {
+	if value != "" {
+		_ = os.Setenv(key, value)
+	} else {
+		_ = os.Unsetenv(key)
 	}
 }
 
@@ -230,16 +288,36 @@ func TestDefaultThoughtsRepo(t *testing.T) {
 }
 
 func TestDefaultUser(t *testing.T) {
-	t.Run("with USER set", func(t *testing.T) {
+	t.Run("THTS_USER takes precedence over USER", func(t *testing.T) {
 		originalUser := os.Getenv("USER")
+		originalThtsUser := os.Getenv("THTS_USER")
 		defer func() {
-			if originalUser != "" {
-				_ = os.Setenv("USER", originalUser)
-			} else {
-				_ = os.Unsetenv("USER")
-			}
+			restoreEnv("USER", originalUser)
+			restoreEnv("THTS_USER", originalThtsUser)
 		}()
 
+		if err := os.Setenv("USER", "systemuser"); err != nil {
+			t.Fatalf("failed to set USER: %v", err)
+		}
+		if err := os.Setenv("THTS_USER", "thtsuser"); err != nil {
+			t.Fatalf("failed to set THTS_USER: %v", err)
+		}
+		got := DefaultUser()
+
+		if got != "thtsuser" {
+			t.Errorf("DefaultUser() = %q, want thtsuser", got)
+		}
+	})
+
+	t.Run("with USER set but no THTS_USER", func(t *testing.T) {
+		originalUser := os.Getenv("USER")
+		originalThtsUser := os.Getenv("THTS_USER")
+		defer func() {
+			restoreEnv("USER", originalUser)
+			restoreEnv("THTS_USER", originalThtsUser)
+		}()
+
+		_ = os.Unsetenv("THTS_USER")
 		if err := os.Setenv("USER", "testuser"); err != nil {
 			t.Fatalf("failed to set USER: %v", err)
 		}
@@ -250,19 +328,16 @@ func TestDefaultUser(t *testing.T) {
 		}
 	})
 
-	t.Run("without USER set", func(t *testing.T) {
+	t.Run("without USER or THTS_USER set", func(t *testing.T) {
 		originalUser := os.Getenv("USER")
+		originalThtsUser := os.Getenv("THTS_USER")
 		defer func() {
-			if originalUser != "" {
-				_ = os.Setenv("USER", originalUser)
-			} else {
-				_ = os.Unsetenv("USER")
-			}
+			restoreEnv("USER", originalUser)
+			restoreEnv("THTS_USER", originalThtsUser)
 		}()
 
-		if err := os.Unsetenv("USER"); err != nil {
-			t.Fatalf("failed to unset USER: %v", err)
-		}
+		_ = os.Unsetenv("USER")
+		_ = os.Unsetenv("THTS_USER")
 		got := DefaultUser()
 
 		if got != "user" {

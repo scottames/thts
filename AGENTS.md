@@ -115,6 +115,17 @@ subcommand.
 **IMPORTANT**: `thts` should always be feature-compatible with humanlayer's
 `thoughts` subcommand so users can switch between them.
 
+## Environment Variables
+
+Override config without modifying files. Priority: flag > env var > config > default.
+
+| Variable           | Description                        | Example                          |
+| ------------------ | ---------------------------------- | -------------------------------- |
+| `THTS_CONFIG_PATH` | Custom config file path            | `THTS_CONFIG_PATH=~/alt.yaml`    |
+| `THTS_USER`        | Override username                  | `THTS_USER=testuser thts status` |
+| `THTS_PROFILE`     | Default profile (like `--profile`) | `THTS_PROFILE=work thts init`    |
+| `THTS_SYNC_MODE`   | Sync mode: full, pull, local       | `THTS_SYNC_MODE=local thts sync` |
+
 ## Development
 
 ### Linting

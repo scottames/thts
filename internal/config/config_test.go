@@ -247,6 +247,58 @@ profiles:
 		}
 	})
 
+	t.Run("THTS_USER env var overrides config user", func(t *testing.T) {
+		xdgDir, cleanup := setupTestXDG(t)
+		defer cleanup()
+
+		// Save and restore THTS_USER
+		originalThtsUser := os.Getenv("THTS_USER")
+		defer func() {
+			if originalThtsUser != "" {
+				_ = os.Setenv("THTS_USER", originalThtsUser)
+			} else {
+				_ = os.Unsetenv("THTS_USER")
+			}
+		}()
+
+		// Create config with a user
+		thtsDir := filepath.Join(xdgDir, "thts")
+		if err := os.MkdirAll(thtsDir, 0755); err != nil {
+			t.Fatalf("failed to create thts dir: %v", err)
+		}
+
+		cfg := &Config{
+			User: "configuser",
+			Profiles: map[string]*ProfileConfig{
+				"personal": {
+					ThoughtsRepo: "~/thoughts",
+					ReposDir:     "repos",
+					GlobalDir:    "global",
+					Default:      true,
+				},
+			},
+		}
+		data, _ := yaml.Marshal(cfg)
+		if err := os.WriteFile(filepath.Join(thtsDir, "config.yaml"), data, 0644); err != nil {
+			t.Fatalf("failed to write config: %v", err)
+		}
+
+		// Set THTS_USER env var
+		if err := os.Setenv("THTS_USER", "envuser"); err != nil {
+			t.Fatalf("failed to set THTS_USER: %v", err)
+		}
+
+		loaded, err := Load()
+		if err != nil {
+			t.Fatalf("Load() error: %v", err)
+		}
+
+		// User should be from env var, not config
+		if loaded.User != "envuser" {
+			t.Errorf("User = %q, want envuser (from THTS_USER env var)", loaded.User)
+		}
+	})
+
 	t.Run("translates humanlayer profiles", func(t *testing.T) {
 		xdgDir, cleanup := setupTestXDG(t)
 		defer cleanup()

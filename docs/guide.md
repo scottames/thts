@@ -37,6 +37,7 @@
   - [Viewing Config](#viewing-config)
   - [Editing Config](#editing-config)
   - [Config Options](#config-options)
+  - [Environment Variables](#environment-variables)
   - [gitIgnore Options](#gitignore-options)
 - [Shell Completion](#shell-completion)
   - [Loading Completions](#loading-completions)
@@ -599,6 +600,50 @@ gitIgnore: project
 | `sync.mode`              | Sync mode: full, pull, or local      | `full`                       |
 | `sync.commitMessage`     | Template for manual sync messages    | (see Commit Message section) |
 | `sync.commitMessageHook` | Template for hook auto-sync messages | (see Commit Message section) |
+
+### Environment Variables
+
+Environment variables override config file settings. Useful for CI/CD, scripting,
+or temporary overrides without modifying config.
+
+| Variable           | Description                       | Overrides             |
+| ------------------ | --------------------------------- | --------------------- |
+| `THTS_CONFIG_PATH` | Custom path to config file        | Default config path   |
+| `THTS_USER`        | Username for thoughts directories | `user` in config      |
+| `THTS_PROFILE`     | Default profile to use            | `--profile` flag      |
+| `THTS_SYNC_MODE`   | Sync mode (full, pull, local)     | `sync.mode` in config |
+
+**Resolution order** (highest to lowest priority):
+
+1. CLI flag (e.g., `--profile`, `--mode`)
+2. Environment variable
+3. Config file
+4. Default value
+
+**Examples:**
+
+```bash
+# Use a different config file
+THTS_CONFIG_PATH=~/alt-config.yaml thts status
+
+# Override username for this session
+THTS_USER=teammate thts sync
+
+# Use work profile without --profile flag
+THTS_PROFILE=work thts init
+
+# Force local-only sync (no network)
+THTS_SYNC_MODE=local thts sync
+```
+
+**Scripting example:**
+
+```bash
+# CI/CD: sync without remote operations
+export THTS_SYNC_MODE=local
+export THTS_USER=ci-bot
+thts sync
+```
 
 ### gitIgnore Options
 

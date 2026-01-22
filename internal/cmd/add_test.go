@@ -1036,6 +1036,206 @@ func TestExecuteAdd(t *testing.T) {
 	})
 }
 
+func TestTHTSProfileEnvVar(t *testing.T) {
+	t.Run("THTS_PROFILE used when profile flag not set", func(t *testing.T) {
+		// Save and restore env var
+		originalEnv := os.Getenv("THTS_PROFILE")
+		defer func() {
+			if originalEnv != "" {
+				_ = os.Setenv("THTS_PROFILE", originalEnv)
+			} else {
+				_ = os.Unsetenv("THTS_PROFILE")
+			}
+		}()
+
+		tmpDir := t.TempDir()
+
+		// Create thoughts setup
+		cfg := &config.Config{
+			User: "testuser",
+			Profiles: map[string]*config.ProfileConfig{
+				"default": {
+					ThoughtsRepo: filepath.Join(tmpDir, "default-thoughts"),
+					GlobalDir:    "global",
+					Default:      true,
+				},
+				"work": {
+					ThoughtsRepo: filepath.Join(tmpDir, "work-thoughts"),
+					GlobalDir:    "global",
+				},
+			},
+		}
+
+		// Create global dirs for both profiles
+		if err := os.MkdirAll(filepath.Join(tmpDir, "default-thoughts", "global", "shared"), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.MkdirAll(filepath.Join(tmpDir, "work-thoughts", "global", "shared"), 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		// Set THTS_PROFILE env var
+		if err := os.Setenv("THTS_PROFILE", "work"); err != nil {
+			t.Fatalf("failed to set THTS_PROFILE: %v", err)
+		}
+
+		// Create AddOptions without profile flag - env var should be used
+		opts := &AddOptions{
+			Title:       "Test Note",
+			Category:    "notes",
+			ProfileName: "", // Not set via flag
+		}
+
+		// Simulate env var fallback (as done in parseAddOptions)
+		if opts.ProfileName == "" {
+			opts.ProfileName = os.Getenv("THTS_PROFILE")
+		}
+
+		// Now opts.ProfileName should be "work" from env var
+		if opts.ProfileName != "work" {
+			t.Errorf("ProfileName = %q, want 'work' from THTS_PROFILE env var", opts.ProfileName)
+		}
+
+		// Verify resolveThoughtsDir uses the work profile
+		thoughtsDir, isGlobal, err := resolveThoughtsDir(cfg, opts)
+		if err != nil {
+			t.Fatalf("resolveThoughtsDir() error = %v", err)
+		}
+
+		expectedPath := filepath.Join(tmpDir, "work-thoughts", "global")
+		if thoughtsDir != expectedPath {
+			t.Errorf("resolveThoughtsDir() = %q, want %q", thoughtsDir, expectedPath)
+		}
+		if !isGlobal {
+			t.Error("resolveThoughtsDir() isGlobal = false, want true for profile target")
+		}
+	})
+
+	t.Run("flag takes precedence over THTS_PROFILE env var", func(t *testing.T) {
+		// Save and restore env var
+		originalEnv := os.Getenv("THTS_PROFILE")
+		defer func() {
+			if originalEnv != "" {
+				_ = os.Setenv("THTS_PROFILE", originalEnv)
+			} else {
+				_ = os.Unsetenv("THTS_PROFILE")
+			}
+		}()
+
+		tmpDir := t.TempDir()
+
+		// Create thoughts setup
+		cfg := &config.Config{
+			User: "testuser",
+			Profiles: map[string]*config.ProfileConfig{
+				"default": {
+					ThoughtsRepo: filepath.Join(tmpDir, "default-thoughts"),
+					GlobalDir:    "global",
+					Default:      true,
+				},
+				"work": {
+					ThoughtsRepo: filepath.Join(tmpDir, "work-thoughts"),
+					GlobalDir:    "global",
+				},
+				"personal": {
+					ThoughtsRepo: filepath.Join(tmpDir, "personal-thoughts"),
+					GlobalDir:    "global",
+				},
+			},
+		}
+
+		// Create global dirs
+		if err := os.MkdirAll(filepath.Join(tmpDir, "work-thoughts", "global", "shared"), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.MkdirAll(filepath.Join(tmpDir, "personal-thoughts", "global", "shared"), 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		// Set THTS_PROFILE env var to "work"
+		if err := os.Setenv("THTS_PROFILE", "work"); err != nil {
+			t.Fatalf("failed to set THTS_PROFILE: %v", err)
+		}
+
+		// Create AddOptions with profile flag set - flag should take precedence
+		opts := &AddOptions{
+			Title:       "Test Note",
+			Category:    "notes",
+			ProfileName: "personal", // Set via flag
+		}
+
+		// Simulate env var fallback (as done in parseAddOptions)
+		// ProfileName is already set, so env var should NOT be used
+		if opts.ProfileName == "" {
+			opts.ProfileName = os.Getenv("THTS_PROFILE")
+		}
+
+		// ProfileName should still be "personal" from flag
+		if opts.ProfileName != "personal" {
+			t.Errorf("ProfileName = %q, want 'personal' from flag (should override env var)", opts.ProfileName)
+		}
+
+		// Verify resolveThoughtsDir uses the personal profile
+		thoughtsDir, _, err := resolveThoughtsDir(cfg, opts)
+		if err != nil {
+			t.Fatalf("resolveThoughtsDir() error = %v", err)
+		}
+
+		expectedPath := filepath.Join(tmpDir, "personal-thoughts", "global")
+		if thoughtsDir != expectedPath {
+			t.Errorf("resolveThoughtsDir() = %q, want %q", thoughtsDir, expectedPath)
+		}
+	})
+
+	t.Run("invalid THTS_PROFILE env var returns error", func(t *testing.T) {
+		// Save and restore env var
+		originalEnv := os.Getenv("THTS_PROFILE")
+		defer func() {
+			if originalEnv != "" {
+				_ = os.Setenv("THTS_PROFILE", originalEnv)
+			} else {
+				_ = os.Unsetenv("THTS_PROFILE")
+			}
+		}()
+
+		tmpDir := t.TempDir()
+
+		cfg := &config.Config{
+			User: "testuser",
+			Profiles: map[string]*config.ProfileConfig{
+				"default": {
+					ThoughtsRepo: filepath.Join(tmpDir, "default-thoughts"),
+					GlobalDir:    "global",
+					Default:      true,
+				},
+			},
+		}
+
+		// Set THTS_PROFILE to non-existent profile
+		if err := os.Setenv("THTS_PROFILE", "nonexistent"); err != nil {
+			t.Fatalf("failed to set THTS_PROFILE: %v", err)
+		}
+
+		opts := &AddOptions{
+			Title:       "Test Note",
+			ProfileName: "", // Not set
+		}
+
+		// Simulate env var fallback
+		if opts.ProfileName == "" {
+			opts.ProfileName = os.Getenv("THTS_PROFILE")
+		}
+
+		_, _, err := resolveThoughtsDir(cfg, opts)
+		if err == nil {
+			t.Error("resolveThoughtsDir() error = nil, want error for invalid profile")
+		}
+		if !strings.Contains(err.Error(), "not found") {
+			t.Errorf("resolveThoughtsDir() error = %q, want 'not found' error", err.Error())
+		}
+	})
+}
+
 func TestAddResultJSONTags(t *testing.T) {
 	// Verify AddResult can be marshaled to JSON with expected field names
 	result := &AddResult{

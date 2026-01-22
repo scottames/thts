@@ -47,7 +47,11 @@ func XDGConfigHome() string {
 }
 
 // ThtsConfigPath returns the path to the thts config file.
+// Respects THTS_CONFIG_PATH environment variable if set.
 func ThtsConfigPath() string {
+	if path := os.Getenv("THTS_CONFIG_PATH"); path != "" {
+		return ExpandPath(path)
+	}
 	return filepath.Join(XDGConfigHome(), "thts", "config.yaml")
 }
 
@@ -65,8 +69,12 @@ func DefaultThoughtsRepo() string {
 	return filepath.Join(home, "thoughts")
 }
 
-// DefaultUser returns the default username from $USER environment variable.
+// DefaultUser returns the default username.
+// Respects THTS_USER environment variable if set, otherwise falls back to $USER.
 func DefaultUser() string {
+	if user := os.Getenv("THTS_USER"); user != "" {
+		return user
+	}
 	if user := os.Getenv("USER"); user != "" {
 		return user
 	}
