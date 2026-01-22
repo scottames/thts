@@ -146,6 +146,14 @@ go test -tags=integration ./...                  # All tests
 
 **Coverage targets:** config/git >70%, fs/thts >60% (all met)
 
+#### Verification Scripts
+
+For CLI behavior that unit tests can't easily cover (flag interactions,
+stdout/stderr separation, output formats), create `scripts/verify-<feature>.sh`.
+
+See `thoughts/shared/notes/2026-01-21-verification-script-pattern.md` for the
+pattern and gotchas (especially around `set -e` and capturing expected errors).
+
 ## Documentation
 
 **Any relevant docs should be updated or created to consider any work
