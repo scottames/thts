@@ -99,18 +99,21 @@ func runSync(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to get current directory: %w", err)
 	}
 
+	// Load state for repo mappings
+	state := config.LoadStateOrDefault()
+
 	// Determine if this repo is initialized
 	thoughtsDir := filepath.Join(currentRepo, "thoughts")
-	isInitialized := fs.Exists(thoughtsDir) && cfg.RepoMappings[currentRepo] != nil
+	isInitialized := fs.Exists(thoughtsDir) && state.RepoMappings[currentRepo] != nil
 
 	var profileConfig *config.ResolvedProfile
 	var projectName string
 
 	if isInitialized {
-		// Use repo-specific profile
-		mapping := cfg.RepoMappings[currentRepo]
+		// Use repo-specific profile from state
+		mapping := state.RepoMappings[currentRepo]
 		projectName = mapping.GetRepoName()
-		profileConfig = cfg.ResolveProfileForRepo(currentRepo)
+		profileConfig = state.ResolveProfileForRepo(cfg, currentRepo)
 	} else {
 		// Use default profile directly
 		profileConfig = cfg.GetDefaultProfileResolved()

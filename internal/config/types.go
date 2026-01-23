@@ -94,6 +94,7 @@ type HooksConfig struct {
 }
 
 // Config represents the thts configuration.
+// Note: RepoMappings have been moved to State (machine-specific state file).
 type Config struct {
 	User                string                    `yaml:"user"`
 	Editor              string                    `yaml:"editor,omitempty"`
@@ -105,7 +106,6 @@ type Config struct {
 	Agents              *AgentsConfig             `yaml:"agents,omitempty"`
 	Hooks               *HooksConfig              `yaml:"hooks,omitempty"`
 	Categories          map[string]*Category      `yaml:"categories,omitempty"` // Global categories
-	RepoMappings        map[string]*RepoMapping   `yaml:"repoMappings,omitempty"`
 	Profiles            map[string]*ProfileConfig `yaml:"profiles"`
 }
 
@@ -125,7 +125,6 @@ func Defaults() *Config {
 	return &Config{
 		AutoSyncInWorktrees: true,
 		Gitignore:           ComponentModeLocal,
-		RepoMappings:        make(map[string]*RepoMapping),
 		Profiles: map[string]*ProfileConfig{
 			"default": {
 				ThoughtsRepo: "~/thoughts",
@@ -197,43 +196,6 @@ func (c *Config) GetDefaultProfileResolved() *ResolvedProfile {
 	}
 }
 
-// ResolveProfileForRepo resolves the profile configuration for a given repository path.
-func (c *Config) ResolveProfileForRepo(repoPath string) *ResolvedProfile {
-	mapping := c.RepoMappings[repoPath]
-
-	// Get default profile for fallback
-	defaultProf, defaultName := c.GetDefaultProfile()
-
-	// Build default resolved profile
-	var defaultResolved *ResolvedProfile
-	if defaultProf != nil {
-		defaultResolved = &ResolvedProfile{
-			ThoughtsRepo: defaultProf.ThoughtsRepo,
-			ReposDir:     defaultProf.ReposDir,
-			GlobalDir:    defaultProf.GlobalDir,
-			ProfileName:  defaultName,
-		}
-	}
-
-	if mapping == nil {
-		return defaultResolved
-	}
-
-	// If profile specified, look it up
-	if mapping.Profile != "" && c.Profiles != nil {
-		if profile, exists := c.Profiles[mapping.Profile]; exists {
-			return &ResolvedProfile{
-				ThoughtsRepo: profile.ThoughtsRepo,
-				ReposDir:     profile.ReposDir,
-				GlobalDir:    profile.GlobalDir,
-				ProfileName:  mapping.Profile,
-			}
-		}
-	}
-
-	return defaultResolved
-}
-
 // ValidateProfile checks if a profile exists in the configuration.
 func (c *Config) ValidateProfile(profileName string) bool {
 	if c.Profiles == nil {
@@ -265,54 +227,11 @@ func SanitizeProfileName(name string) string {
 	return string(result)
 }
 
-// CountReposUsingProfile counts how many repositories are using a given profile.
-func (c *Config) CountReposUsingProfile(profileName string) int {
-	count := 0
-	for _, mapping := range c.RepoMappings {
-		if mapping != nil && mapping.Profile == profileName {
-			count++
-		}
-	}
-	return count
-}
-
 // ProfileUsageCounts holds counts of repos using a profile.
 type ProfileUsageCounts struct {
 	Explicit int // mapping.Profile == profileName
 	Implicit int // mapping.Profile == "" AND this profile is default
 	Total    int
-}
-
-// CountReposUsingProfileWithImplicit counts repos using a profile,
-// distinguishing explicit assignments from implicit (via default) usage.
-func (c *Config) CountReposUsingProfileWithImplicit(profileName string) ProfileUsageCounts {
-	counts := ProfileUsageCounts{}
-	_, defaultName := c.GetDefaultProfile()
-	isDefault := profileName == defaultName
-
-	for _, mapping := range c.RepoMappings {
-		if mapping == nil {
-			continue
-		}
-		if mapping.Profile == profileName {
-			counts.Explicit++
-		} else if mapping.Profile == "" && isDefault {
-			counts.Implicit++
-		}
-	}
-	counts.Total = counts.Explicit + counts.Implicit
-	return counts
-}
-
-// GetReposUsingProfile returns paths of repositories using a given profile.
-func (c *Config) GetReposUsingProfile(profileName string) []string {
-	var repos []string
-	for repoPath, mapping := range c.RepoMappings {
-		if mapping != nil && mapping.Profile == profileName {
-			repos = append(repos, repoPath)
-		}
-	}
-	return repos
 }
 
 // DeleteProfile removes a profile from the configuration.

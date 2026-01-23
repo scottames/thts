@@ -74,6 +74,8 @@ type testEnv struct {
 	root string
 	// XDG_CONFIG_HOME for this test
 	configHome string
+	// XDG_STATE_HOME for this test
+	stateHome string
 	// Path to a git repo that simulates "current project"
 	projectRepo string
 	// Path to a git repo that simulates "central thoughts repo"
@@ -97,6 +99,7 @@ func setupTestEnv(t *testing.T) *testEnv {
 	env := &testEnv{
 		root:         root,
 		configHome:   filepath.Join(root, "config"),
+		stateHome:    filepath.Join(root, "state"),
 		projectRepo:  filepath.Join(root, "project"),
 		thoughtsRepo: filepath.Join(root, "thoughts-repo"),
 	}
@@ -131,12 +134,11 @@ func setupTestEnv(t *testing.T) *testEnv {
 		t.Fatalf("failed to init thoughts repo: %v", err)
 	}
 
-	// Create initial config
+	// Create initial config (RepoMappings now in state file, not config)
 	cfg := &config.Config{
 		User:                "testuser",
 		Gitignore:           config.ComponentModeLocal,
 		AutoSyncInWorktrees: true,
-		RepoMappings:        make(map[string]*config.RepoMapping),
 		Profiles: map[string]*config.ProfileConfig{
 			"default": {
 				ThoughtsRepo: env.thoughtsRepo,
@@ -186,6 +188,7 @@ func (e *testEnv) runThts(args ...string) (string, error) {
 	cmd.Dir = e.projectRepo
 	cmd.Env = append(os.Environ(),
 		"XDG_CONFIG_HOME="+e.configHome,
+		"XDG_STATE_HOME="+e.stateHome,
 		"HOME="+e.root, // Ensure ~ expansion works correctly
 	)
 
@@ -199,6 +202,7 @@ func (e *testEnv) runThtsInDir(dir string, args ...string) (string, error) {
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(),
 		"XDG_CONFIG_HOME="+e.configHome,
+		"XDG_STATE_HOME="+e.stateHome,
 		"HOME="+e.root,
 	)
 
@@ -279,21 +283,21 @@ func TestInitCommand(t *testing.T) {
 			t.Errorf("post-commit hook not installed: %v", err)
 		}
 
-		// Verify config was updated with mapping
-		configPath := filepath.Join(env.configHome, "thts", "config.yaml")
-		configData, err := os.ReadFile(configPath)
+		// Verify state was updated with mapping (RepoMappings are in state, not config)
+		statePath := filepath.Join(env.stateHome, "thts", "state.yaml")
+		stateData, err := os.ReadFile(statePath)
 		if err != nil {
-			t.Fatalf("failed to read config: %v", err)
+			t.Fatalf("failed to read state: %v", err)
 		}
 
-		var cfg config.Config
-		if err := yaml.Unmarshal(configData, &cfg); err != nil {
-			t.Fatalf("failed to parse config: %v", err)
+		var state config.State
+		if err := yaml.Unmarshal(stateData, &state); err != nil {
+			t.Fatalf("failed to parse state: %v", err)
 		}
 
-		mapping := cfg.RepoMappings[env.projectRepo]
+		mapping := state.RepoMappings[env.projectRepo]
 		if mapping == nil {
-			t.Errorf("repo mapping not added to config")
+			t.Errorf("repo mapping not added to state")
 		} else {
 			if mapping.Repo != "myproject" {
 				t.Errorf("repo mapping name = %q, want %q", mapping.Repo, "myproject")
@@ -497,20 +501,20 @@ func TestUninitCommand(t *testing.T) {
 			t.Errorf("thoughts directory should be removed")
 		}
 
-		// Verify config mapping was removed
-		configPath := filepath.Join(env.configHome, "thts", "config.yaml")
-		configData, err := os.ReadFile(configPath)
+		// Verify state mapping was removed (RepoMappings are in state, not config)
+		statePath := filepath.Join(env.stateHome, "thts", "state.yaml")
+		stateData, err := os.ReadFile(statePath)
 		if err != nil {
-			t.Fatalf("failed to read config: %v", err)
+			t.Fatalf("failed to read state: %v", err)
 		}
 
-		var cfg config.Config
-		if err := yaml.Unmarshal(configData, &cfg); err != nil {
-			t.Fatalf("failed to parse config: %v", err)
+		var state config.State
+		if err := yaml.Unmarshal(stateData, &state); err != nil {
+			t.Fatalf("failed to parse state: %v", err)
 		}
 
-		if cfg.RepoMappings[env.projectRepo] != nil {
-			t.Errorf("repo mapping should be removed from config")
+		if state.RepoMappings[env.projectRepo] != nil {
+			t.Errorf("repo mapping should be removed from state")
 		}
 	})
 

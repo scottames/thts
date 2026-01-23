@@ -172,11 +172,13 @@ func displayConfig(cfg *config.Config) error {
 		fmt.Println(ui.Muted("  * = default profile"))
 	}
 
-	// Repo mappings
-	if len(cfg.RepoMappings) > 0 {
+	// Repo mappings from state file
+	state := config.LoadStateOrDefault()
+	if len(state.RepoMappings) > 0 {
 		fmt.Println()
 		fmt.Println(ui.SubHeader("Repository Mappings"))
-		for repoPath, mapping := range cfg.RepoMappings {
+		fmt.Printf("  %s\n", ui.Muted(fmt.Sprintf("(from %s)", config.ContractPath(config.StatePath()))))
+		for repoPath, mapping := range state.RepoMappings {
 			displayPath := config.ContractPath(repoPath)
 			if mapping.Profile != "" {
 				fmt.Printf("  %s → %s %s\n",
@@ -191,6 +193,7 @@ func displayConfig(cfg *config.Config) error {
 
 	fmt.Println()
 	fmt.Printf("Config file: %s\n", ui.Muted(config.ThtsConfigPath()))
+	fmt.Printf("State file:  %s\n", ui.Muted(config.StatePath()))
 
 	return nil
 }

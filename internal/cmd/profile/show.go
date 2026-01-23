@@ -112,8 +112,9 @@ func runShow(_ *cobra.Command, args []string) error {
 	fmt.Println(tbl)
 	fmt.Println()
 
-	// Count repositories using this profile
-	counts := cfg.CountReposUsingProfileWithImplicit(profileName)
+	// Count repositories using this profile (from state, not config)
+	state := config.LoadStateOrDefault()
+	counts := state.CountReposUsingProfileWithImplicit(cfg, profileName)
 
 	fmt.Println(ui.SubHeader("Usage"))
 	if counts.Implicit > 0 {

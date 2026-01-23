@@ -73,9 +73,6 @@ func loadFromPath(path string) (*Config, error) {
 	}
 
 	// Initialize maps if nil
-	if cfg.RepoMappings == nil {
-		cfg.RepoMappings = make(map[string]*RepoMapping)
-	}
 	if cfg.Profiles == nil {
 		cfg.Profiles = make(map[string]*ProfileConfig)
 	}
@@ -85,6 +82,7 @@ func loadFromPath(path string) (*Config, error) {
 
 // loadFromHumanLayerPath loads config from HumanLayer's config file.
 // It translates their top-level config format to our profiles-only format.
+// Note: RepoMappings are not loaded here - use LoadStateFromHumanLayer for that.
 func loadFromHumanLayerPath(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -104,14 +102,8 @@ func loadFromHumanLayerPath(path string) (*Config, error) {
 
 	// Create our config with profiles-only structure
 	cfg := &Config{
-		User:         hl.User,
-		RepoMappings: hl.RepoMappings,
-		Profiles:     make(map[string]*ProfileConfig),
-	}
-
-	// Initialize maps if nil
-	if cfg.RepoMappings == nil {
-		cfg.RepoMappings = make(map[string]*RepoMapping)
+		User:     hl.User,
+		Profiles: make(map[string]*ProfileConfig),
 	}
 
 	// Translate top-level config to a "default" profile
@@ -132,6 +124,30 @@ func loadFromHumanLayerPath(path string) (*Config, error) {
 	}
 
 	return cfg, nil
+}
+
+// LoadStateFromHumanLayer loads RepoMappings from HumanLayer's config file into State.
+// This allows existing HumanLayer users to use thts without re-initializing repos.
+// Returns nil if no HumanLayer config exists or has no repo mappings.
+func LoadStateFromHumanLayer() *State {
+	path := HumanLayerConfigPath()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+
+	var hlCfg humanLayerConfigFile
+	if err := json.Unmarshal(data, &hlCfg); err != nil {
+		return nil
+	}
+
+	if hlCfg.Thoughts == nil || len(hlCfg.Thoughts.RepoMappings) == 0 {
+		return nil
+	}
+
+	return &State{
+		RepoMappings: hlCfg.Thoughts.RepoMappings,
+	}
 }
 
 // Save saves the configuration to ~/.config/thts/config.yaml.

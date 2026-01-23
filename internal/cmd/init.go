@@ -243,19 +243,15 @@ func runInit(cmd *cobra.Command, args []string) error {
 		fmt.Println(ui.SuccessF("Added 'thoughts/' to %s", gitignoreLocationName(gitignoreMode)))
 	}
 
-	// Update config with repo mapping
-	if cfg.RepoMappings == nil {
-		cfg.RepoMappings = make(map[string]*config.RepoMapping)
-	}
-
-	mapping := &config.RepoMapping{
+	// Update state with repo mapping
+	state := config.LoadStateOrDefault()
+	state.RepoMappings[currentRepo] = &config.RepoMapping{
 		Repo:    projectName,
 		Profile: profileConfig.ProfileName,
 	}
-	cfg.RepoMappings[currentRepo] = mapping
 
-	if err := config.Save(cfg); err != nil {
-		return fmt.Errorf("failed to save config: %w", err)
+	if err := config.SaveState(state); err != nil {
+		return fmt.Errorf("failed to save state: %w", err)
 	}
 
 	// Install git hooks
@@ -677,13 +673,14 @@ func refreshThoughtsSetup(thoughtsDir string, cfg *config.Config) error {
 	// Regenerate CLAUDE.md with current config
 	claudePath := filepath.Join(thoughtsDir, "CLAUDE.md")
 	if fs.Exists(claudePath) {
-		// Get project name from existing mapping
+		// Get project name from existing mapping in state
 		currentRepo, err := os.Getwd()
 		if err != nil {
 			return fmt.Errorf("failed to get current directory: %w", err)
 		}
 
-		mapping := cfg.RepoMappings[currentRepo]
+		state := config.LoadStateOrDefault()
+		mapping := state.RepoMappings[currentRepo]
 		if mapping == nil {
 			fmt.Println(ui.Warning("No repo mapping found - CLAUDE.md not updated"))
 		} else {

@@ -45,15 +45,17 @@ func runUninit(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Load config
+	// Load config and state
 	cfg, err := config.Load()
 	if err != nil {
 		fmt.Println(ui.Error("Thoughts configuration not found."))
 		return nil
 	}
 
-	// Get current repo mapping
-	mapping := cfg.RepoMappings[currentRepo]
+	state := config.LoadStateOrDefault()
+
+	// Get current repo mapping from state
+	mapping := state.RepoMappings[currentRepo]
 	mappedName := ""
 	profileName := ""
 
@@ -111,12 +113,12 @@ func runUninit(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Remove from config if mapped
+	// Remove from state if mapped
 	if mappedName != "" {
-		fmt.Println(ui.Muted("Removing repository from thoughts configuration..."))
-		delete(cfg.RepoMappings, currentRepo)
-		if err := config.Save(cfg); err != nil {
-			fmt.Println(ui.WarningF("Could not update configuration: %v", err))
+		fmt.Println(ui.Muted("Removing repository from thoughts state..."))
+		delete(state.RepoMappings, currentRepo)
+		if err := config.SaveState(state); err != nil {
+			fmt.Println(ui.WarningF("Could not update state: %v", err))
 		}
 	}
 

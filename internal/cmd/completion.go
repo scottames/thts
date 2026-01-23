@@ -132,7 +132,8 @@ func CompleteCategoriesWithContext(cmd *cobra.Command, _ []string, toComplete st
 	// Check if in a git repo with thts initialized
 	if cwd, err := os.Getwd(); err == nil {
 		if git.IsInGitRepoAt(cwd) {
-			if profile := cfg.ResolveProfileForRepo(cwd); profile != nil {
+			state := config.LoadStateOrDefault()
+			if profile := state.ResolveProfileForRepo(cfg, cwd); profile != nil {
 				return completeCategoriesFromConfig(cfg.GetCategoriesForProfile(profile.ProfileName), toComplete)
 			}
 		}

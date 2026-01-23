@@ -56,8 +56,9 @@ func runDelete(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Check if any repositories are using this profile
-	usingRepos := cfg.GetReposUsingProfile(profileName)
+	// Check if any repositories are using this profile (from state, not config)
+	state := config.LoadStateOrDefault()
+	usingRepos := state.GetReposUsingProfile(profileName)
 
 	if len(usingRepos) > 0 && !deleteForce {
 		fmt.Println(ui.ErrorF("Profile %q is in use by %d repository(ies):", profileName, len(usingRepos)))

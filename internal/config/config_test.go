@@ -239,9 +239,7 @@ profiles:
 			t.Fatalf("Load() error: %v", err)
 		}
 
-		if loaded.RepoMappings == nil {
-			t.Error("RepoMappings should be initialized")
-		}
+		// Note: RepoMappings are now in State, not Config
 		if loaded.Profiles == nil {
 			t.Error("Profiles should be initialized")
 		}
@@ -367,7 +365,6 @@ func TestSave(t *testing.T) {
 			User:                "testuser",
 			AutoSyncInWorktrees: true,
 			Gitignore:           ComponentModeLocal,
-			RepoMappings:        make(map[string]*RepoMapping),
 			Profiles: map[string]*ProfileConfig{
 				"personal": {
 					ThoughtsRepo: "~/thoughts",
@@ -399,13 +396,11 @@ func TestSave(t *testing.T) {
 		xdgDir, cleanup := setupTestXDG(t)
 		defer cleanup()
 
+		// Note: RepoMappings are now in State, not Config
 		cfg := &Config{
 			User:                "testuser",
 			AutoSyncInWorktrees: true,
 			Gitignore:           ComponentModeLocal,
-			RepoMappings: map[string]*RepoMapping{
-				"/path/to/repo": {Repo: "myrepo", Profile: "work"},
-			},
 			Profiles: map[string]*ProfileConfig{
 				"personal": {
 					ThoughtsRepo: "~/thoughts",
@@ -440,9 +435,6 @@ func TestSave(t *testing.T) {
 		if loaded.User != "testuser" {
 			t.Errorf("User = %q, want testuser", loaded.User)
 		}
-		if len(loaded.RepoMappings) != 1 {
-			t.Errorf("RepoMappings length = %d, want 1", len(loaded.RepoMappings))
-		}
 		if len(loaded.Profiles) != 2 {
 			t.Errorf("Profiles length = %d, want 2", len(loaded.Profiles))
 		}
@@ -465,8 +457,7 @@ func TestSave(t *testing.T) {
 
 		// Save initial config
 		cfg1 := &Config{
-			User:         "user1",
-			RepoMappings: make(map[string]*RepoMapping),
+			User: "user1",
 			Profiles: map[string]*ProfileConfig{
 				"personal": {
 					ThoughtsRepo: "~/thoughts-v1",
@@ -482,8 +473,7 @@ func TestSave(t *testing.T) {
 
 		// Save updated config
 		cfg2 := &Config{
-			User:         "user2",
-			RepoMappings: make(map[string]*RepoMapping),
+			User: "user2",
 			Profiles: map[string]*ProfileConfig{
 				"personal": {
 					ThoughtsRepo: "~/thoughts-v2",

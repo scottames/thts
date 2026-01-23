@@ -104,8 +104,10 @@ func runConfigValidate(cmd *cobra.Command, args []string) error {
 	}
 
 	// Check 8: RepoMappings reference valid profiles (warning only)
+	// Note: RepoMappings are now in state file, not config
+	state := config.LoadStateOrDefault()
 	invalidMappings := []string{}
-	for repoPath, mapping := range cfg.RepoMappings {
+	for repoPath, mapping := range state.RepoMappings {
 		if mapping != nil && mapping.Profile != "" {
 			if !cfg.ValidateProfile(mapping.Profile) {
 				invalidMappings = append(invalidMappings, fmt.Sprintf("%s → %s", repoPath, mapping.Profile))
@@ -117,7 +119,7 @@ func runConfigValidate(cmd *cobra.Command, args []string) error {
 			fmt.Printf("  %s Repo mapping references unknown profile: %s\n", ui.Warning(""), m)
 			warnings++
 		}
-	} else if len(cfg.RepoMappings) > 0 {
+	} else if len(state.RepoMappings) > 0 {
 		fmt.Printf("  %s All repo mappings reference valid profiles\n", ui.Success(""))
 	}
 

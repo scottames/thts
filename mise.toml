@@ -35,5 +35,8 @@ depends = ["lint", "test", "test-integration"]
 [tasks.install]
 run = "go install ./cmd/thts"
 
+[tasks.install_local]
+run = "go build -o ~/.local/bin/thts ./cmd/thts"
+
 [tasks.clean]
 run = "rm -f thts coverage.out coverage.html"

@@ -570,6 +570,9 @@ func resolveSyncContext(cfg *config.Config, opts *AddOptions) (*addSyncContext, 
 		}, nil
 	}
 
+	// Load state for repo mappings
+	state := config.LoadStateOrDefault()
+
 	// Case 2: --repo flag specified - find the repo's mapped profile
 	if opts.RepoPath != "" {
 		expandedPath := config.ExpandPath(opts.RepoPath)
@@ -580,7 +583,7 @@ func resolveSyncContext(cfg *config.Config, opts *AddOptions) (*addSyncContext, 
 			}
 			expandedPath = filepath.Join(cwd, expandedPath)
 		}
-		resolvedProfile := cfg.ResolveProfileForRepo(expandedPath)
+		resolvedProfile := state.ResolveProfileForRepo(cfg, expandedPath)
 		if resolvedProfile == nil {
 			resolvedProfile = cfg.GetDefaultProfileResolved()
 		}
@@ -602,7 +605,7 @@ func resolveSyncContext(cfg *config.Config, opts *AddOptions) (*addSyncContext, 
 	if git.IsInGitRepoAt(cwd) {
 		thoughtsDir := filepath.Join(cwd, "thoughts")
 		if isValidThoughtsSetup(thoughtsDir, cfg.User) {
-			resolvedProfile := cfg.ResolveProfileForRepo(cwd)
+			resolvedProfile := state.ResolveProfileForRepo(cfg, cwd)
 			if resolvedProfile != nil {
 				return &addSyncContext{
 					RepoPath:    config.ExpandPath(resolvedProfile.ThoughtsRepo),

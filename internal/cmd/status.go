@@ -32,13 +32,15 @@ func init() {
 }
 
 func runStatus(cmd *cobra.Command, args []string) error {
-	// Load config
+	// Load config and state
 	cfg, err := config.Load()
 	if err != nil {
 		fmt.Println(ui.Error("Thoughts not configured."))
 		fmt.Printf("Run %s first to set up.\n", ui.Accent("thts setup"))
 		return nil
 	}
+
+	state := config.LoadStateOrDefault()
 
 	fmt.Println(ui.Header("Thoughts Repository Status"))
 	fmt.Println()
@@ -56,7 +58,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		tbl.Row("Global directory", defaultProfile.GlobalDir)
 		tbl.Row("User", cfg.User)
 		tbl.Row("Profiles", fmt.Sprintf("%d", len(cfg.Profiles)))
-		tbl.Row("Mapped repos", fmt.Sprintf("%d", len(cfg.RepoMappings)))
+		tbl.Row("Mapped repos", fmt.Sprintf("%d", len(state.RepoMappings)))
 		fmt.Println(tbl)
 	} else {
 		if len(cfg.Profiles) == 0 {
@@ -75,9 +77,9 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to get current directory: %w", err)
 	}
 
-	// Check current repo mapping
-	mapping := cfg.RepoMappings[currentRepo]
-	profileConfig := cfg.ResolveProfileForRepo(currentRepo)
+	// Check current repo mapping from state
+	mapping := state.RepoMappings[currentRepo]
+	profileConfig := state.ResolveProfileForRepo(cfg, currentRepo)
 
 	if mapping != nil && profileConfig != nil {
 		fmt.Println(ui.SubHeader("Current Repository"))
