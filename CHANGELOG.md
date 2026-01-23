@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.3.1](https://github.com/scottames/thts/compare/v0.3.0...v0.3.1) (2026-01-23)
+
+
+### Miscellaneous Chores
+
+* **deps:** update ⬆️ gomod patching to v2.23.1 ([#17](https://github.com/scottames/thts/issues/17)) ([46dc2e7](https://github.com/scottames/thts/commit/46dc2e7c0a3914a2489da18e8ba81f383a215464))
+* **deps:** update dependency go to v1.25.6 ([#14](https://github.com/scottames/thts/issues/14)) ([31ee44a](https://github.com/scottames/thts/commit/31ee44abe4a3121ecb92d962721bf9bb0a37e2fc))
+* **deps:** update github-actions ([#16](https://github.com/scottames/thts/issues/16)) ([2e35bb1](https://github.com/scottames/thts/commit/2e35bb17b77eefa08c61528ba6eaf1882d7cd30d))
+
+
+### Code Refactoring
+
+* **config:** move repoMappings to state file ([8424af4](https://github.com/scottames/thts/commit/8424af454ea028bd041ee9b64f901a73b6c66b50))
+
 ## [0.3.0](https://github.com/scottames/thts/compare/v0.2.0...v0.3.0) (2026-01-22)
 
 
