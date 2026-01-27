@@ -3,7 +3,6 @@ package cmd
 import (
 	"os"
 
-	"github.com/scottames/thts/internal/cmd/agents"
 	"github.com/scottames/thts/internal/cmd/profile"
 	"github.com/spf13/cobra"
 )
@@ -36,6 +35,5 @@ func Execute() {
 
 func init() {
 	rootCmd.Version = Version
-	rootCmd.AddCommand(agents.AgentsCmd)
 	rootCmd.AddCommand(profile.ProfileCmd)
 }

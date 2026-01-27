@@ -1,4 +1,4 @@
-package agents
+package cmd
 
 import (
 	"fmt"
@@ -9,18 +9,22 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var instructionsCmd = &cobra.Command{
-	Use:   "instructions",
+var agentInstructionsCmd = &cobra.Command{
+	Use:   "agent-instructions",
 	Short: "Output thts instructions to stdout",
 	Long: `Outputs the templated thts instructions for agent integration.
 
 This is primarily used by hooks and plugins to inject instructions dynamically,
 without requiring a per-project instructions file.`,
-	RunE:   runInstructions,
+	RunE:   runAgentInstructions,
 	Hidden: true, // Internal use by hooks/plugins
 }
 
-func runInstructions(cmd *cobra.Command, args []string) error {
+func init() {
+	rootCmd.AddCommand(agentInstructionsCmd)
+}
+
+func runAgentInstructions(_ *cobra.Command, _ []string) error {
 	cfg := config.LoadOrDefault()
 	data := thts.BuildInstructionsData(cfg)
 	content, err := thtsfiles.GetInstructions(data)

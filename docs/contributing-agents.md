@@ -345,7 +345,7 @@ Test initialization:
 cd /tmp
 mkdir test-project && cd test-project
 git init
-/path/to/thts agents init --agents testbot
+/path/to/thts init agents --agents testbot
 ```
 
 Verify files were created:

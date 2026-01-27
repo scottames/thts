@@ -101,8 +101,8 @@ thts sync -m "Added architecture notes"
 | `thts profile list`            | List profiles                                              |
 | `thts profile show <name>`     | Show profile details                                       |
 | `thts profile delete <name>`   | Delete a profile                                           |
-| `thts agents init`             | Install AI agent integration                               |
-| `thts agents uninit`           | Remove AI agent integration                                |
+| `thts init agents`             | Install AI agent integration                               |
+| `thts uninit agents`           | Remove AI agent integration                                |
 
 ## Documentation
 
@@ -115,10 +115,10 @@ thts sync -m "Added architecture notes"
 directory. Supports Claude Code, OpenAI Codex, and OpenCode.
 
 ```bash
-thts agents init              # Install for detected agents
-thts agents init -i           # Interactive mode
-thts agents init --global     # Install to global config directories
-thts agents uninit            # Remove integration
+thts init agents              # Install for detected agents
+thts init agents -i           # Interactive mode
+thts init agents --global     # Install to global config directories
+thts uninit agents            # Remove integration
 ```
 
 This installs skills, commands, and agents for thoughts/ integration including:

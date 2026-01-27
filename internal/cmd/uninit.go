@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/charmbracelet/huh"
+	"github.com/scottames/thts/internal/agents"
 	agentscmd "github.com/scottames/thts/internal/cmd/agents"
 	"github.com/scottames/thts/internal/config"
 	"github.com/scottames/thts/internal/fs"
@@ -20,13 +22,24 @@ var uninitCmd = &cobra.Command{
 	Short: "Remove thoughts setup from current repository",
 	Long: `Remove the thoughts directory and configuration from the current repository.
 
-This only removes the local symlinks and configuration. Your actual thoughts
-content remains safe in the central thoughts repository.`,
+This removes:
+  - The thoughts/ directory (symlinks only)
+  - Repository mapping from thts state
+  - Any agent integrations (if present)
+
+Your actual thoughts content remains safe in the central thoughts repository.
+
+To remove only agent integrations without removing thoughts/, use:
+  thts uninit agents`,
 	RunE: runUninit,
 }
 
 func init() {
 	uninitCmd.Flags().BoolVarP(&uninitForce, "force", "f", false, "Skip confirmation prompt")
+
+	// Register agents subcommand
+	uninitCmd.AddCommand(agentscmd.UninitCmd)
+
 	rootCmd.AddCommand(uninitCmd)
 }
 
@@ -70,17 +83,30 @@ func runUninit(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
+	// Detect existing agent integrations
+	detectedAgents := agents.DetectExistingAgents(currentRepo)
+	hasAgentIntegrations := len(detectedAgents) > 0
+
 	// Confirm unless --force
 	if !uninitForce {
 		fmt.Println(ui.Info("Removing thoughts setup from current repository..."))
 		fmt.Println()
 		fmt.Printf("This will remove: %s\n", ui.Accent(thoughtsDir))
+		if hasAgentIntegrations {
+			fmt.Printf("This will also remove agent integrations: %s\n",
+				ui.Accent(strings.Join(agents.AgentTypesToStrings(detectedAgents), ", ")))
+		}
 		fmt.Println()
+
+		description := "Your actual thoughts content will remain safe in the central repository."
+		if hasAgentIntegrations {
+			description += " Agent integration files will also be removed."
+		}
 
 		var confirm bool
 		err := huh.NewConfirm().
 			Title("Are you sure you want to remove thoughts from this repository?").
-			Description("Your actual thoughts content will remain safe in the central repository.").
+			Description(description).
 			Affirmative("Yes, remove").
 			Negative("Cancel").
 			Value(&confirm).
@@ -123,9 +149,15 @@ func runUninit(cmd *cobra.Command, args []string) error {
 	}
 
 	// Also remove agent integrations if present (leave no trace)
-	fmt.Println(ui.Muted("Checking for agent integrations..."))
-	if err := agentscmd.Uninit(currentRepo, true, nil); err != nil {
-		fmt.Println(ui.WarningF("Could not remove agent integrations: %v", err))
+	if hasAgentIntegrations {
+		fmt.Printf("%s Removing agent integrations (%s)...\n",
+			ui.Muted(""),
+			strings.Join(agents.AgentTypesToStrings(detectedAgents), ", "))
+		if err := agentscmd.Uninit(currentRepo, true, nil); err != nil {
+			fmt.Println(ui.WarningF("Could not remove agent integrations: %v", err))
+		} else {
+			fmt.Println(ui.Success("Removed agent integrations"))
+		}
 	}
 
 	fmt.Println()

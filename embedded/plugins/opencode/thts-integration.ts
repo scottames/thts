@@ -13,7 +13,7 @@ function getInstructions(): string | null {
   }
 
   try {
-    return execSync("thts agents instructions", {
+    return execSync("thts agent-instructions", {
       encoding: "utf-8",
       stdio: ["ignore", "pipe", "ignore"],
     });

@@ -9,6 +9,8 @@ import (
 
 	"github.com/charmbracelet/huh"
 	thtsfiles "github.com/scottames/thts"
+	"github.com/scottames/thts/internal/agents"
+	agentscmd "github.com/scottames/thts/internal/cmd/agents"
 	"github.com/scottames/thts/internal/config"
 	"github.com/scottames/thts/internal/fs"
 	"github.com/scottames/thts/internal/git"
@@ -56,6 +58,9 @@ func init() {
 		BoolVar(&initCheck, "check", false, "Check if repo is initialized (exit 0=yes, 1=no)")
 
 	_ = initCmd.RegisterFlagCompletionFunc("profile", CompleteProfiles)
+
+	// Register agents subcommand
+	initCmd.AddCommand(agentscmd.InitCmd)
 
 	rootCmd.AddCommand(initCmd)
 }
@@ -318,6 +323,24 @@ func runInit(cmd *cobra.Command, args []string) error {
 	fmt.Printf("  1. Run %s to sync and create the searchable index\n", ui.Accent("thts sync"))
 	fmt.Printf("  2. Create markdown files in %s for your notes\n", ui.Accent(fmt.Sprintf("thoughts/%s/", cfg.User)))
 	fmt.Println()
+
+	// Prompt for agent integration in interactive mode
+	if !initRefresh && isInteractive() && !agentsAlreadyInitialized(currentRepo) {
+		var initAgentsOpt bool
+		err := huh.NewConfirm().
+			Title("Initialize agent integration?").
+			Description("This enables thts integration with Claude, Codex, OpenCode, etc.").
+			Affirmative("Yes").
+			Negative("No").
+			Value(&initAgentsOpt).
+			Run()
+		if err == nil && initAgentsOpt {
+			fmt.Println()
+			if err := agentscmd.RunInit(cmd, []string{}); err != nil {
+				fmt.Println(ui.WarningF("Agent initialization had issues: %v", err))
+			}
+		}
+	}
 
 	return nil
 }
@@ -702,4 +725,26 @@ func refreshThoughtsSetup(thoughtsDir string, cfg *config.Config) error {
 	}
 
 	return nil
+}
+
+// isInteractive returns true if stdin is a terminal.
+func isInteractive() bool {
+	fi, err := os.Stdin.Stat()
+	if err != nil {
+		return false
+	}
+	return fi.Mode()&os.ModeCharDevice != 0
+}
+
+// agentsAlreadyInitialized returns true if any agent integration is already initialized.
+func agentsAlreadyInitialized(projectDir string) bool {
+	detected := agents.DetectExistingAgents(projectDir)
+	for _, agentType := range detected {
+		cfg := agents.GetConfig(agentType)
+		manifestPath := filepath.Join(projectDir, cfg.RootDir, "thts-manifest.json")
+		if fs.Exists(manifestPath) {
+			return true
+		}
+	}
+	return false
 }

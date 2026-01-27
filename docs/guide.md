@@ -726,20 +726,20 @@ your thoughts directory and enable session continuity.
 #### Installing Integration
 
 ```bash
-thts agents init              # Install for detected agents
-thts agents init -i           # Interactive mode
-thts agents init --agents claude,codex  # Specify agents
-thts agents init --with-settings  # Also create settings files
+thts init agents              # Install for detected agents
+thts init agents -i           # Interactive mode
+thts init agents --agents claude,codex  # Specify agents
+thts init agents --with-settings  # Also create settings files
 ```
 
 #### Global vs Project Configuration
 
-By default, `thts agents init` installs to project directories (`.claude/`,
+By default, `thts init agents` installs to project directories (`.claude/`,
 `.codex/`, `.opencode/`). You can also install globally:
 
 ```bash
-thts agents init --global all              # Install everything globally
-thts agents init --global skills,commands  # Install specific components
+thts init agents --global all              # Install everything globally
+thts init agents --global skills,commands  # Install specific components
 ```
 
 **Global paths:**
@@ -779,7 +779,7 @@ sudo dnf install jq yq
 
 #### Integration Levels
 
-When you run `thts agents init`, you'll be asked how to activate the
+When you run `thts init agents`, you'll be asked how to activate the
 integration:
 
 | Level                        | Config Value           | Description                                | Best For                     |
@@ -865,10 +865,10 @@ The handoff document captures:
 To remove agent integration from a project:
 
 ```bash
-thts agents uninit              # Interactive confirmation
-thts agents uninit --force      # Skip confirmation
-thts agents uninit --dry-run    # Preview what would be removed
-thts agents uninit --global     # Remove global installation
+thts uninit agents              # Interactive confirmation
+thts uninit agents --force      # Skip confirmation
+thts uninit agents --dry-run    # Preview what would be removed
+thts uninit agents --global     # Remove global installation
 ```
 
 This removes:

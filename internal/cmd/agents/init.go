@@ -152,8 +152,10 @@ type installationPlan struct {
 	globalFileCount int
 }
 
-var initCmd = &cobra.Command{
-	Use:   "init",
+// InitCmd is the command for initializing agent integration.
+// It is exported so it can be registered as a subcommand of `thts init`.
+var InitCmd = &cobra.Command{
+	Use:   "agents",
 	Short: "Initialize agent integration for this project",
 	Long: `Initialize agent integration by copying thts integration files
 to the project's agent-specific directories.
@@ -178,27 +180,35 @@ Integration levels:
   - Always-on (local): Creates local instructions file (gitignored)
   - On-demand: Just installs skill/commands for manual invocation
 
-Use --dry-run to preview what files would be created without actually creating them.`,
+Use --dry-run to preview what files would be created without actually creating them.
+
+Usage: thts init agents [flags]`,
 	RunE: runAgentsInit,
 }
 
 func init() {
-	initCmd.Flags().StringVarP(&initAgents, "agents", "a", "", "Comma-separated list of agents (claude,codex,opencode)")
-	initCmd.Flags().BoolVarP(&initForce, "force", "f", false, "Overwrite existing files")
-	initCmd.Flags().BoolVarP(&initInteractive, "interactive", "i", false, "Interactively select options")
-	initCmd.Flags().BoolVar(&initWithSettings, "with-settings", false, "Also create settings files")
-	initCmd.Flags().StringVar(&initGlobal, "global", "", "Install components globally (all, or: skills,commands,agents)")
+	InitCmd.Flags().StringVarP(&initAgents, "agents", "a", "", "Comma-separated list of agents (claude,codex,opencode)")
+	InitCmd.Flags().BoolVarP(&initForce, "force", "f", false, "Overwrite existing files")
+	InitCmd.Flags().BoolVarP(&initInteractive, "interactive", "i", false, "Interactively select options")
+	InitCmd.Flags().BoolVar(&initWithSettings, "with-settings", false, "Also create settings files")
+	InitCmd.Flags().StringVar(&initGlobal, "global", "", "Install components globally (all, or: skills,commands,agents)")
 	// NoOptDefVal allows --global without value to trigger interactive mode
-	initCmd.Flags().Lookup("global").NoOptDefVal = "interactive"
-	initCmd.Flags().BoolVar(&initRefresh, "refresh", false, "Update agent files with current config (skip prompt)")
-	initCmd.Flags().BoolVar(&initDryRun, "dry-run", false, "Show what would be installed without installing")
+	InitCmd.Flags().Lookup("global").NoOptDefVal = "interactive"
+	InitCmd.Flags().BoolVar(&initRefresh, "refresh", false, "Update agent files with current config (skip prompt)")
+	InitCmd.Flags().BoolVar(&initDryRun, "dry-run", false, "Show what would be installed without installing")
 
-	_ = initCmd.RegisterFlagCompletionFunc("agents", completeAgentTypes)
+	_ = InitCmd.RegisterFlagCompletionFunc("agents", completeAgentTypes)
 }
 
 // completeAgentTypes provides shell completion for agent types.
 func completeAgentTypes(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
 	return agents.AgentTypesToStrings(agents.AllAgentTypes()), cobra.ShellCompDirectiveNoFileComp
+}
+
+// RunInit runs the agents init command programmatically.
+// This is exported so that `thts init` can call it after the interactive prompt.
+func RunInit(cmd *cobra.Command, args []string) error {
+	return runAgentsInit(cmd, args)
 }
 
 func runAgentsInit(cmd *cobra.Command, args []string) error {

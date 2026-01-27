@@ -153,7 +153,7 @@ func runCreate(cmd *cobra.Command, args []string) error {
 
 			err = huh.NewMultiSelect[string]().
 				Title("Default agents for this profile (optional)").
-				Description("These will be used by 'thts agents init' when no --agents flag is provided").
+				Description("These will be used by 'thts init agents' when no --agents flag is provided").
 				Options(options...).
 				Value(&selectedAgents).
 				Run()

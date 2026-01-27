@@ -15,8 +15,8 @@ HumanLayer's `thoughts` subcommand with full feature compatibility.
 | `thts config`        | View/edit configuration                             |
 | `thts edit`          | Open thoughts directory in editor                   |
 | `thts profile`       | Manage profiles (create/list/show/delete)           |
-| `thts agents init`   | Install agent integration (claude, codex, opencode) |
-| `thts agents uninit` | Remove agent integration from project               |
+| `thts init agents`   | Install agent integration (claude, codex, opencode) |
+| `thts uninit agents` | Remove agent integration from project               |
 | `thts completion`    | Generate shell completion scripts (bash/zsh/fish)   |
 
 ## Project Structure
@@ -69,7 +69,7 @@ Terminal output uses the `internal/ui` package for consistency.
 ## Agent Integration Files
 
 Files in `instructions/`, `skills/`, `commands/`, `agents/` are embedded in the
-binary and copied to agent directories by `thts agents init`.
+binary and copied to agent directories by `thts init agents`.
 
 ### Supported Agents
 

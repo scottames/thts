@@ -24,8 +24,10 @@ var (
 	uninitGlobal bool
 )
 
-var uninitCmd = &cobra.Command{
-	Use:   "uninit",
+// UninitCmd is the command for removing agent integration.
+// It is exported so it can be registered as a subcommand of `thts uninit`.
+var UninitCmd = &cobra.Command{
+	Use:   "agents",
 	Short: "Remove agent integration from this project",
 	Long: `Remove thts agent integration files from agent directories.
 
@@ -40,16 +42,18 @@ The agent directories themselves are preserved if they contain other files.
 
 Agent selection:
   --agents claude,codex   Remove specific agents
-  --all                   Remove all detected agent integrations`,
+  --all                   Remove all detected agent integrations
+
+Usage: thts uninit agents [flags]`,
 	RunE: runAgentsUninit,
 }
 
 func init() {
-	uninitCmd.Flags().StringVarP(&uninitAgents, "agents", "a", "", "Comma-separated list of agents to remove")
-	uninitCmd.Flags().BoolVarP(&uninitForce, "force", "f", false, "Skip confirmation prompt")
-	uninitCmd.Flags().BoolVar(&uninitDryRun, "dry-run", false, "Show what would be removed without removing")
-	uninitCmd.Flags().BoolVar(&uninitAll, "all", false, "Remove all detected agent integrations")
-	uninitCmd.Flags().BoolVar(&uninitGlobal, "global", false, "Remove globally installed components")
+	UninitCmd.Flags().StringVarP(&uninitAgents, "agents", "a", "", "Comma-separated list of agents to remove")
+	UninitCmd.Flags().BoolVarP(&uninitForce, "force", "f", false, "Skip confirmation prompt")
+	UninitCmd.Flags().BoolVar(&uninitDryRun, "dry-run", false, "Show what would be removed without removing")
+	UninitCmd.Flags().BoolVar(&uninitAll, "all", false, "Remove all detected agent integrations")
+	UninitCmd.Flags().BoolVar(&uninitGlobal, "global", false, "Remove globally installed components")
 }
 
 func runAgentsUninit(cmd *cobra.Command, args []string) error {
