@@ -27,6 +27,7 @@ var (
 	initWithSettings bool
 	initGlobal       string
 	initRefresh      bool
+	initDryRun       bool
 )
 
 // ModelType represents the available Claude models.
@@ -120,6 +121,37 @@ type HooksModification struct {
 	HookCommands []string `json:"hookCommands"`
 }
 
+// installationPlan holds information about what would be installed for an agent.
+type installationPlan struct {
+	agentType        agents.AgentType
+	agentDir         string // Local agent dir (e.g., .claude/)
+	globalDir        string // Global agent dir (e.g., ~/.claude/)
+	projectDir       string
+	integrationLevel IntegrationLevel
+
+	// Local files to create (relative paths)
+	skillFiles   []string
+	commandFiles []string
+	agentFiles   []string
+	hookFiles    []string
+	pluginFiles  []string
+
+	// Global files (relative paths, when component is global)
+	globalSkillFiles   []string
+	globalCommandFiles []string
+	globalAgentFiles   []string
+
+	// Modifications
+	settingsFile          string // If --with-settings
+	settingsLocalFile     string // For hook integration
+	instructionsFile      string // For marker integration
+	gitignorePatterns     []string
+	hooksSettingsModified bool // Whether hooks config will be added
+
+	localFileCount  int
+	globalFileCount int
+}
+
 var initCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Initialize agent integration for this project",
@@ -144,7 +176,9 @@ Integration levels:
   - Hook-based (default): Loads on keyword detection, keeps CLAUDE.md clean
   - Always-on (AGENTS.md): Adds @include to project's AGENTS.md/CLAUDE.md
   - Always-on (local): Creates local instructions file (gitignored)
-  - On-demand: Just installs skill/commands for manual invocation`,
+  - On-demand: Just installs skill/commands for manual invocation
+
+Use --dry-run to preview what files would be created without actually creating them.`,
 	RunE: runAgentsInit,
 }
 
@@ -157,6 +191,7 @@ func init() {
 	// NoOptDefVal allows --global without value to trigger interactive mode
 	initCmd.Flags().Lookup("global").NoOptDefVal = "interactive"
 	initCmd.Flags().BoolVar(&initRefresh, "refresh", false, "Update agent files with current config (skip prompt)")
+	initCmd.Flags().BoolVar(&initDryRun, "dry-run", false, "Show what would be installed without installing")
 
 	_ = initCmd.RegisterFlagCompletionFunc("agents", completeAgentTypes)
 }
@@ -238,6 +273,28 @@ func runAgentsInit(cmd *cobra.Command, args []string) error {
 	integrationLevel, err := selectIntegrationLevel()
 	if err != nil {
 		return err
+	}
+
+	// Build installation plans for all agents
+	var allPlans []*installationPlan
+	for _, agentType := range agentTypes {
+		plan, err := buildInstallationPlan(targetDir, agentType, integrationLevel)
+		if err != nil {
+			fmt.Println(ui.WarningF("Could not plan %s: %v", agentType, err))
+			continue
+		}
+		allPlans = append(allPlans, plan)
+	}
+
+	// Print installation plans
+	for _, plan := range allPlans {
+		printInstallationPlan(plan)
+	}
+
+	// Dry-run exit point
+	if initDryRun {
+		fmt.Println(ui.Info("Dry run complete. No files were created."))
+		return nil
 	}
 
 	// Initialize each agent
@@ -340,6 +397,253 @@ func selectIntegrationLevel() (IntegrationLevel, error) {
 		return "", err
 	}
 	return IntegrationLevel(level), nil
+}
+
+// buildInstallationPlan computes what would be installed for an agent without writing files.
+func buildInstallationPlan(projectDir string, agentType agents.AgentType, level IntegrationLevel) (*installationPlan, error) {
+	agentConfig := agents.GetConfig(agentType)
+	if agentConfig == nil {
+		return nil, fmt.Errorf("unknown agent type: %s", agentType)
+	}
+
+	agentDir := filepath.Join(projectDir, agentConfig.RootDir)
+	globalDir := config.GlobalAgentDir(string(agentType))
+	cfg := config.LoadOrDefault()
+
+	plan := &installationPlan{
+		agentType:        agentType,
+		agentDir:         agentDir,
+		globalDir:        globalDir,
+		projectDir:       projectDir,
+		integrationLevel: level,
+	}
+
+	// Plan skills (check component mode)
+	skillsMode := cfg.GetAgentComponentMode("skills")
+	for _, skillName := range thtsfiles.GetAvailableSkills() {
+		var relPath string
+		if agentConfig.SkillNeedsDir {
+			relPath = filepath.Join(agentConfig.SkillsDir, skillName, "SKILL.md")
+		} else {
+			relPath = filepath.Join(agentConfig.SkillsDir, skillName+".md")
+		}
+		switch skillsMode {
+		case config.ComponentModeGlobal:
+			plan.globalSkillFiles = append(plan.globalSkillFiles, relPath)
+		case config.ComponentModeLocal:
+			plan.skillFiles = append(plan.skillFiles, relPath)
+		}
+	}
+
+	// Plan commands/prompts (check component mode)
+	if agentConfig.SupportsCommands && !agentConfig.CommandsGlobalOnly {
+		commandsMode := cfg.GetAgentComponentMode("commands")
+		ext := ".md"
+		if agentConfig.CommandsFormat == "toml" {
+			ext = ".toml"
+		}
+		for _, cmdName := range thtsfiles.GetAvailableCommands() {
+			relPath := filepath.Join(agentConfig.CommandsDir, cmdName+ext)
+			switch commandsMode {
+			case config.ComponentModeGlobal:
+				plan.globalCommandFiles = append(plan.globalCommandFiles, relPath)
+			case config.ComponentModeLocal:
+				plan.commandFiles = append(plan.commandFiles, relPath)
+			}
+		}
+	}
+
+	// Plan agents (check component mode)
+	if agentConfig.AgentsDir != "" {
+		agentsMode := cfg.GetAgentComponentMode("agents")
+		for _, agentName := range thtsfiles.GetAvailableAgents() {
+			relPath := filepath.Join(agentConfig.AgentsDir, agentName+".md")
+			switch agentsMode {
+			case config.ComponentModeGlobal:
+				plan.globalAgentFiles = append(plan.globalAgentFiles, relPath)
+			case config.ComponentModeLocal:
+				plan.agentFiles = append(plan.agentFiles, relPath)
+			}
+		}
+	}
+
+	// Plan hooks and settings based on integration level
+	level = normalizeIntegrationLevel(level)
+	if level == IntegrationHook && agentConfig.SupportsHooks {
+		// Hook-based integration
+		if agentConfig.HooksDir != "" {
+			for _, hookName := range thtsfiles.GetAvailableHooks() {
+				relPath := filepath.Join(agentConfig.HooksDir, hookName+".sh")
+				plan.hookFiles = append(plan.hookFiles, relPath)
+			}
+			plan.settingsLocalFile = "settings.local.json"
+			plan.hooksSettingsModified = true
+			plan.gitignorePatterns = append(plan.gitignorePatterns, filepath.Join(agentConfig.RootDir, "settings.local.json"))
+		}
+		if agentConfig.PluginsDir != "" {
+			relPath := filepath.Join(agentConfig.PluginsDir, "thts-integration.ts")
+			plan.pluginFiles = append(plan.pluginFiles, relPath)
+		}
+	} else if level == IntegrationAgentsContent {
+		plan.instructionsFile = agentConfig.InstructionTargetFile
+	} else if level == IntegrationAgentsContentLocal {
+		if agentConfig.Type == agents.AgentClaude {
+			plan.instructionsFile = "CLAUDE.local.md"
+		} else {
+			plan.instructionsFile = "AGENTS.local.md"
+		}
+		plan.gitignorePatterns = append(plan.gitignorePatterns, filepath.Join(agentConfig.RootDir, plan.instructionsFile))
+	}
+
+	// Plan settings file if --with-settings
+	if initWithSettings {
+		plan.settingsFile = agentConfig.SettingsFile
+	}
+
+	// Calculate file counts
+	plan.localFileCount = len(plan.skillFiles) + len(plan.commandFiles) + len(plan.agentFiles) +
+		len(plan.hookFiles) + len(plan.pluginFiles)
+	if plan.settingsFile != "" {
+		plan.localFileCount++
+	}
+	plan.globalFileCount = len(plan.globalSkillFiles) + len(plan.globalCommandFiles) + len(plan.globalAgentFiles)
+
+	return plan, nil
+}
+
+// printInstallationPlan displays what would be installed for an agent using a tree structure.
+func printInstallationPlan(plan *installationPlan) {
+	agentConfig := agents.GetConfig(plan.agentType)
+	localDir := agentConfig.RootDir
+	globalDir := config.ContractPath(plan.globalDir)
+
+	fmt.Printf("%s (%s)\n", ui.SubHeader(agents.AgentTypeLabels[plan.agentType]), localDir)
+
+	// Build list of sections to determine which is last (for tree rendering)
+	type section struct {
+		name    string
+		global  bool
+		files   []string
+		isLast  bool
+		hasData bool
+	}
+
+	cmdLabel := capitalize(agents.CommandsDirLabel(plan.agentType))
+	sections := []section{
+		{name: "Skills", global: len(plan.globalSkillFiles) > 0, files: plan.skillFiles, hasData: len(plan.skillFiles) > 0 || len(plan.globalSkillFiles) > 0},
+		{name: cmdLabel, global: len(plan.globalCommandFiles) > 0, files: plan.commandFiles, hasData: len(plan.commandFiles) > 0 || len(plan.globalCommandFiles) > 0},
+		{name: "Agents", global: len(plan.globalAgentFiles) > 0, files: plan.agentFiles, hasData: len(plan.agentFiles) > 0 || len(plan.globalAgentFiles) > 0},
+		{name: "Hooks", files: plan.hookFiles, hasData: len(plan.hookFiles) > 0},
+		{name: "Plugins", files: plan.pluginFiles, hasData: len(plan.pluginFiles) > 0},
+	}
+
+	// Add settings section if applicable
+	if plan.settingsFile != "" {
+		sections = append(sections, section{name: "Settings", files: []string{plan.settingsFile}, hasData: true})
+	}
+
+	// Add modifications section
+	hasModifications := plan.hooksSettingsModified || plan.instructionsFile != "" || len(plan.gitignorePatterns) > 0
+	if hasModifications {
+		sections = append(sections, section{name: "Modifications", hasData: true})
+	}
+
+	// Mark the last section with data
+	for i := len(sections) - 1; i >= 0; i-- {
+		if sections[i].hasData {
+			sections[i].isLast = true
+			break
+		}
+	}
+
+	// Print each section
+	for _, sec := range sections {
+		if !sec.hasData {
+			continue
+		}
+
+		branch := "├─"
+		childPrefix := "│  "
+		if sec.isLast {
+			branch = "└─"
+			childPrefix = "   "
+		}
+
+		// Handle special sections
+		if sec.name == "Modifications" {
+			fmt.Printf("%s Modifications\n", branch)
+			printModificationsTree(plan, childPrefix)
+			continue
+		}
+
+		// Handle global vs local files
+		if sec.global {
+			var globalFiles []string
+			switch sec.name {
+			case "Skills":
+				globalFiles = plan.globalSkillFiles
+			case cmdLabel:
+				globalFiles = plan.globalCommandFiles
+			case "Agents":
+				globalFiles = plan.globalAgentFiles
+			}
+			fmt.Printf("%s %s %s\n", branch, sec.name, ui.Muted(fmt.Sprintf("(global: %s)", globalDir)))
+			printFilesTree(globalFiles, childPrefix)
+		} else if len(sec.files) > 0 {
+			fmt.Printf("%s %s %s\n", branch, sec.name, ui.Muted("(local)"))
+			printFilesTree(sec.files, childPrefix)
+		}
+	}
+
+	// Print summary
+	var parts []string
+	if plan.localFileCount > 0 {
+		parts = append(parts, fmt.Sprintf("%d local", plan.localFileCount))
+	}
+	if plan.globalFileCount > 0 {
+		parts = append(parts, fmt.Sprintf("%d global", plan.globalFileCount))
+	}
+	if len(parts) == 0 {
+		parts = append(parts, "0 files")
+	}
+	fmt.Printf("Summary: %s\n\n", strings.Join(parts, ", "))
+}
+
+// printFilesTree prints files with tree characters.
+func printFilesTree(files []string, prefix string) {
+	for i, f := range files {
+		branch := "├─"
+		if i == len(files)-1 {
+			branch = "└─"
+		}
+		fmt.Printf("%s%s %s\n", prefix, branch, f)
+	}
+}
+
+// printModificationsTree prints the modifications section with tree characters.
+func printModificationsTree(plan *installationPlan, prefix string) {
+	var mods []string
+	if plan.hooksSettingsModified {
+		mods = append(mods, fmt.Sprintf("%s (hooks config)", plan.settingsLocalFile))
+	}
+	if plan.instructionsFile != "" {
+		if plan.integrationLevel == IntegrationAgentsContent {
+			mods = append(mods, fmt.Sprintf("%s (append thts block)", plan.instructionsFile))
+		} else {
+			mods = append(mods, plan.instructionsFile)
+		}
+	}
+	for _, p := range plan.gitignorePatterns {
+		mods = append(mods, fmt.Sprintf(".gitignore += %s", p))
+	}
+
+	for i, m := range mods {
+		branch := "├─"
+		if i == len(mods)-1 {
+			branch = "└─"
+		}
+		fmt.Printf("%s%s %s\n", prefix, branch, m)
+	}
 }
 
 // initAgent initializes a single agent type.
@@ -1885,6 +2189,137 @@ func refreshIntegration(projectDir, agentDir string, agentCfg *agents.AgentConfi
 	return nil
 }
 
+// globalInstallationPlan holds information about what would be installed globally.
+type globalInstallationPlan struct {
+	component  string
+	agentPlans map[agents.AgentType]*globalAgentPlan // agent -> plan
+	totalFiles int
+}
+
+// globalAgentPlan holds file info for a single agent in global install.
+type globalAgentPlan struct {
+	globalDir string   // e.g., ~/.claude
+	files     []string // relative paths within globalDir
+}
+
+// buildGlobalInstallationPlans computes what would be installed globally.
+func buildGlobalInstallationPlans(components []string, agentTypes []agents.AgentType) []*globalInstallationPlan {
+	var plans []*globalInstallationPlan
+
+	for _, component := range components {
+		plan := &globalInstallationPlan{
+			component:  component,
+			agentPlans: make(map[agents.AgentType]*globalAgentPlan),
+		}
+
+		for _, agentType := range agentTypes {
+			globalDir := config.GlobalAgentDir(string(agentType))
+			if globalDir == "" {
+				continue
+			}
+
+			agentCfg := agents.GetConfig(agentType)
+			if agentCfg == nil {
+				continue
+			}
+
+			var files []string
+			switch component {
+			case "skills":
+				for _, skillName := range thtsfiles.GetAvailableSkills() {
+					var relPath string
+					if agentCfg.SkillNeedsDir {
+						relPath = filepath.Join(agentCfg.SkillsDir, skillName, "SKILL.md")
+					} else {
+						relPath = filepath.Join(agentCfg.SkillsDir, skillName+".md")
+					}
+					files = append(files, relPath)
+				}
+			case "commands":
+				if !agentCfg.SupportsCommands {
+					continue
+				}
+				ext := ".md"
+				if agentCfg.CommandsFormat == "toml" {
+					ext = ".toml"
+				}
+				for _, cmdName := range thtsfiles.GetAvailableCommands() {
+					relPath := filepath.Join(agentCfg.CommandsDir, cmdName+ext)
+					files = append(files, relPath)
+				}
+			case "agents":
+				if agentCfg.AgentsDir == "" {
+					continue
+				}
+				for _, agentName := range thtsfiles.GetAvailableAgents() {
+					relPath := filepath.Join(agentCfg.AgentsDir, agentName+".md")
+					files = append(files, relPath)
+				}
+			case "hooks":
+				if !agentCfg.SupportsHooks {
+					continue
+				}
+				if agentCfg.HooksDir != "" {
+					for _, hookName := range thtsfiles.GetAvailableHooks() {
+						relPath := filepath.Join(agentCfg.HooksDir, hookName+".sh")
+						files = append(files, relPath)
+					}
+					// Settings file for hooks config
+					files = append(files, agentCfg.SettingsFile)
+				}
+				if agentCfg.PluginsDir != "" {
+					relPath := filepath.Join(agentCfg.PluginsDir, "thts-integration.ts")
+					files = append(files, relPath)
+				}
+			}
+
+			if len(files) > 0 {
+				plan.agentPlans[agentType] = &globalAgentPlan{
+					globalDir: globalDir,
+					files:     files,
+				}
+				plan.totalFiles += len(files)
+			}
+		}
+
+		if plan.totalFiles > 0 {
+			plans = append(plans, plan)
+		}
+	}
+
+	return plans
+}
+
+// printGlobalInstallationPlan displays what would be installed globally using tree structure.
+func printGlobalInstallationPlan(plan *globalInstallationPlan) {
+	fmt.Printf("%s\n", ui.SubHeader(capitalize(plan.component)))
+
+	// Get sorted agent types for consistent output
+	agentTypes := make([]agents.AgentType, 0, len(plan.agentPlans))
+	for agentType := range plan.agentPlans {
+		agentTypes = append(agentTypes, agentType)
+	}
+	agents.SortAgentTypes(agentTypes)
+
+	for i, agentType := range agentTypes {
+		agentPlan := plan.agentPlans[agentType]
+		isLast := i == len(agentTypes)-1
+
+		branch := "├─"
+		childPrefix := "│  "
+		if isLast {
+			branch = "└─"
+			childPrefix = "   "
+		}
+
+		globalDirDisplay := config.ContractPath(agentPlan.globalDir)
+		fmt.Printf("%s %s (%s)\n", branch, agents.AgentTypeLabels[agentType], ui.Muted(globalDirDisplay))
+		printFilesTree(agentPlan.files, childPrefix)
+	}
+
+	fmt.Printf("Total: %d file(s)\n\n", plan.totalFiles)
+}
+
 // runGlobalInit handles global installation of agent components.
 func runGlobalInit(_ *cobra.Command, _ []string) error {
 	fmt.Println(ui.Header("Initialize Global Agent Components"))
@@ -1912,6 +2347,18 @@ func runGlobalInit(_ *cobra.Command, _ []string) error {
 
 	fmt.Printf("%s For agents: %s\n", ui.Info(""), strings.Join(agents.AgentTypesToStrings(agentTypes), ", "))
 	fmt.Println()
+
+	// Build and print installation plans
+	plans := buildGlobalInstallationPlans(components, agentTypes)
+	for _, plan := range plans {
+		printGlobalInstallationPlan(plan)
+	}
+
+	// Dry-run exit point
+	if initDryRun {
+		fmt.Println(ui.Info("Dry run complete. No files were created."))
+		return nil
+	}
 
 	// Load or create global manifest
 	manifest, err := LoadGlobalManifest()
@@ -1958,6 +2405,10 @@ func runGlobalInit(_ *cobra.Command, _ []string) error {
 // parseGlobalComponents parses the --global flag value into component names.
 func parseGlobalComponents(value string) ([]string, error) {
 	if value == "interactive" {
+		// In dry-run mode, default to all components instead of prompting
+		if initDryRun {
+			return []string{"skills", "commands", "agents", "hooks"}, nil
+		}
 		return promptGlobalComponentSelection()
 	}
 
