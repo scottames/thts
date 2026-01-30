@@ -149,11 +149,11 @@ var AgentConfigs = map[AgentType]*AgentConfig{
 		InstructionsFile:      "", // Uses plugin for dynamic injection
 		IntegrationType:       "marker",
 		InstructionTargetFile: "AGENTS.md",
-		SkillsDir:             "skill",
+		SkillsDir:             "skills",
 		SkillNeedsDir:         true,
-		AgentsDir:             "agent",
+		AgentsDir:             "agents",
 		SupportsCommands:      true,
-		CommandsDir:           "command",
+		CommandsDir:           "commands",
 		CommandsGlobalOnly:    false,
 		GlobalUsesXDG:         true, // OpenCode uses ~/.config/opencode/ for global
 		SettingsFile:          "opencode.json",

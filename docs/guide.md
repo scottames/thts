@@ -714,7 +714,7 @@ your thoughts directory and enable session continuity.
 | ----------- | ------------ | ------------------- | ----------------- | --------------------- |
 | Claude Code | `.claude/`   | `skills/`           | `commands/`       | `~/.claude/`          |
 | Codex CLI   | `.codex/`    | `skills/*/SKILL.md` | `prompts/` (glob) | `~/.codex/`           |
-| OpenCode    | `.opencode/` | `skill/*/SKILL.md`  | `command/`        | `~/.config/opencode/` |
+| OpenCode    | `.opencode/` | `skills/*/SKILL.md` | `commands/`       | `~/.config/opencode/` |
 
 **Key differences:**
 

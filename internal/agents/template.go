@@ -41,6 +41,10 @@ type EmbedTemplateData struct {
 	// True for Claude, false for others
 	IncludeToolsMetadata bool
 
+	// IncludeAgentMode indicates whether to include agent mode in frontmatter
+	// True for OpenCode, false for others
+	IncludeAgentMode bool
+
 	// AgentModel is the model to use for agents (e.g., "haiku" for Claude)
 	AgentModel string
 }
@@ -86,6 +90,7 @@ func GetEmbedTemplateData(agentType AgentType) EmbedTemplateData {
 		data.TaskTracking = "Use your task tracking"
 		data.HasSpawnTasks = true
 		data.IncludeToolsMetadata = false
+		data.IncludeAgentMode = true
 		data.AgentModel = ""
 
 	case AgentGemini:

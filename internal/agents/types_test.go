@@ -159,8 +159,8 @@ func TestAgentConfigProperties(t *testing.T) {
 	if !opencode.SupportsCommands {
 		t.Error("OpenCode should support commands")
 	}
-	if opencode.CommandsDir != "command" {
-		t.Errorf("OpenCode CommandsDir = %q, want command", opencode.CommandsDir)
+	if opencode.CommandsDir != "commands" {
+		t.Errorf("OpenCode CommandsDir = %q, want commands", opencode.CommandsDir)
 	}
 	if opencode.CommandsGlobalOnly {
 		t.Error("OpenCode commands should not be global-only")
@@ -177,11 +177,11 @@ func TestAgentConfigProperties(t *testing.T) {
 	if opencode.InstructionsFile != "" {
 		t.Errorf("OpenCode InstructionsFile = %q, want empty (uses plugin for dynamic injection)", opencode.InstructionsFile)
 	}
-	if opencode.SkillsDir != "skill" {
-		t.Errorf("OpenCode SkillsDir = %q, want skill", opencode.SkillsDir)
+	if opencode.SkillsDir != "skills" {
+		t.Errorf("OpenCode SkillsDir = %q, want skills", opencode.SkillsDir)
 	}
-	if opencode.AgentsDir != "agent" {
-		t.Errorf("OpenCode AgentsDir = %q, want agent", opencode.AgentsDir)
+	if opencode.AgentsDir != "agents" {
+		t.Errorf("OpenCode AgentsDir = %q, want agents", opencode.AgentsDir)
 	}
 
 	// Gemini-specific properties

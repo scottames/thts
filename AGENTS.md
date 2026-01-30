@@ -1,5 +1,7 @@
 # thts
 
+<!-- NOTE: CLAUDE.md symlinks to this file. Only edit AGENTS.md. -->
+
 Go CLI for managing developer thoughts/notes across repositories. Replicates
 HumanLayer's `thoughts` subcommand with full feature compatibility.
 
@@ -77,7 +79,7 @@ binary and copied to agent directories by `thts init agents`.
 | -------- | ------------ | ------------------- | ------------------- | --------------- |
 | Claude   | `.claude/`   | `skills/*.md`       | `commands/`         | `settings.json` |
 | Codex    | `.codex/`    | `skills/*/SKILL.md` | `prompts/` (global) | `config.toml`   |
-| OpenCode | `.opencode/` | `skill/*/SKILL.md`  | `command/`          | `opencode.json` |
+| OpenCode | `.opencode/` | `skills/*/SKILL.md` | `commands/`         | `opencode.json` |
 | Gemini   | `.gemini/`   | `skills/*/SKILL.md` | `commands/*.toml`   | `settings.json` |
 
 **Note:** Codex calls commands "prompts" and they are global-only (`~/.codex/prompts/`).
