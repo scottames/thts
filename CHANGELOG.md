@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.4.0](https://github.com/scottames/thts/compare/v0.3.1...v0.4.0) (2026-01-30)
+
+
+### Features
+
+* **agents/init:** dry-run flag ([1b0bd91](https://github.com/scottames/thts/commit/1b0bd91ddae52ac6b37a604c0e091cd5fa74c0ac))
+* **opencode:** align dirs and subagent mode metadata ([0a30290](https://github.com/scottames/thts/commit/0a3029034c7863aa65e6c561d7e2a973b64f5547))
+
+
+### Code Refactoring
+
+* thts agents init/uninit moved into thts init/uninit ([61a6317](https://github.com/scottames/thts/commit/61a63172ee4aee5dfd6d7302338704ed0f78e84a))
+
 ## [0.3.1](https://github.com/scottames/thts/compare/v0.3.0...v0.3.1) (2026-01-23)
 
 
