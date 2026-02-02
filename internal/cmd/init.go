@@ -207,6 +207,12 @@ func runInit(cmd *cobra.Command, args []string) error {
 	fmt.Println()
 	fmt.Printf("Setting up thoughts for: %s\n", ui.Accent(currentRepo))
 	fmt.Printf("Project name: %s\n", ui.Accent(projectName))
+	profileDisplay := profileConfig.ProfileName
+	if profileDisplay == "" {
+		profileDisplay = "default"
+	}
+	fmt.Printf("Profile: %s\n", ui.Accent(profileDisplay))
+	fmt.Printf("Thoughts repo: %s\n", ui.Accent(profileConfig.ThoughtsRepo))
 	fmt.Println()
 
 	// Create directory structure in central thoughts repo
