@@ -510,6 +510,46 @@ func printRemovalPlan(plan *removalPlan) {
 	fmt.Println()
 }
 
+// isPathSafeForRemoval checks if a relative file path is safe to remove.
+// Returns false for empty strings, absolute paths, paths that escape the
+// directory via "..", or paths that would resolve to dangerous locations.
+func isPathSafeForRemoval(relativePath, baseDir string) bool {
+	// Skip empty strings or current directory
+	if relativePath == "" || relativePath == "." {
+		return false
+	}
+
+	// Skip absolute paths - all files should be relative to agent dir
+	if filepath.IsAbs(relativePath) {
+		return false
+	}
+
+	// Skip paths starting with ".." (directory escape)
+	if strings.HasPrefix(relativePath, "..") {
+		return false
+	}
+
+	// Resolve the full path and ensure it's within the base directory
+	fullPath := filepath.Join(baseDir, relativePath)
+	cleanPath := filepath.Clean(fullPath)
+	cleanBase := filepath.Clean(baseDir)
+
+	// The resolved path must be within the base directory (not equal to it, not outside it)
+	if cleanPath == cleanBase {
+		return false
+	}
+	if !strings.HasPrefix(cleanPath, cleanBase+string(filepath.Separator)) {
+		return false
+	}
+
+	// Extra safety: never allow removal of root paths
+	if cleanPath == "/" || cleanPath == filepath.VolumeName(cleanPath)+string(filepath.Separator) {
+		return false
+	}
+
+	return true
+}
+
 // performRemoval removes all thts integration files and reverts modifications.
 func performRemoval(plan *removalPlan) error {
 	cfg := agents.GetConfig(plan.agentType)
@@ -517,6 +557,10 @@ func performRemoval(plan *removalPlan) error {
 
 	// 1. Remove files
 	for _, f := range plan.filesToRemove {
+		// Validate path is safe to remove
+		if !isPathSafeForRemoval(f, plan.agentDir) {
+			continue
+		}
 		path := filepath.Join(plan.agentDir, f)
 		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 			warnings = append(warnings, fmt.Sprintf("failed to remove %s: %v", f, err))
