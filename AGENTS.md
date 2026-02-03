@@ -310,6 +310,13 @@ MUST write to thoughts/ when:
 
 ### Where to Write
 
+**Path shorthand:** When the user says `thts/<path>` or `thoughts/<path>`, resolve using:
+
+- Default: project-specific, shared (e.g., `thts/notes` → `thoughts/shared/notes/`)
+- `my/` = personal scope (e.g., `thts/my/notes` → `thoughts/{user}/notes/`)
+- `global/` = cross-project (e.g., `thts/global/notes` → `thoughts/global/shared/notes/`)
+- Combine: `thts/global/my/notes` → `thoughts/global/{user}/notes/`
+
 | Content Type            | Location                     |
 | ----------------------- | ---------------------------- |
 | Implementation plans    | `thoughts/shared/plans/`     |

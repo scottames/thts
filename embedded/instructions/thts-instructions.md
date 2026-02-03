@@ -100,6 +100,35 @@ MUST write to thoughts/ when:
 
 ## Where to Write
 
+### Path Shorthand
+
+When the user specifies paths like `thts/<path>` or `thoughts/<path>`, resolve
+them using two orthogonal dimensions:
+
+| Dimension         | Default      | Override                  |
+| ----------------- | ------------ | ------------------------- |
+| **Project scope** | this project | `global/` = cross-project |
+| **Visibility**    | shared       | `my/` = personal          |
+
+**Syntax:** `thts/[global/][my/]<category>`
+
+| User Says              | Resolves To                     |
+| ---------------------- | ------------------------------- |
+| `thts/notes`           | `thoughts/shared/notes/`        |
+| `thts/my/notes`        | `thoughts/{user}/notes/`        |
+| `thts/research`        | `thoughts/shared/research/`     |
+| `thts/my/tickets`      | `thoughts/{user}/tickets/`      |
+| `thts/global/notes`    | `thoughts/global/shared/notes/` |
+| `thts/global/my/notes` | `thoughts/global/{user}/notes/` |
+
+**Notes:**
+
+- `thoughts/` prefix also works (e.g., `thoughts/notes` = `thts/notes`)
+- `my/`, `user/`, or the actual username (e.g., `scotty/`) all mean personal scope
+- Unknown categories default to `shared/` (use `my/` for personal)
+
+### Content Locations
+
 | Content Type | Location |
 | ------------ | -------- |
 
