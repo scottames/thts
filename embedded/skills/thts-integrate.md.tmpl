@@ -1,6 +1,9 @@
 ---
 name: thts-integrate
-description: Activate thoughts/ integration for the current task. Use when you want{{if .AgentName}} {{.AgentName}}{{end}} to check existing context and write findings to thoughts/.
+description: |
+  Activate thoughts/ integration for the current task. Use when you want
+  {{if .AgentName}} {{.AgentName}}{{end}} to check existing context and write
+  findings to thoughts/.
 ---
 
 # thoughts/ Integration
@@ -17,7 +20,13 @@ Read and apply the full integration instructions {{.InstructionRef}}.
 
 **For this task specifically:**
 
-1. Before starting, {{if .HasAgentsFeature}}use `thoughts-locator` agent to check for existing context{{else}}check thoughts/ directory for existing context{{end}}
+1. Before starting, do quick triage:
+   - if task is research/debug/resume/history-heavy, {{if .HasAgentsFeature}}use
+     `thoughts-locator` then `thoughts-analyzer`{{else}}check thoughts/
+     directory for existing context{{end}}
+   - if task is straightforward/localized, continue without thoughts agents
+   - if ambiguous, ask the user whether to include thoughts context (use Ask
+     question tool if available)
 2. While working, note key findings worth preserving
 3. After completing, write to the appropriate thoughts/ location and run `thts sync`
 

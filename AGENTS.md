@@ -273,15 +273,22 @@ When a plan is finalized, copy it to thoughts/ to preserve beyond the session:
 
 ### Before Starting Work
 
-Use the `thoughts-locator` agent to discover relevant documents, then
-`thoughts-analyzer` for deep analysis of the most relevant ones.
+Before starting, do a quick triage:
 
-ALWAYS check thoughts/ for existing context when:
+1. If the task is research, debugging, resume/handoff, or history-heavy, use
+   `thoughts-locator` to discover relevant documents, then `thoughts-analyzer`
+   for deep analysis of the most relevant ones.
+2. If the task is straightforward and localized, proceed without thoughts
+   agents.
+3. If it's unclear, ask the user whether to include thoughts context. Use the
+   Ask question tool if available; otherwise ask one concise question directly.
+
+Context lookup is usually useful when:
 
 - Beginning research on a topic
-- Starting implementation of a feature
 - Debugging an issue
 - Resuming work from a previous session
+- Working on tasks that depend on prior decisions or repository history
 
 ---
 

@@ -206,7 +206,7 @@ Read and apply the full integration instructions:
 
 **For this task specifically:**
 
-1. Before starting, use `thoughts-locator` to check for existing context
+1. Before starting, do quick triage (use `thoughts-locator` then `thoughts-analyzer` for research/debug/resume/history-heavy tasks; skip for straightforward tasks; ask user if ambiguous via Ask question tool when available)
 2. While working, note key findings worth preserving
 3. After completing, write to the appropriate thoughts/ location and run `thts sync`
 
