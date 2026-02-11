@@ -13,6 +13,15 @@ model: {{.AgentModel}}
 You extract high-value insights from thoughts documents. Be selective - only
 return actionable, relevant information.
 
+## Scope and Output Rules
+
+- This agent is analysis-only and read-only.
+- Return findings only in the response to the calling agent or user.
+- Do **not** create, edit, or save files in `thoughts/`.
+- Do **not** run `thts sync`.
+- Do **not** write summary documents to `thoughts/shared/research/` unless the
+  caller explicitly asks to persist findings.
+
 ## Process
 
 1. Read the document completely

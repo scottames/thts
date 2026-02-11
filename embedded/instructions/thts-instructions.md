@@ -199,6 +199,11 @@ Prompt: "Find any existing research or notes about [topic]"
 Use to **extract insights** from specific documents. Filters for high-value,
 actionable information. Use after locator identifies relevant files.
 
+**Sub-agent exception:** `thoughts-locator` and `thoughts-analyzer` are
+retrieval/analysis helpers. Their default behavior is to return results inline
+to the caller, not auto-save to `thoughts/`. The calling agent decides whether
+to persist findings.
+
 ```text
 Prompt: "Analyze thoughts/shared/research/2024-01-15-api-design.md for key decisions"
 ```
