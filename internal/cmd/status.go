@@ -52,6 +52,8 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	fmt.Println(ui.SubHeader("Configuration"))
 	if defaultProfile != nil {
 		tbl := ui.NewTable("Setting", "Value")
+		tbl.Row("Config file", config.ContractPath(config.CanonicalConfigPath()))
+		tbl.Row("State file", config.ContractPath(config.StatePath()))
 		tbl.Row("Default profile", defaultProfileName)
 		tbl.Row("Repository", defaultProfile.ThoughtsRepo)
 		tbl.Row("Repos directory", defaultProfile.ReposDir)
@@ -97,7 +99,13 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		}
 		fmt.Println(tbl)
 	} else {
-		fmt.Println(ui.Warning("Current repository not mapped to thoughts"))
+		thoughtsDir := filepath.Join(currentRepo, "thoughts")
+		if fs.Exists(thoughtsDir) {
+			fmt.Println(ui.Warning("Current repository has thoughts/ but no mapping in the active state file"))
+			fmt.Printf("  %s\n", ui.Muted("This usually means your current THTS_CONFIG_PATH points to a different state namespace."))
+		} else {
+			fmt.Println(ui.Warning("Current repository not mapped to thoughts"))
+		}
 	}
 	fmt.Println()
 

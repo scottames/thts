@@ -1,6 +1,8 @@
 package config
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"os"
 	"path/filepath"
 	"sort"
@@ -37,8 +39,15 @@ func TestStatePath(t *testing.T) {
 	xdgDir, cleanup := setupTestXDGState(t)
 	defer cleanup()
 
+	originalConfigPath := os.Getenv("THTS_CONFIG_PATH")
+	defer restoreEnv("THTS_CONFIG_PATH", originalConfigPath)
+	if err := os.Setenv("THTS_CONFIG_PATH", "/tmp/thts-tests/config.yaml"); err != nil {
+		t.Fatalf("failed to set THTS_CONFIG_PATH: %v", err)
+	}
+
 	path := StatePath()
-	expected := filepath.Join(xdgDir, "thts", "state.yaml")
+	configHash := sha256.Sum256([]byte("/tmp/thts-tests/config.yaml"))
+	expected := filepath.Join(xdgDir, "thts", "state-"+hex.EncodeToString(configHash[:])+".yaml")
 	if path != expected {
 		t.Errorf("StatePath() = %q, want %q", path, expected)
 	}
@@ -62,7 +71,7 @@ func TestLoadState(t *testing.T) {
 		}
 
 		data, _ := yaml.Marshal(state)
-		if err := os.WriteFile(filepath.Join(stateDir, "state.yaml"), data, 0644); err != nil {
+		if err := os.WriteFile(StatePath(), data, 0644); err != nil {
 			t.Fatalf("failed to write state: %v", err)
 		}
 
@@ -108,7 +117,7 @@ func TestLoadState(t *testing.T) {
 		}
 
 		// Empty YAML file
-		if err := os.WriteFile(filepath.Join(stateDir, "state.yaml"), []byte(""), 0644); err != nil {
+		if err := os.WriteFile(StatePath(), []byte(""), 0644); err != nil {
 			t.Fatalf("failed to write state: %v", err)
 		}
 
@@ -139,7 +148,7 @@ func TestLoadStateOrDefault(t *testing.T) {
 			},
 		}
 		data, _ := yaml.Marshal(state)
-		if err := os.WriteFile(filepath.Join(stateDir, "state.yaml"), data, 0644); err != nil {
+		if err := os.WriteFile(StatePath(), data, 0644); err != nil {
 			t.Fatalf("failed to write state: %v", err)
 		}
 
@@ -185,14 +194,14 @@ func TestSaveState(t *testing.T) {
 		}
 
 		// Verify file exists
-		statePath := filepath.Join(stateDir, "state.yaml")
+		statePath := StatePath()
 		if _, err := os.Stat(statePath); err != nil {
 			t.Error("state file should be created")
 		}
 	})
 
 	t.Run("writes valid YAML", func(t *testing.T) {
-		xdgDir, cleanup := setupTestXDGState(t)
+		_, cleanup := setupTestXDGState(t)
 		defer cleanup()
 
 		state := &State{
@@ -206,7 +215,7 @@ func TestSaveState(t *testing.T) {
 		}
 
 		// Read and parse
-		statePath := filepath.Join(xdgDir, "thts", "state.yaml")
+		statePath := StatePath()
 		data, err := os.ReadFile(statePath)
 		if err != nil {
 			t.Fatalf("failed to read saved state: %v", err)
@@ -257,6 +266,43 @@ func TestSaveState(t *testing.T) {
 		}
 		if loaded.RepoMappings["/repo1"] != nil {
 			t.Error("expected /repo1 mapping to be removed")
+		}
+	})
+
+	t.Run("writes metadata for active config path", func(t *testing.T) {
+		_, cleanup := setupTestXDGState(t)
+		defer cleanup()
+
+		originalConfigPath := os.Getenv("THTS_CONFIG_PATH")
+		defer restoreEnv("THTS_CONFIG_PATH", originalConfigPath)
+		if err := os.Setenv("THTS_CONFIG_PATH", "/tmp/thts-tests/work.yaml"); err != nil {
+			t.Fatalf("failed to set THTS_CONFIG_PATH: %v", err)
+		}
+
+		state := &State{RepoMappings: map[string]*RepoMapping{}}
+		if err := SaveState(state); err != nil {
+			t.Fatalf("SaveState() error: %v", err)
+		}
+
+		loaded, err := LoadState()
+		if err != nil {
+			t.Fatalf("LoadState() error: %v", err)
+		}
+
+		if loaded.Meta == nil {
+			t.Fatal("Meta should be populated")
+		}
+		if loaded.Meta.ConfigPath != "/tmp/thts-tests/work.yaml" {
+			t.Errorf("Meta.ConfigPath = %q, want %q", loaded.Meta.ConfigPath, "/tmp/thts-tests/work.yaml")
+		}
+		if loaded.Meta.ConfigPathHash == "" {
+			t.Error("Meta.ConfigPathHash should be populated")
+		}
+		if loaded.Meta.CreatedAt == "" {
+			t.Error("Meta.CreatedAt should be populated")
+		}
+		if loaded.Meta.LastUsedAt == "" {
+			t.Error("Meta.LastUsedAt should be populated")
 		}
 	})
 }

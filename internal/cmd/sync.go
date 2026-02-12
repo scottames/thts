@@ -115,6 +115,11 @@ func runSync(cmd *cobra.Command, args []string) error {
 		projectName = mapping.GetRepoName()
 		profileConfig = state.ResolveProfileForRepo(cfg, currentRepo)
 	} else {
+		if fs.Exists(thoughtsDir) {
+			fmt.Println(ui.Warning("Current repository has thoughts/ but no mapping in the active state file"))
+			fmt.Printf("  %s\n", ui.Muted("This usually means your current THTS_CONFIG_PATH points to a different state namespace."))
+		}
+
 		// Use default profile directly
 		profileConfig = cfg.GetDefaultProfileResolved()
 		if profileConfig == nil {

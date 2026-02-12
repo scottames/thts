@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"go.yaml.in/yaml/v3"
 )
@@ -12,29 +13,28 @@ import (
 // State represents machine-specific state that should not be synced.
 // This is separate from Config which contains portable preferences.
 type State struct {
+	Meta         *StateMeta              `yaml:"meta,omitempty"`
 	RepoMappings map[string]*RepoMapping `yaml:"repoMappings,omitempty"`
+}
+
+// StateMeta captures context metadata for a namespaced state file.
+type StateMeta struct {
+	SchemaVersion  int    `yaml:"schemaVersion"`
+	ConfigPath     string `yaml:"configPath"`
+	ConfigPathHash string `yaml:"configPathHash"`
+	CreatedAt      string `yaml:"createdAt"`
+	LastUsedAt     string `yaml:"lastUsedAt"`
 }
 
 // ErrStateNotFound is returned when no state file exists.
 var ErrStateNotFound = errors.New("state not found")
 
-// StatePath returns the path to the thts state file.
-// Uses XDG_STATE_HOME with fallback to ~/.local/state/thts/state.yaml.
-func StatePath() string {
-	return filepath.Join(XDGStateHome(), "thts", "state.yaml")
-}
-
-// LoadState loads the thts state from the state file.
-// If the state file doesn't exist, falls back to HumanLayer's config for compatibility.
+// LoadState loads the thts state from the namespaced state file.
 func LoadState() (*State, error) {
 	path := StatePath()
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			// Try HumanLayer fallback for compatibility
-			if hlState := LoadStateFromHumanLayer(); hlState != nil {
-				return hlState, nil
-			}
 			return nil, ErrStateNotFound
 		}
 		return nil, err
@@ -49,6 +49,8 @@ func LoadState() (*State, error) {
 	if state.RepoMappings == nil {
 		state.RepoMappings = make(map[string]*RepoMapping)
 	}
+
+	state.ensureMeta()
 
 	return &state, nil
 }
@@ -74,6 +76,9 @@ func SaveState(state *State) error {
 		return fmt.Errorf("failed to create state directory: %w", err)
 	}
 
+	state.ensureMeta()
+	state.Meta.LastUsedAt = time.Now().UTC().Format(time.RFC3339)
+
 	data, err := yaml.Marshal(state)
 	if err != nil {
 		return fmt.Errorf("failed to marshal state: %w", err)
@@ -84,6 +89,47 @@ func SaveState(state *State) error {
 	}
 
 	return nil
+}
+
+func (s *State) ensureMeta() {
+	canonicalConfigPath := CanonicalConfigPath()
+	currentPath := StatePathForConfig(canonicalConfigPath)
+	currentHash := statePathHash(currentPath)
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	if s.Meta == nil {
+		s.Meta = &StateMeta{
+			SchemaVersion:  1,
+			ConfigPath:     canonicalConfigPath,
+			ConfigPathHash: currentHash,
+			CreatedAt:      now,
+			LastUsedAt:     now,
+		}
+		return
+	}
+
+	if s.Meta.SchemaVersion == 0 {
+		s.Meta.SchemaVersion = 1
+	}
+	if s.Meta.CreatedAt == "" {
+		s.Meta.CreatedAt = now
+	}
+
+	s.Meta.ConfigPath = canonicalConfigPath
+	s.Meta.ConfigPathHash = currentHash
+	if s.Meta.LastUsedAt == "" {
+		s.Meta.LastUsedAt = now
+	}
+}
+
+func statePathHash(statePath string) string {
+	base := filepath.Base(statePath)
+	const prefix = "state-"
+	const suffix = ".yaml"
+	if len(base) > len(prefix)+len(suffix) && base[:len(prefix)] == prefix {
+		return base[len(prefix) : len(base)-len(suffix)]
+	}
+	return ""
 }
 
 // ResolveProfileForRepo resolves the profile configuration for a given repository path.

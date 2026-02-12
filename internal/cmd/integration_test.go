@@ -3,6 +3,8 @@
 package cmd
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -210,6 +212,12 @@ func (e *testEnv) runThtsInDir(dir string, args ...string) (string, error) {
 	return string(output), err
 }
 
+func (e *testEnv) defaultStatePath() string {
+	configPath := filepath.Join(e.configHome, "thts", "config.yaml")
+	hash := sha256.Sum256([]byte(configPath))
+	return filepath.Join(e.stateHome, "thts", "state-"+hex.EncodeToString(hash[:])+".yaml")
+}
+
 // =============================================================================
 // Integration Tests
 // =============================================================================
@@ -284,7 +292,7 @@ func TestInitCommand(t *testing.T) {
 		}
 
 		// Verify state was updated with mapping (RepoMappings are in state, not config)
-		statePath := filepath.Join(env.stateHome, "thts", "state.yaml")
+		statePath := env.defaultStatePath()
 		stateData, err := os.ReadFile(statePath)
 		if err != nil {
 			t.Fatalf("failed to read state: %v", err)
@@ -466,6 +474,68 @@ func TestSyncCommand(t *testing.T) {
 			t.Errorf("expected 'No changes to commit' message, got: %s", output)
 		}
 	})
+
+	t.Run("warns when thoughts dir exists but mapping is in different state namespace", func(t *testing.T) {
+		env := setupTestEnv(t)
+		defer env.cleanup()
+
+		// Initialize repo with default config namespace.
+		_, err := env.runThts("init", "--name", "myproject", "--force")
+		if err != nil {
+			t.Fatalf("init failed: %v", err)
+		}
+
+		// Create alternate thoughts repo and config (different namespace).
+		altThoughtsRepo := filepath.Join(env.root, "alt-thoughts-repo")
+		if err := os.MkdirAll(altThoughtsRepo, 0755); err != nil {
+			t.Fatalf("failed to create alt thoughts repo: %v", err)
+		}
+		if err := initGitRepo(altThoughtsRepo); err != nil {
+			t.Fatalf("failed to init alt thoughts repo: %v", err)
+		}
+
+		altCfg := &config.Config{
+			User:                "testuser",
+			Gitignore:           config.ComponentModeLocal,
+			AutoSyncInWorktrees: true,
+			Profiles: map[string]*config.ProfileConfig{
+				"alt": {
+					ThoughtsRepo: altThoughtsRepo,
+					ReposDir:     "repos",
+					GlobalDir:    "global",
+					Default:      true,
+				},
+			},
+		}
+
+		altConfigPath := filepath.Join(env.root, "alt-config.yaml")
+		altConfigData, err := yaml.Marshal(altCfg)
+		if err != nil {
+			t.Fatalf("failed to marshal alt config: %v", err)
+		}
+		if err := os.WriteFile(altConfigPath, altConfigData, 0644); err != nil {
+			t.Fatalf("failed to write alt config: %v", err)
+		}
+
+		cmd := exec.Command(binaryPath, "sync", "--mode", "local")
+		cmd.Dir = env.projectRepo
+		cmd.Env = append(os.Environ(),
+			"XDG_CONFIG_HOME="+env.configHome,
+			"XDG_STATE_HOME="+env.stateHome,
+			"HOME="+env.root,
+			"THTS_CONFIG_PATH="+altConfigPath,
+		)
+
+		outputBytes, err := cmd.CombinedOutput()
+		output := string(outputBytes)
+		if err != nil {
+			t.Fatalf("sync failed: %v\nOutput: %s", err, output)
+		}
+
+		if !strings.Contains(output, "Current repository has thoughts/ but no mapping in the active state file") {
+			t.Errorf("expected namespace mismatch warning, got: %s", output)
+		}
+	})
 }
 
 func TestUninitCommand(t *testing.T) {
@@ -502,7 +572,7 @@ func TestUninitCommand(t *testing.T) {
 		}
 
 		// Verify state mapping was removed (RepoMappings are in state, not config)
-		statePath := filepath.Join(env.stateHome, "thts", "state.yaml")
+		statePath := env.defaultStatePath()
 		stateData, err := os.ReadFile(statePath)
 		if err != nil {
 			t.Fatalf("failed to read state: %v", err)

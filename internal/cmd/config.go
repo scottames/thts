@@ -192,8 +192,11 @@ func displayConfig(cfg *config.Config) error {
 	}
 
 	fmt.Println()
-	fmt.Printf("Config file: %s\n", ui.Muted(config.ThtsConfigPath()))
-	fmt.Printf("State file:  %s\n", ui.Muted(config.StatePath()))
+	fmt.Printf("Config file: %s\n", ui.Muted(config.ContractPath(config.CanonicalConfigPath())))
+	fmt.Printf("State file:  %s\n", ui.Muted(config.ContractPath(config.StatePath())))
+	if state.Meta != nil {
+		fmt.Printf("State meta:  %s\n", ui.Muted(config.ContractPath(state.Meta.ConfigPath)))
+	}
 
 	return nil
 }
