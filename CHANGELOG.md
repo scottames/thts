@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.5.0](https://github.com/scottames/thts/compare/v0.4.0...v0.5.0) (2026-02-15)
+
+
+### Features
+
+* **instructions:** add a shorthand for path references ([fa9585d](https://github.com/scottames/thts/commit/fa9585d17a9ead09aabd9cb4fbae95cba464c100))
+* **instructions:** choice approach to leveraging research ([26f2bdf](https://github.com/scottames/thts/commit/26f2bdf807a501d870eabf8c797276214656c155))
+* **state:** namespace repo mappings by config path ([918f04c](https://github.com/scottames/thts/commit/918f04cfd64931a0763e99c4c757c0088dd7045e))
+
+
+### Bug Fixes
+
+* **agents:** clarify thoughts-analyzer returns inline results only ([b9b96f5](https://github.com/scottames/thts/commit/b9b96f59ee4bdd3f4208ef7ccb23e7ea77fa9403))
+* **uninit:** safer path removal ([3dd7132](https://github.com/scottames/thts/commit/3dd71326ed4b37be95fc8d77dc1c35f85aae3c18))
+
+
+### Miscellaneous Chores
+
+* **deps:** update ⬆️ trunk go to v1.25.7 ([#20](https://github.com/scottames/thts/issues/20)) ([946309c](https://github.com/scottames/thts/commit/946309c0d03b16407f5b5f41305e26dcc17b3392))
+* **deps:** update ⬆️ trunk go to v1.26.0 ([#22](https://github.com/scottames/thts/issues/22)) ([e221247](https://github.com/scottames/thts/commit/e2212473826867ff32418a45e9760d29c88f1728))
+* **deps:** update dependency go to v1.25.7 ([#21](https://github.com/scottames/thts/issues/21)) ([ace6f3f](https://github.com/scottames/thts/commit/ace6f3f39e51cbea4bc799deb622642ba87c13b2))
+
+
+### Code Refactoring
+
+* **init:** add profile info to stdout ([77ed2de](https://github.com/scottames/thts/commit/77ed2debead01328c9bd42c4f0945f3b1b156831))
+
 ## [0.4.0](https://github.com/scottames/thts/compare/v0.3.1...v0.4.0) (2026-01-30)
 
 
