@@ -1,6 +1,9 @@
 package config
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -55,6 +58,12 @@ func ThtsConfigPath() string {
 	return filepath.Join(XDGConfigHome(), "thts", "config.yaml")
 }
 
+// CanonicalConfigPath returns the realpath of the active thts config path.
+// It expands ~ and resolves symlinks when possible.
+func CanonicalConfigPath() string {
+	return canonicalPath(ThtsConfigPath())
+}
+
 // HumanLayerConfigPath returns the path to the HumanLayer config file.
 func HumanLayerConfigPath() string {
 	return filepath.Join(XDGConfigHome(), "humanlayer", "humanlayer.json")
@@ -93,9 +102,37 @@ func XDGStateHome() string {
 	return filepath.Join(home, ".local", "state")
 }
 
+// LegacyStatePath returns the legacy single-file thts state path.
+func LegacyStatePath() string {
+	return filepath.Join(XDGStateHome(), "thts", "state.yaml")
+}
+
+// StatePathForConfig returns the namespaced state path for a specific config path.
+func StatePathForConfig(configPath string) string {
+	canonicalConfigPath := canonicalPath(configPath)
+	hash := sha256.Sum256([]byte(canonicalConfigPath))
+	hashStr := hex.EncodeToString(hash[:])
+	filename := fmt.Sprintf("state-%s.yaml", hashStr)
+	return filepath.Join(XDGStateHome(), "thts", filename)
+}
+
+// StatePath returns the namespaced thts state file for the active config path.
+func StatePath() string {
+	return StatePathForConfig(CanonicalConfigPath())
+}
+
 // GlobalManifestPath returns the path to the global agent manifest file.
 func GlobalManifestPath() string {
 	return filepath.Join(XDGStateHome(), "thts", "global-manifest.json")
+}
+
+func canonicalPath(path string) string {
+	expandedPath := ExpandPath(path)
+	resolvedPath, err := filepath.EvalSymlinks(expandedPath)
+	if err == nil {
+		return resolvedPath
+	}
+	return expandedPath
 }
 
 // GlobalAgentDir returns the global directory for an agent type.

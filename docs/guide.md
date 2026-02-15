@@ -531,10 +531,62 @@ it maps that project to use the profile's repo.
 profiles:
   work:
     thoughtsRepo: ~/work-thoughts
-repoMappings:
-  /home/{user}/src/work-project:
-    profile: work
 ```
+
+Repository mappings are stored in a state file under `XDG_STATE_HOME` (default
+`~/.local/state/thts/`), not in your config file.
+
+State files are namespaced by the active config path. For example:
+
+```text
+~/.local/state/thts/state-<sha256-of-config-realpath>.yaml
+```
+
+This keeps mappings separate when you switch configs with `THTS_CONFIG_PATH`
+(for example personal vs work configs).
+
+### Moving a Thoughts Repo (Same Config, Same Repos)
+
+If you want to move a profile's central thoughts repo to a new absolute path,
+use this sequence to avoid surprises:
+
+1. Move the existing thoughts repo to the new location (preserves git history)
+2. Update `profiles.<name>.thoughtsRepo` in the same config file
+3. In each initialized project, run `thts init --refresh`
+4. Verify with `thts status`
+5. Run `thts sync`
+
+Example:
+
+```bash
+# 1) Move the central thoughts repo
+mv ~/thoughts ~/notes/thoughts
+
+# 2) Update config
+thts config --edit
+# profiles:
+#   personal:
+#     thoughtsRepo: ~/notes/thoughts
+
+# 3) Refresh symlinks in each initialized project
+cd ~/src/project-a && thts init --refresh
+cd ~/src/project-b && thts init --refresh
+
+# 4) Verify active config + state + profile resolution
+thts status
+
+# 5) Sync as usual
+thts sync
+```
+
+Notes:
+
+- This works cleanly when the config path is unchanged (same `THTS_CONFIG_PATH`
+  context). Repo mappings remain valid because they reference profile names.
+- `thts init --refresh` updates project symlinks to point at the new central
+  location.
+- If you also change the config file path, you are switching state namespaces;
+  run `thts init` in each repository under the new config context.
 
 ## Git Worktrees
 

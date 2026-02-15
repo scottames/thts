@@ -51,6 +51,12 @@ func TestGetInstructions_DefaultCategories(t *testing.T) {
 	if !strings.Contains(result, "## Before Starting Work") {
 		t.Error("missing static section")
 	}
+	if !strings.Contains(result, "Before starting, do a quick triage") {
+		t.Error("missing triage guidance")
+	}
+	if !strings.Contains(result, "Ask question tool if available") {
+		t.Error("missing Ask question tool guidance")
+	}
 
 	// Verify Auto-Save Triggers table populated
 	if !strings.Contains(result, "**Gotchas discovered**") {

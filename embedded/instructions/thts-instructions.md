@@ -63,15 +63,22 @@ Save to thoughts/ automatically (without asking) when:
 
 ## Before Starting Work
 
-Use the `thoughts-locator` agent to discover relevant documents, then
-`thoughts-analyzer` for deep analysis of the most relevant ones.
+Before starting, do a quick triage:
 
-ALWAYS check thoughts/ for existing context when:
+1. If the task is research, debugging, resume/handoff, or history-heavy, use
+   `thoughts-locator` to discover relevant documents, then `thoughts-analyzer`
+   for deep analysis of the most relevant ones.
+2. If the task is straightforward and localized, proceed without thoughts
+   agents.
+3. If it's unclear, ask the user whether to include thoughts context. Use the
+   Ask question tool if available; otherwise ask one concise question directly.
+
+Context lookup is usually useful when:
 
 - Beginning research on a topic
-- Starting implementation of a feature
 - Debugging an issue
 - Resuming work from a previous session
+- Working on tasks that depend on prior decisions or repository history
 
 ---
 
@@ -191,6 +198,11 @@ Prompt: "Find any existing research or notes about [topic]"
 
 Use to **extract insights** from specific documents. Filters for high-value,
 actionable information. Use after locator identifies relevant files.
+
+**Sub-agent exception:** `thoughts-locator` and `thoughts-analyzer` are
+retrieval/analysis helpers. Their default behavior is to return results inline
+to the caller, not auto-save to `thoughts/`. The calling agent decides whether
+to persist findings.
 
 ```text
 Prompt: "Analyze thoughts/shared/research/2024-01-15-api-design.md for key decisions"

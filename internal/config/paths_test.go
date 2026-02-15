@@ -1,6 +1,8 @@
 package config
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"os"
 	"path/filepath"
 	"strings"
@@ -344,4 +346,74 @@ func TestDefaultUser(t *testing.T) {
 			t.Errorf("DefaultUser() = %q, want user", got)
 		}
 	})
+}
+
+func TestStatePathForConfig(t *testing.T) {
+	originalXDG := os.Getenv("XDG_STATE_HOME")
+	defer restoreEnv("XDG_STATE_HOME", originalXDG)
+	if err := os.Setenv("XDG_STATE_HOME", "/tmp/thts-state-home"); err != nil {
+		t.Fatalf("failed to set XDG_STATE_HOME: %v", err)
+	}
+
+	configPath := "/tmp/thts-configs/work.yaml"
+	path := StatePathForConfig(configPath)
+
+	configHash := sha256.Sum256([]byte(configPath))
+	want := filepath.Join("/tmp/thts-state-home", "thts", "state-"+hex.EncodeToString(configHash[:])+".yaml")
+	if path != want {
+		t.Errorf("StatePathForConfig() = %q, want %q", path, want)
+	}
+}
+
+func TestLegacyStatePath(t *testing.T) {
+	originalXDG := os.Getenv("XDG_STATE_HOME")
+	defer restoreEnv("XDG_STATE_HOME", originalXDG)
+	if err := os.Setenv("XDG_STATE_HOME", "/tmp/thts-state-home"); err != nil {
+		t.Fatalf("failed to set XDG_STATE_HOME: %v", err)
+	}
+
+	got := LegacyStatePath()
+	want := filepath.Join("/tmp/thts-state-home", "thts", "state.yaml")
+	if got != want {
+		t.Errorf("LegacyStatePath() = %q, want %q", got, want)
+	}
+}
+
+func TestStatePathUsesRealConfigPath(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "thts-paths-test-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tempDir) }()
+
+	actualPath := filepath.Join(tempDir, "actual-config.yaml")
+	if err := os.WriteFile(actualPath, []byte("profiles: {}\n"), 0644); err != nil {
+		t.Fatalf("failed to write config file: %v", err)
+	}
+	symlinkPath := filepath.Join(tempDir, "link-config.yaml")
+	if err := os.Symlink(actualPath, symlinkPath); err != nil {
+		t.Fatalf("failed to create symlink: %v", err)
+	}
+
+	originalConfigPath := os.Getenv("THTS_CONFIG_PATH")
+	originalXDGState := os.Getenv("XDG_STATE_HOME")
+	defer func() {
+		restoreEnv("THTS_CONFIG_PATH", originalConfigPath)
+		restoreEnv("XDG_STATE_HOME", originalXDGState)
+	}()
+
+	if err := os.Setenv("THTS_CONFIG_PATH", symlinkPath); err != nil {
+		t.Fatalf("failed to set THTS_CONFIG_PATH: %v", err)
+	}
+	if err := os.Setenv("XDG_STATE_HOME", "/tmp/thts-state-home"); err != nil {
+		t.Fatalf("failed to set XDG_STATE_HOME: %v", err)
+	}
+
+	statePath := StatePath()
+	hash := sha256.Sum256([]byte(actualPath))
+	want := filepath.Join("/tmp/thts-state-home", "thts", "state-"+hex.EncodeToString(hash[:])+".yaml")
+
+	if statePath != want {
+		t.Errorf("StatePath() = %q, want %q", statePath, want)
+	}
 }

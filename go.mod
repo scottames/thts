@@ -1,6 +1,6 @@
 module github.com/scottames/thts
 
-go 1.25.7
+go 1.26.0
 
 require (
 	github.com/alecthomas/chroma/v2 v2.23.1
