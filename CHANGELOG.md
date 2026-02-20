@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.6.0](https://github.com/scottames/thts/compare/v0.5.0...v0.6.0) (2026-02-20)
+
+
+### Features
+
+* worktree aware init ([c651634](https://github.com/scottames/thts/commit/c651634f2842c3f50ed94e7b9fc3bc2db9ac0ce5))
+
+
+### Miscellaneous Chores
+
+* **deps:** update dependency go to v1.26.0 ([#23](https://github.com/scottames/thts/issues/23)) ([4bf6665](https://github.com/scottames/thts/commit/4bf66651e9e665513ab80ac0f2cfb43beed42d1a))
+
 ## [0.5.0](https://github.com/scottames/thts/compare/v0.4.0...v0.5.0) (2026-02-15)
 
 
