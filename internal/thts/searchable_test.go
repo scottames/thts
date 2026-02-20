@@ -123,7 +123,7 @@ func TestCreateSearchableDir(t *testing.T) {
 		}
 	})
 
-	t.Run("skips CLAUDE.md", func(t *testing.T) {
+	t.Run("skips agent instruction docs", func(t *testing.T) {
 		dir, cleanup := setupTestDir(t)
 		defer cleanup()
 
@@ -132,10 +132,14 @@ func TestCreateSearchableDir(t *testing.T) {
 			t.Fatalf("failed to create thoughts directory: %v", err)
 		}
 
-		// Create CLAUDE.md
+		// Create CLAUDE.md and AGENTS.md
 		claudeMd := filepath.Join(thoughtsDir, "CLAUDE.md")
 		if err := os.WriteFile(claudeMd, []byte("# Claude instructions"), 0644); err != nil {
 			t.Fatalf("failed to create CLAUDE.md: %v", err)
+		}
+		agentsMd := filepath.Join(thoughtsDir, "AGENTS.md")
+		if err := os.WriteFile(agentsMd, []byte("# Agent instructions"), 0644); err != nil {
+			t.Fatalf("failed to create AGENTS.md: %v", err)
 		}
 
 		// Create a regular file
@@ -150,13 +154,16 @@ func TestCreateSearchableDir(t *testing.T) {
 		}
 
 		if result.LinkedCount != 1 {
-			t.Errorf("LinkedCount = %d, want 1 (should skip CLAUDE.md)", result.LinkedCount)
+			t.Errorf("LinkedCount = %d, want 1 (should skip CLAUDE.md and AGENTS.md)", result.LinkedCount)
 		}
 
-		// Verify CLAUDE.md was not linked
+		// Verify instruction docs were not linked
 		searchDir := filepath.Join(thoughtsDir, "searchable")
 		if _, err := os.Stat(filepath.Join(searchDir, "CLAUDE.md")); !os.IsNotExist(err) {
 			t.Error("CLAUDE.md should not be linked")
+		}
+		if _, err := os.Stat(filepath.Join(searchDir, "AGENTS.md")); !os.IsNotExist(err) {
+			t.Error("AGENTS.md should not be linked")
 		}
 	})
 

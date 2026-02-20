@@ -184,6 +184,40 @@ func initGitRepo(dir string) error {
 	return cmd.Run()
 }
 
+func ensureInitialCommit(dir string) error {
+	check := exec.Command("git", "rev-parse", "--verify", "HEAD")
+	check.Dir = dir
+	if err := check.Run(); err == nil {
+		return nil
+	}
+
+	seedFile := filepath.Join(dir, "README.md")
+	if err := os.WriteFile(seedFile, []byte("# test\n"), 0644); err != nil {
+		return err
+	}
+
+	add := exec.Command("git", "add", ".")
+	add.Dir = dir
+	if err := add.Run(); err != nil {
+		return err
+	}
+
+	commit := exec.Command("git", "commit", "-m", "initial")
+	commit.Dir = dir
+	return commit.Run()
+}
+
+func createWorktree(mainRepo, worktreePath, branch string) error {
+	if err := ensureInitialCommit(mainRepo); err != nil {
+		return err
+	}
+
+	_ = os.RemoveAll(worktreePath)
+	cmd := exec.Command("git", "worktree", "add", worktreePath, "-b", branch)
+	cmd.Dir = mainRepo
+	return cmd.Run()
+}
+
 // runThts runs the thts binary with the given args and environment
 func (e *testEnv) runThts(args ...string) (string, error) {
 	cmd := exec.Command(binaryPath, args...)
@@ -354,6 +388,61 @@ func TestInitCommand(t *testing.T) {
 
 		if !strings.Contains(output, "Thoughts setup complete") {
 			t.Errorf("expected success message on reinit, got: %s", output)
+		}
+	})
+
+	t.Run("worktree init reuses existing repository mapping", func(t *testing.T) {
+		env := setupTestEnv(t)
+		defer env.cleanup()
+
+		_, err := env.runThts("init", "--name", "myproject", "--force")
+		if err != nil {
+			t.Fatalf("init in main repo failed: %v", err)
+		}
+
+		worktreeDir := filepath.Join(env.root, "feature-worktree")
+		if err := createWorktree(env.projectRepo, worktreeDir, "feature-worktree"); err != nil {
+			t.Fatalf("failed to create worktree: %v", err)
+		}
+
+		output, err := env.runThtsInDir(worktreeDir, "init", "--force")
+		if err != nil {
+			t.Fatalf("init in worktree failed: %v\nOutput: %s", err, output)
+		}
+
+		if !strings.Contains(output, "Reusing mapping from") {
+			t.Errorf("expected mapping reuse message, got: %s", output)
+		}
+
+		worktreeThoughts := filepath.Join(worktreeDir, "thoughts")
+		if _, err := os.Stat(worktreeThoughts); err != nil {
+			t.Fatalf("expected thoughts directory in worktree: %v", err)
+		}
+
+		statePath := env.defaultStatePath()
+		stateData, err := os.ReadFile(statePath)
+		if err != nil {
+			t.Fatalf("failed to read state: %v", err)
+		}
+
+		var state config.State
+		if err := yaml.Unmarshal(stateData, &state); err != nil {
+			t.Fatalf("failed to parse state: %v", err)
+		}
+
+		if len(state.RepoMappings) != 1 {
+			t.Fatalf("expected a single mapping, got %d", len(state.RepoMappings))
+		}
+
+		mapping := state.RepoMappings[env.projectRepo]
+		if mapping == nil {
+			t.Fatalf("expected mapping to remain keyed by main repo path")
+		}
+		if mapping.Repo != "myproject" {
+			t.Errorf("mapping repo = %q, want %q", mapping.Repo, "myproject")
+		}
+		if mapping.RepoIdentity == "" {
+			t.Error("expected repoIdentity to be recorded")
 		}
 	})
 }
@@ -562,7 +651,7 @@ func TestUninitCommand(t *testing.T) {
 		}
 
 		// Verify success message
-		if !strings.Contains(output, "Thoughts removed from repository") {
+		if !strings.Contains(output, "Local thoughts setup removed from repository") {
 			t.Errorf("expected success message, got: %s", output)
 		}
 
@@ -572,6 +661,40 @@ func TestUninitCommand(t *testing.T) {
 		}
 
 		// Verify state mapping was removed (RepoMappings are in state, not config)
+		statePath := env.defaultStatePath()
+		stateData, err := os.ReadFile(statePath)
+		if err != nil {
+			t.Fatalf("failed to read state: %v", err)
+		}
+
+		var state config.State
+		if err := yaml.Unmarshal(stateData, &state); err != nil {
+			t.Fatalf("failed to parse state: %v", err)
+		}
+
+		if state.RepoMappings[env.projectRepo] == nil {
+			t.Errorf("repo mapping should be retained in state")
+		}
+	})
+
+	t.Run("uninit --all removes thoughts mapping", func(t *testing.T) {
+		env := setupTestEnv(t)
+		defer env.cleanup()
+
+		_, err := env.runThts("init", "--name", "myproject", "--force")
+		if err != nil {
+			t.Fatalf("init failed: %v", err)
+		}
+
+		output, err := env.runThts("uninit", "--all", "--force")
+		if err != nil {
+			t.Fatalf("uninit --all failed: %v\nOutput: %s", err, output)
+		}
+
+		if !strings.Contains(output, "Thoughts mapping removed from repository") {
+			t.Errorf("expected --all success message, got: %s", output)
+		}
+
 		statePath := env.defaultStatePath()
 		stateData, err := os.ReadFile(statePath)
 		if err != nil {
@@ -797,7 +920,7 @@ func TestInitRefresh(t *testing.T) {
 		}
 	})
 
-	t.Run("refresh updates CLAUDE.md", func(t *testing.T) {
+	t.Run("refresh updates AGENTS.md and keeps CLAUDE.md symlink", func(t *testing.T) {
 		env := setupTestEnv(t)
 		defer env.cleanup()
 
@@ -807,15 +930,15 @@ func TestInitRefresh(t *testing.T) {
 			t.Fatalf("first init failed: %v", err)
 		}
 
-		// Verify CLAUDE.md was created
-		claudeMdPath := filepath.Join(env.projectRepo, "thoughts", "CLAUDE.md")
-		if _, err := os.Stat(claudeMdPath); err != nil {
-			t.Errorf("CLAUDE.md not created: %v", err)
+		// Verify AGENTS.md was created
+		agentsMdPath := filepath.Join(env.projectRepo, "thoughts", "AGENTS.md")
+		if _, err := os.Stat(agentsMdPath); err != nil {
+			t.Errorf("AGENTS.md not created: %v", err)
 		}
 
-		// Modify CLAUDE.md to verify it gets updated
-		if err := os.WriteFile(claudeMdPath, []byte("# old content"), 0644); err != nil {
-			t.Fatalf("failed to modify CLAUDE.md: %v", err)
+		// Modify AGENTS.md to verify it gets updated
+		if err := os.WriteFile(agentsMdPath, []byte("# old content"), 0644); err != nil {
+			t.Fatalf("failed to modify AGENTS.md: %v", err)
 		}
 
 		// Run refresh
@@ -824,13 +947,22 @@ func TestInitRefresh(t *testing.T) {
 			t.Fatalf("init --refresh failed: %v\nOutput: %s", err, output)
 		}
 
-		// Verify CLAUDE.md was updated (should contain project name)
-		content, err := os.ReadFile(claudeMdPath)
+		// Verify AGENTS.md was updated (should contain project name)
+		content, err := os.ReadFile(agentsMdPath)
 		if err != nil {
-			t.Fatalf("failed to read CLAUDE.md: %v", err)
+			t.Fatalf("failed to read AGENTS.md: %v", err)
 		}
 		if !strings.Contains(string(content), "myproject") {
-			t.Errorf("CLAUDE.md should contain project name 'myproject', got: %s", content)
+			t.Errorf("AGENTS.md should contain project name 'myproject', got: %s", content)
+		}
+
+		claudeMdPath := filepath.Join(env.projectRepo, "thoughts", "CLAUDE.md")
+		info, err := os.Lstat(claudeMdPath)
+		if err != nil {
+			t.Fatalf("failed to stat CLAUDE.md: %v", err)
+		}
+		if info.Mode()&os.ModeSymlink == 0 {
+			t.Fatal("CLAUDE.md should be a symlink")
 		}
 	})
 

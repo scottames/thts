@@ -130,18 +130,23 @@ grep thoughts .gitignore
 
 **Symptoms:** Project mapped to wrong directory in thoughts repo.
 
-**Fix the mapping:**
+**Reinitialize with explicit name:**
 
 ```bash
-thts config --edit
-# Edit repoMappings to fix the path
+thts uninit --all --force
+thts init --name correct-name
 ```
 
-**Or reinitialize:**
+Use `--all` so the shared repo mapping is removed before reinitializing.
+
+### Uninit Didn't Fully Detach Repository
+
+**Symptoms:** `thts uninit` removed local `thoughts/` but repo still appears mapped.
+
+`thts uninit` removes local setup only. To fully detach the repository mapping:
 
 ```bash
-thts uninit --force
-thts init --name correct-name
+thts uninit --all
 ```
 
 ### Profile Not Found

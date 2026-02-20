@@ -590,19 +590,32 @@ Notes:
 
 ## Git Worktrees
 
-thts supports git worktrees. Each worktree needs its own `thts init`:
+thts supports git worktrees. Run `thts init` in each worktree where you want a
+local `thoughts/` directory:
 
 ```bash
 git worktree add ../feature -b feature
 cd ../feature
-thts init    # Sets up thoughts directory for this worktree
+thts init    # Sets up local thoughts/ for this worktree
 ```
 
 **How it works:**
 
 - Git hooks install to the common git dir (shared across worktrees)
 - Symlinks are per-worktree (each worktree has its own `thoughts/`)
-- Project name derives from git remote (same across all worktrees)
+- Repository mapping is shared by repo identity (no duplicate mapping per worktree)
+- Project/profile are reused from the existing mapping when one already exists
+
+### Worktree Cleanup
+
+`uninit` now has two scopes:
+
+```bash
+thts uninit              # Remove local setup in current worktree only
+thts uninit --all        # Remove local setup and detach shared repo mapping
+```
+
+Use `--all` only when you want to fully detach the repository from thts state.
 
 ### Disabling Auto-Sync in Worktrees
 
@@ -931,8 +944,8 @@ This removes:
 
 The agent directory itself is preserved if it contains other files.
 
-**Note:** Running `thts uninit` (to remove thoughts/ integration) also removes
-agent integration automatically, ensuring a clean teardown.
+**Note:** Running `thts uninit` (or `thts uninit --all`) also removes agent
+integration automatically, ensuring a clean teardown in the current checkout.
 
 ## Compatibility with HumanLayer
 

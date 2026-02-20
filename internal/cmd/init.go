@@ -124,7 +124,11 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 
 	// Resolve profile config
-	profileConfig := resolveInitProfile(cfg, currentRepo)
+	state := config.LoadStateOrDefault()
+	repoIdentity, _ := git.GetRepoIdentityAt(currentRepo)
+	existingMappingKey, existingMapping := state.ResolveRepoMapping(currentRepo, repoIdentity)
+
+	profileConfig := resolveInitProfile(cfg, currentRepo, existingMapping)
 	if profileConfig == nil {
 		if len(cfg.Profiles) == 0 {
 			fmt.Println(ui.Error("No profiles configured."))
@@ -194,7 +198,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 
 	// Determine project name
-	projectName, err := determineProjectName(profileConfig, currentRepo)
+	projectName, err := determineProjectName(profileConfig, currentRepo, existingMapping)
 	if err != nil {
 		return err
 	}
@@ -206,6 +210,9 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 	fmt.Println()
 	fmt.Printf("Setting up thoughts for: %s\n", ui.Accent(currentRepo))
+	if existingMappingKey != "" && existingMappingKey != currentRepo {
+		fmt.Printf("Reusing mapping from: %s\n", ui.Muted(config.ContractPath(existingMappingKey)))
+	}
 	fmt.Printf("Project name: %s\n", ui.Accent(projectName))
 	profileDisplay := profileConfig.ProfileName
 	if profileDisplay == "" {
@@ -237,12 +244,12 @@ func runInit(cmd *cobra.Command, args []string) error {
 		fmt.Println(ui.WarningF("Could not copy templates: %v", err))
 	}
 
-	// Generate CLAUDE.md for Claude Code integration
-	created, err := thts.WriteClaudeMD(thoughtsDir, projectName, cfg.User)
+	// Generate AGENTS.md and CLAUDE.md symlink for Claude Code integration
+	created, err := thts.WriteThoughtsAgentsMD(thoughtsDir, projectName, cfg.User)
 	if err != nil {
-		fmt.Println(ui.WarningF("Could not create CLAUDE.md: %v", err))
+		fmt.Println(ui.WarningF("Could not create AGENTS.md/CLAUDE.md link: %v", err))
 	} else if created {
-		fmt.Println(ui.Success("Created thoughts/CLAUDE.md"))
+		fmt.Println(ui.Success("Created thoughts/AGENTS.md and linked thoughts/CLAUDE.md"))
 	}
 
 	// Add to gitignore
@@ -254,11 +261,17 @@ func runInit(cmd *cobra.Command, args []string) error {
 		fmt.Println(ui.SuccessF("Added 'thoughts/' to %s", gitignoreLocationName(gitignoreMode)))
 	}
 
-	// Update state with repo mapping
-	state := config.LoadStateOrDefault()
-	state.RepoMappings[currentRepo] = &config.RepoMapping{
-		Repo:    projectName,
-		Profile: profileConfig.ProfileName,
+	// Update state with repo mapping.
+	// If we resolved an existing mapping by identity, update that key to avoid
+	// creating one mapping per worktree path.
+	mappingKey := currentRepo
+	if existingMappingKey != "" {
+		mappingKey = existingMappingKey
+	}
+	state.RepoMappings[mappingKey] = &config.RepoMapping{
+		Repo:         projectName,
+		Profile:      profileConfig.ProfileName,
+		RepoIdentity: repoIdentity,
 	}
 
 	if err := config.SaveState(state); err != nil {
@@ -319,7 +332,8 @@ func runInit(cmd *cobra.Command, args []string) error {
 			),
 		),
 	)
-	fmt.Printf("         └── CLAUDE.md    %s\n", ui.Muted("(Claude Code documentation)"))
+	fmt.Printf("         ├── AGENTS.md    %s\n", ui.Muted("(Claude Code documentation)"))
+	fmt.Printf("         └── CLAUDE.md    %s\n", ui.Muted("(symlink to AGENTS.md)"))
 	fmt.Println()
 	fmt.Println("Protection enabled:")
 	fmt.Println(ui.Success("Pre-commit hook: Prevents committing thoughts/"))
@@ -353,7 +367,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 // resolveInitProfile resolves the profile configuration for init.
 // Priority: flag > env var > default.
-func resolveInitProfile(cfg *config.Config, repoPath string) *config.ResolvedProfile {
+func resolveInitProfile(cfg *config.Config, repoPath string, existingMapping *config.RepoMapping) *config.ResolvedProfile {
 	// Resolve profile name: flag takes precedence over env var
 	profileName := initProfile
 	if profileName == "" {
@@ -368,6 +382,18 @@ func resolveInitProfile(cfg *config.Config, repoPath string) *config.ResolvedPro
 				ReposDir:     profile.ReposDir,
 				GlobalDir:    profile.GlobalDir,
 				ProfileName:  profileName,
+			}
+		}
+	}
+
+	// Reuse profile from existing mapping (for worktree init) when available.
+	if existingMapping != nil && existingMapping.Profile != "" && cfg.Profiles != nil {
+		if profile, exists := cfg.Profiles[existingMapping.Profile]; exists {
+			return &config.ResolvedProfile{
+				ThoughtsRepo: profile.ThoughtsRepo,
+				ReposDir:     profile.ReposDir,
+				GlobalDir:    profile.GlobalDir,
+				ProfileName:  existingMapping.Profile,
 			}
 		}
 	}
@@ -387,13 +413,18 @@ func resolveInitProfile(cfg *config.Config, repoPath string) *config.ResolvedPro
 }
 
 // determineProjectName determines the project name for this repository.
-func determineProjectName(profile *config.ResolvedProfile, repoPath string) (string, error) {
+func determineProjectName(profile *config.ResolvedProfile, repoPath string, existingMapping *config.RepoMapping) (string, error) {
 	// 1. Check --name flag
 	if initName != "" {
 		return git.SanitizeRepoName(initName), nil
 	}
 
-	// 2. Try git remote
+	// 2. Reuse existing mapping when initializing a new worktree.
+	if existingMapping != nil && existingMapping.Repo != "" && !initInteractive {
+		return existingMapping.Repo, nil
+	}
+
+	// 3. Try git remote
 	if !initInteractive {
 		remoteURL, err := git.GetRemoteURL()
 		if err == nil && remoteURL != "" {
@@ -404,7 +435,7 @@ func determineProjectName(profile *config.ResolvedProfile, repoPath string) (str
 		}
 	}
 
-	// 3. Interactive selection
+	// 4. Interactive selection
 	return interactiveProjectName(profile, repoPath)
 }
 
@@ -683,7 +714,7 @@ func runInitCheck() error {
 	return nil
 }
 
-// refreshThoughtsSetup updates templates and CLAUDE.md with current config.
+// refreshThoughtsSetup updates templates and Claude docs with current config.
 // This is used when thoughts/ is already initialized and user wants to update
 // generated files to reflect changes in their category configuration.
 func refreshThoughtsSetup(thoughtsDir string, cfg *config.Config) error {
@@ -699,25 +730,29 @@ func refreshThoughtsSetup(thoughtsDir string, cfg *config.Config) error {
 		updated++
 	}
 
-	// Regenerate CLAUDE.md with current config
+	// Regenerate AGENTS.md and ensure CLAUDE.md symlink
+	agentsPath := filepath.Join(thoughtsDir, "AGENTS.md")
 	claudePath := filepath.Join(thoughtsDir, "CLAUDE.md")
-	if fs.Exists(claudePath) {
+	if fs.Exists(agentsPath) || fs.Exists(claudePath) {
 		// Get project name from existing mapping in state
 		currentRepo, err := os.Getwd()
 		if err != nil {
 			return fmt.Errorf("failed to get current directory: %w", err)
 		}
 
+		repoIdentity, _ := git.GetRepoIdentityAt(currentRepo)
 		state := config.LoadStateOrDefault()
-		mapping := state.RepoMappings[currentRepo]
+		_, mapping := state.ResolveRepoMapping(currentRepo, repoIdentity)
 		if mapping == nil {
-			fmt.Println(ui.Warning("No repo mapping found - CLAUDE.md not updated"))
+			fmt.Println(ui.Warning("No repo mapping found - AGENTS.md not updated"))
 		} else {
-			content := thts.GenerateClaudeMD(mapping.Repo, cfg.User)
-			if err := os.WriteFile(claudePath, []byte(content), 0644); err != nil {
-				fmt.Println(ui.WarningF("Could not update CLAUDE.md: %v", err))
+			content := thts.GenerateThoughtsAgentsMD(mapping.Repo, cfg.User)
+			if err := os.WriteFile(agentsPath, []byte(content), 0644); err != nil {
+				fmt.Println(ui.WarningF("Could not update AGENTS.md: %v", err))
+			} else if err := thts.EnsureThoughtsClaudeSymlink(thoughtsDir); err != nil {
+				fmt.Println(ui.WarningF("Could not update CLAUDE.md symlink: %v", err))
 			} else {
-				fmt.Println(ui.Success("Updated thoughts/CLAUDE.md"))
+				fmt.Println(ui.Success("Updated thoughts/AGENTS.md and relinked thoughts/CLAUDE.md"))
 				updated++
 			}
 		}

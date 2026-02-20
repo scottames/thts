@@ -458,3 +458,42 @@ func TestGetRepoTopLevelAt(t *testing.T) {
 		}
 	})
 }
+
+func TestGetRepoIdentityAt(t *testing.T) {
+	t.Run("normal repo uses common-dir identity", func(t *testing.T) {
+		repoDir, cleanup := setupTestGitRepo(t)
+		defer cleanup()
+
+		identity, err := GetRepoIdentityAt(repoDir)
+		if err != nil {
+			t.Fatalf("GetRepoIdentityAt() error: %v", err)
+		}
+
+		expected := "git-common-dir:" + filepath.Join(repoDir, ".git")
+		if identity != expected {
+			t.Errorf("GetRepoIdentityAt() = %q, want %q", identity, expected)
+		}
+	})
+
+	t.Run("main repo and worktree share identity", func(t *testing.T) {
+		mainRepo, cleanup := setupTestGitRepo(t)
+		defer cleanup()
+
+		worktree, worktreeCleanup := setupTestWorktree(t, mainRepo)
+		defer worktreeCleanup()
+
+		mainID, err := GetRepoIdentityAt(mainRepo)
+		if err != nil {
+			t.Fatalf("GetRepoIdentityAt(main) error: %v", err)
+		}
+
+		worktreeID, err := GetRepoIdentityAt(worktree)
+		if err != nil {
+			t.Fatalf("GetRepoIdentityAt(worktree) error: %v", err)
+		}
+
+		if mainID != worktreeID {
+			t.Errorf("expected shared identity, got main=%q worktree=%q", mainID, worktreeID)
+		}
+	})
+}

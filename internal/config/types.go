@@ -37,8 +37,9 @@ type Category struct {
 // RepoMapping represents a repository mapping that can be either a simple string
 // (repo name only) or a full object with profile information.
 type RepoMapping struct {
-	Repo    string `yaml:"repo"`
-	Profile string `yaml:"profile,omitempty"`
+	Repo         string `yaml:"repo"`
+	Profile      string `yaml:"profile,omitempty"`
+	RepoIdentity string `yaml:"repoIdentity,omitempty"`
 }
 
 // ProfileConfig represents a named profile with its own thoughts repository.

@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 )
 
-// GenerateClaudeMD generates the content for a CLAUDE.md file in the thoughts directory.
+// GenerateThoughtsAgentsMD generates the content for thoughts/AGENTS.md.
 // This file documents the thoughts directory structure for Claude Code.
-func GenerateClaudeMD(projectName, user string) string {
+func GenerateThoughtsAgentsMD(projectName, user string) string {
 	return fmt.Sprintf(`# Thoughts Directory Structure
 
 This directory contains developer thoughts and notes for the %s repository.
@@ -59,20 +59,47 @@ Quick access:
 `, projectName, projectName, user, user, user, user, user)
 }
 
-// WriteClaudeMD writes the CLAUDE.md file to the thoughts directory.
-// Returns true if the file was created, false if it already exists.
-func WriteClaudeMD(thoughtsDir, projectName, user string) (bool, error) {
+// WriteThoughtsAgentsMD writes AGENTS.md in thoughts/ and ensures CLAUDE.md points to it.
+// Returns true if AGENTS.md was created, false if it already exists.
+func WriteThoughtsAgentsMD(thoughtsDir, projectName, user string) (bool, error) {
+	agentsPath := filepath.Join(thoughtsDir, "AGENTS.md")
+	created := false
+
+	// Create AGENTS.md if needed
+	if _, err := os.Stat(agentsPath); err != nil {
+		if !os.IsNotExist(err) {
+			return false, fmt.Errorf("failed to stat AGENTS.md: %w", err)
+		}
+
+		content := GenerateThoughtsAgentsMD(projectName, user)
+		if err := os.WriteFile(agentsPath, []byte(content), 0644); err != nil {
+			return false, fmt.Errorf("failed to write AGENTS.md: %w", err)
+		}
+		created = true
+	}
+
+	if err := EnsureThoughtsClaudeSymlink(thoughtsDir); err != nil {
+		return false, err
+	}
+
+	return created, nil
+}
+
+// EnsureThoughtsClaudeSymlink ensures thoughts/CLAUDE.md is a symlink to AGENTS.md.
+func EnsureThoughtsClaudeSymlink(thoughtsDir string) error {
 	claudePath := filepath.Join(thoughtsDir, "CLAUDE.md")
 
-	// Check if file already exists
-	if _, err := os.Stat(claudePath); err == nil {
-		return false, nil
+	if _, err := os.Lstat(claudePath); err == nil {
+		if err := os.Remove(claudePath); err != nil {
+			return fmt.Errorf("failed to replace CLAUDE.md with symlink: %w", err)
+		}
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("failed to stat CLAUDE.md: %w", err)
 	}
 
-	content := GenerateClaudeMD(projectName, user)
-	if err := os.WriteFile(claudePath, []byte(content), 0644); err != nil {
-		return false, fmt.Errorf("failed to write CLAUDE.md: %w", err)
+	if err := os.Symlink("AGENTS.md", claudePath); err != nil {
+		return fmt.Errorf("failed to create CLAUDE.md symlink: %w", err)
 	}
 
-	return true, nil
+	return nil
 }

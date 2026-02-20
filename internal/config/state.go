@@ -132,10 +132,41 @@ func statePathHash(statePath string) string {
 	return ""
 }
 
+// ResolveRepoMapping resolves a repository mapping with optional identity fallback.
+// Resolution order:
+//  1. Exact repoPath key match.
+//  2. RepoIdentity match (when repoIdentity is provided).
+func (s *State) ResolveRepoMapping(repoPath, repoIdentity string) (string, *RepoMapping) {
+	if mapping := s.RepoMappings[repoPath]; mapping != nil {
+		return repoPath, mapping
+	}
+
+	if repoIdentity == "" {
+		return "", nil
+	}
+
+	for key, mapping := range s.RepoMappings {
+		if mapping == nil || mapping.RepoIdentity == "" {
+			continue
+		}
+		if mapping.RepoIdentity == repoIdentity {
+			return key, mapping
+		}
+	}
+
+	return "", nil
+}
+
 // ResolveProfileForRepo resolves the profile configuration for a given repository path.
 // It requires both the state (for repo mappings) and config (for profile definitions).
 func (s *State) ResolveProfileForRepo(cfg *Config, repoPath string) *ResolvedProfile {
-	mapping := s.RepoMappings[repoPath]
+	return s.ResolveProfileForRepoWithIdentity(cfg, repoPath, "")
+}
+
+// ResolveProfileForRepoWithIdentity resolves profile configuration for a repository,
+// optionally using repo identity fallback.
+func (s *State) ResolveProfileForRepoWithIdentity(cfg *Config, repoPath, repoIdentity string) *ResolvedProfile {
+	_, mapping := s.ResolveRepoMapping(repoPath, repoIdentity)
 
 	// Get default profile for fallback
 	defaultProf, defaultName := cfg.GetDefaultProfile()

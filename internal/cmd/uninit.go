@@ -11,11 +11,15 @@ import (
 	agentscmd "github.com/scottames/thts/internal/cmd/agents"
 	"github.com/scottames/thts/internal/config"
 	"github.com/scottames/thts/internal/fs"
+	"github.com/scottames/thts/internal/git"
 	"github.com/scottames/thts/internal/ui"
 	"github.com/spf13/cobra"
 )
 
-var uninitForce bool
+var (
+	uninitForce bool
+	uninitAll   bool
+)
 
 var uninitCmd = &cobra.Command{
 	Use:   "uninit",
@@ -24,10 +28,12 @@ var uninitCmd = &cobra.Command{
 
 This removes:
   - The thoughts/ directory (symlinks only)
-  - Repository mapping from thts state
   - Any agent integrations (if present)
 
 Your actual thoughts content remains safe in the central thoughts repository.
+
+By default, this only removes local setup in the current worktree/checkout.
+Use --all to also remove the shared repository mapping from thts state.
 
 To remove only agent integrations without removing thoughts/, use:
   thts uninit agents`,
@@ -36,6 +42,7 @@ To remove only agent integrations without removing thoughts/, use:
 
 func init() {
 	uninitCmd.Flags().BoolVarP(&uninitForce, "force", "f", false, "Skip confirmation prompt")
+	uninitCmd.Flags().BoolVar(&uninitAll, "all", false, "Also remove shared repository mapping from thts state")
 
 	// Register agents subcommand
 	uninitCmd.AddCommand(agentscmd.UninitCmd)
@@ -51,12 +58,7 @@ func runUninit(cmd *cobra.Command, args []string) error {
 	}
 
 	thoughtsDir := filepath.Join(currentRepo, "thoughts")
-
-	// Check if thoughts directory exists
-	if !fs.Exists(thoughtsDir) {
-		fmt.Println(ui.Error("Thoughts not initialized for this repository."))
-		return nil
-	}
+	hasLocalThoughts := fs.Exists(thoughtsDir)
 
 	// Load config and state
 	cfg, err := config.Load()
@@ -67,8 +69,8 @@ func runUninit(cmd *cobra.Command, args []string) error {
 
 	state := config.LoadStateOrDefault()
 
-	// Get current repo mapping from state
-	mapping := state.RepoMappings[currentRepo]
+	repoIdentity, _ := git.GetRepoIdentityAt(currentRepo)
+	mappingKey, mapping := state.ResolveRepoMapping(currentRepo, repoIdentity)
 	mappedName := ""
 	profileName := ""
 
@@ -77,9 +79,16 @@ func runUninit(cmd *cobra.Command, args []string) error {
 		profileName = mapping.Profile
 	}
 
-	if mappedName == "" && !uninitForce {
-		fmt.Println(ui.Error("This repository is not in the thoughts configuration."))
-		fmt.Printf("Use %s to remove the thoughts directory anyway.\n", ui.Accent("--force"))
+	if !hasLocalThoughts && !uninitAll {
+		fmt.Println(ui.Error("Thoughts not initialized for this repository."))
+		if mappedName != "" {
+			fmt.Printf("Run %s to remove shared mapping too.\n", ui.Accent("thts uninit --all"))
+		}
+		return nil
+	}
+
+	if mappedName == "" && uninitAll {
+		fmt.Println(ui.Error("No shared repository mapping found in thts state."))
 		return nil
 	}
 
@@ -91,7 +100,12 @@ func runUninit(cmd *cobra.Command, args []string) error {
 	if !uninitForce {
 		fmt.Println(ui.Info("Removing thoughts setup from current repository..."))
 		fmt.Println()
-		fmt.Printf("This will remove: %s\n", ui.Accent(thoughtsDir))
+		if hasLocalThoughts {
+			fmt.Printf("This will remove: %s\n", ui.Accent(thoughtsDir))
+		}
+		if uninitAll && mappedName != "" {
+			fmt.Printf("This will also remove repo mapping: %s\n", ui.Accent(mappedName))
+		}
 		if hasAgentIntegrations {
 			fmt.Printf("This will also remove agent integrations: %s\n",
 				ui.Accent(strings.Join(agents.AgentTypesToStrings(detectedAgents), ", ")))
@@ -99,13 +113,16 @@ func runUninit(cmd *cobra.Command, args []string) error {
 		fmt.Println()
 
 		description := "Your actual thoughts content will remain safe in the central repository."
+		if !uninitAll {
+			description += " Shared repository mapping will be kept."
+		}
 		if hasAgentIntegrations {
 			description += " Agent integration files will also be removed."
 		}
 
 		var confirm bool
 		err := huh.NewConfirm().
-			Title("Are you sure you want to remove thoughts from this repository?").
+			Title("Are you sure you want to continue?").
 			Description(description).
 			Affirmative("Yes, remove").
 			Negative("Cancel").
@@ -122,27 +139,29 @@ func runUninit(cmd *cobra.Command, args []string) error {
 
 	fmt.Println(ui.Info("Removing thoughts setup from current repository..."))
 
-	// Handle searchable directory if it exists
-	searchableDir := filepath.Join(thoughtsDir, "searchable")
-	if fs.Exists(searchableDir) {
-		fmt.Println(ui.Muted("Removing searchable directory..."))
-		if err := fs.RemoveAll(searchableDir); err != nil {
-			fmt.Println(ui.WarningF("Could not remove searchable directory: %v", err))
+	if hasLocalThoughts {
+		// Handle searchable directory if it exists
+		searchableDir := filepath.Join(thoughtsDir, "searchable")
+		if fs.Exists(searchableDir) {
+			fmt.Println(ui.Muted("Removing searchable directory..."))
+			if err := fs.RemoveAll(searchableDir); err != nil {
+				fmt.Println(ui.WarningF("Could not remove searchable directory: %v", err))
+			}
+		}
+
+		// Remove the entire thoughts directory
+		fmt.Println(ui.Muted("Removing thoughts directory (symlinks only)..."))
+		if err := fs.RemoveAll(thoughtsDir); err != nil {
+			fmt.Println(ui.ErrorF("Could not remove thoughts directory: %v", err))
+			fmt.Printf("You may need to manually remove: %s\n", thoughtsDir)
+			return nil
 		}
 	}
 
-	// Remove the entire thoughts directory
-	fmt.Println(ui.Muted("Removing thoughts directory (symlinks only)..."))
-	if err := fs.RemoveAll(thoughtsDir); err != nil {
-		fmt.Println(ui.ErrorF("Could not remove thoughts directory: %v", err))
-		fmt.Printf("You may need to manually remove: %s\n", thoughtsDir)
-		return nil
-	}
-
-	// Remove from state if mapped
-	if mappedName != "" {
-		fmt.Println(ui.Muted("Removing repository from thoughts state..."))
-		delete(state.RepoMappings, currentRepo)
+	// Remove from state only when explicitly requested.
+	if uninitAll && mappedName != "" {
+		fmt.Println(ui.Muted("Removing repository mapping from thoughts state..."))
+		delete(state.RepoMappings, mappingKey)
 		if err := config.SaveState(state); err != nil {
 			fmt.Println(ui.WarningF("Could not update state: %v", err))
 		}
@@ -161,7 +180,12 @@ func runUninit(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Println()
-	fmt.Println(ui.Success("Thoughts removed from repository"))
+	if uninitAll {
+		fmt.Println(ui.Success("Thoughts mapping removed from repository"))
+	} else {
+		fmt.Println(ui.Success("Local thoughts setup removed from repository"))
+		fmt.Printf("Run %s to remove shared mapping as well.\n", ui.Accent("thts uninit --all"))
+	}
 
 	// Provide info about what was preserved
 	if mappedName != "" {
@@ -188,7 +212,11 @@ func runUninit(cmd *cobra.Command, args []string) error {
 			fmt.Printf("  %s\n", ui.Muted(fmt.Sprintf("(profile: %s)", displayProfileName)))
 		}
 
-		fmt.Println(ui.Muted("Only the local symlinks and configuration were removed."))
+		if uninitAll {
+			fmt.Println(ui.Muted("Local setup removed and shared mapping detached."))
+		} else {
+			fmt.Println(ui.Muted("Only local setup was removed; shared mapping is still active."))
+		}
 	}
 
 	return nil

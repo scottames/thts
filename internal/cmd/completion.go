@@ -133,7 +133,8 @@ func CompleteCategoriesWithContext(cmd *cobra.Command, _ []string, toComplete st
 	if cwd, err := os.Getwd(); err == nil {
 		if git.IsInGitRepoAt(cwd) {
 			state := config.LoadStateOrDefault()
-			if profile := state.ResolveProfileForRepo(cfg, cwd); profile != nil {
+			repoIdentity, _ := git.GetRepoIdentityAt(cwd)
+			if profile := state.ResolveProfileForRepoWithIdentity(cfg, cwd, repoIdentity); profile != nil {
 				return completeCategoriesFromConfig(cfg.GetCategoriesForProfile(profile.ProfileName), toComplete)
 			}
 		}

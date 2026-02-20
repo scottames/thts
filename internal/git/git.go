@@ -179,6 +179,30 @@ func GetRepoTopLevelAt(dir string) (string, error) {
 	return strings.TrimSpace(string(output)), nil
 }
 
+// GetRepoIdentity returns a stable repository identity for the current repo.
+// Format: git-common-dir:<absolute-common-dir>
+func GetRepoIdentity() (string, error) {
+	commonDir, err := GetGitCommonDir()
+	if err != nil {
+		return "", err
+	}
+	return formatRepoIdentity(commonDir), nil
+}
+
+// GetRepoIdentityAt returns a stable repository identity for the repo at dir.
+// Format: git-common-dir:<absolute-common-dir>
+func GetRepoIdentityAt(dir string) (string, error) {
+	commonDir, err := GetGitCommonDirAt(dir)
+	if err != nil {
+		return "", err
+	}
+	return formatRepoIdentity(commonDir), nil
+}
+
+func formatRepoIdentity(commonDir string) string {
+	return "git-common-dir:" + filepath.Clean(commonDir)
+}
+
 // SanitizeRepoName sanitizes a string for use as a directory name.
 func SanitizeRepoName(name string) string {
 	// Replace any non-alphanumeric characters (except - and _) with _

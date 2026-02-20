@@ -644,3 +644,49 @@ func TestStateCountReposUsingProfileWithImplicit(t *testing.T) {
 		})
 	}
 }
+
+func TestStateResolveRepoMapping(t *testing.T) {
+	t.Run("prefers direct path match", func(t *testing.T) {
+		state := &State{
+			RepoMappings: map[string]*RepoMapping{
+				"/repo/main": {Repo: "thts", Profile: "personal", RepoIdentity: "git-common-dir:/repo/.git"},
+			},
+		}
+
+		key, mapping := state.ResolveRepoMapping("/repo/main", "git-common-dir:/repo/.git")
+		if key != "/repo/main" {
+			t.Errorf("key = %q, want %q", key, "/repo/main")
+		}
+		if mapping == nil || mapping.Repo != "thts" {
+			t.Fatalf("expected mapping for /repo/main")
+		}
+	})
+
+	t.Run("falls back to repo identity for worktree path", func(t *testing.T) {
+		state := &State{
+			RepoMappings: map[string]*RepoMapping{
+				"/repo/main": {Repo: "thts", Profile: "personal", RepoIdentity: "git-common-dir:/repo/.git"},
+			},
+		}
+
+		key, mapping := state.ResolveRepoMapping("/repo/worktrees/feature", "git-common-dir:/repo/.git")
+		if key != "/repo/main" {
+			t.Errorf("key = %q, want %q", key, "/repo/main")
+		}
+		if mapping == nil || mapping.Repo != "thts" {
+			t.Fatalf("expected mapping to be resolved by identity")
+		}
+	})
+
+	t.Run("returns nil when no path or identity match", func(t *testing.T) {
+		state := &State{RepoMappings: map[string]*RepoMapping{}}
+
+		key, mapping := state.ResolveRepoMapping("/repo/other", "git-common-dir:/other/.git")
+		if key != "" {
+			t.Errorf("key = %q, want empty", key)
+		}
+		if mapping != nil {
+			t.Fatal("expected nil mapping")
+		}
+	})
+}

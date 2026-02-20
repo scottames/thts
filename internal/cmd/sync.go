@@ -12,6 +12,7 @@ import (
 
 	"github.com/scottames/thts/internal/config"
 	"github.com/scottames/thts/internal/fs"
+	"github.com/scottames/thts/internal/git"
 	"github.com/scottames/thts/internal/thts"
 	"github.com/scottames/thts/internal/ui"
 	"github.com/spf13/cobra"
@@ -101,19 +102,20 @@ func runSync(cmd *cobra.Command, args []string) error {
 
 	// Load state for repo mappings
 	state := config.LoadStateOrDefault()
+	repoIdentity, _ := git.GetRepoIdentityAt(currentRepo)
+	mappingKey, mapping := state.ResolveRepoMapping(currentRepo, repoIdentity)
 
 	// Determine if this repo is initialized
 	thoughtsDir := filepath.Join(currentRepo, "thoughts")
-	isInitialized := fs.Exists(thoughtsDir) && state.RepoMappings[currentRepo] != nil
+	isInitialized := fs.Exists(thoughtsDir) && mapping != nil
 
 	var profileConfig *config.ResolvedProfile
 	var projectName string
 
 	if isInitialized {
 		// Use repo-specific profile from state
-		mapping := state.RepoMappings[currentRepo]
 		projectName = mapping.GetRepoName()
-		profileConfig = state.ResolveProfileForRepo(cfg, currentRepo)
+		profileConfig = state.ResolveProfileForRepoWithIdentity(cfg, mappingKey, repoIdentity)
 	} else {
 		if fs.Exists(thoughtsDir) {
 			fmt.Println(ui.Warning("Current repository has thoughts/ but no mapping in the active state file"))

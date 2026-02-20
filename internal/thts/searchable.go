@@ -82,7 +82,7 @@ func CreateSearchableDir(thoughtsDir string) (*SearchableResult, error) {
 // findFilesFollowingSymlinks recursively finds all files through symlinks.
 // It skips:
 // - Files/directories starting with '.'
-// - CLAUDE.md files
+// - Agent instruction files (CLAUDE.md, AGENTS.md)
 // - The searchable/ directory itself
 func findFilesFollowingSymlinks(dir string) ([]string, error) {
 	var files []string
@@ -124,8 +124,8 @@ func walkFollowingSymlinks(root, dir string, visited map[string]bool, files *[]s
 			continue
 		}
 
-		// Skip CLAUDE.md
-		if name == "CLAUDE.md" {
+		// Skip agent instruction docs
+		if name == "CLAUDE.md" || name == "AGENTS.md" {
 			continue
 		}
 

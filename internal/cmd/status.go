@@ -10,6 +10,7 @@ import (
 
 	"github.com/scottames/thts/internal/config"
 	"github.com/scottames/thts/internal/fs"
+	"github.com/scottames/thts/internal/git"
 	"github.com/scottames/thts/internal/ui"
 	"github.com/spf13/cobra"
 )
@@ -80,13 +81,17 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	}
 
 	// Check current repo mapping from state
-	mapping := state.RepoMappings[currentRepo]
-	profileConfig := state.ResolveProfileForRepo(cfg, currentRepo)
+	repoIdentity, _ := git.GetRepoIdentityAt(currentRepo)
+	mappingKey, mapping := state.ResolveRepoMapping(currentRepo, repoIdentity)
+	profileConfig := state.ResolveProfileForRepoWithIdentity(cfg, currentRepo, repoIdentity)
 
 	if mapping != nil && profileConfig != nil {
 		fmt.Println(ui.SubHeader("Current Repository"))
 		tbl := ui.NewTable("Setting", "Value")
 		tbl.Row("Path", currentRepo)
+		if mappingKey != "" && mappingKey != currentRepo {
+			tbl.Row("Mapped from", mappingKey)
+		}
 		tbl.Row("Thoughts directory", fmt.Sprintf("%s/%s", profileConfig.ReposDir, mapping.GetRepoName()))
 		tbl.Row("Profile", profileConfig.ProfileName)
 

@@ -583,7 +583,8 @@ func resolveSyncContext(cfg *config.Config, opts *AddOptions) (*addSyncContext, 
 			}
 			expandedPath = filepath.Join(cwd, expandedPath)
 		}
-		resolvedProfile := state.ResolveProfileForRepo(cfg, expandedPath)
+		repoIdentity, _ := git.GetRepoIdentityAt(expandedPath)
+		resolvedProfile := state.ResolveProfileForRepoWithIdentity(cfg, expandedPath, repoIdentity)
 		if resolvedProfile == nil {
 			resolvedProfile = cfg.GetDefaultProfileResolved()
 		}
@@ -605,7 +606,8 @@ func resolveSyncContext(cfg *config.Config, opts *AddOptions) (*addSyncContext, 
 	if git.IsInGitRepoAt(cwd) {
 		thoughtsDir := filepath.Join(cwd, "thoughts")
 		if isValidThoughtsSetup(thoughtsDir, cfg.User) {
-			resolvedProfile := state.ResolveProfileForRepo(cfg, cwd)
+			repoIdentity, _ := git.GetRepoIdentityAt(cwd)
+			resolvedProfile := state.ResolveProfileForRepoWithIdentity(cfg, cwd, repoIdentity)
 			if resolvedProfile != nil {
 				return &addSyncContext{
 					RepoPath:    config.ExpandPath(resolvedProfile.ThoughtsRepo),
