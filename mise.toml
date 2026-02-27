@@ -1,6 +1,6 @@
 [tools]
 "aqua:goreleaser/goreleaser" = "2.14.1"
-"aqua:int128/ghcp" = "1.15.1"
+"aqua:int128/ghcp" = "1.15.2"
 go = "1.26.0"
 trunk = "1.3.4"
 
