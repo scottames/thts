@@ -47,6 +47,10 @@ type EmbedTemplateData struct {
 
 	// AgentModel is the model to use for agents (e.g., "haiku" for Claude)
 	AgentModel string
+
+	// IncludeClaudePlanDirective controls whether Claude-specific plan directive
+	// content is rendered into session-start hooks.
+	IncludeClaudePlanDirective bool
 }
 
 // GetEmbedTemplateData returns the template data for a specific agent type.
@@ -71,6 +75,7 @@ func GetEmbedTemplateData(agentType AgentType) EmbedTemplateData {
 		data.HasSpawnTasks = true
 		data.IncludeToolsMetadata = true
 		data.AgentModel = "haiku"
+		data.IncludeClaudePlanDirective = true
 
 	case AgentCodex:
 		data.AgentName = ""
@@ -81,6 +86,7 @@ func GetEmbedTemplateData(agentType AgentType) EmbedTemplateData {
 		data.HasSpawnTasks = true
 		data.IncludeToolsMetadata = false
 		data.AgentModel = ""
+		data.IncludeClaudePlanDirective = false
 
 	case AgentOpenCode:
 		data.AgentName = ""
@@ -92,6 +98,7 @@ func GetEmbedTemplateData(agentType AgentType) EmbedTemplateData {
 		data.IncludeToolsMetadata = false
 		data.IncludeAgentMode = true
 		data.AgentModel = ""
+		data.IncludeClaudePlanDirective = false
 
 	case AgentGemini:
 		data.AgentName = ""
@@ -102,6 +109,7 @@ func GetEmbedTemplateData(agentType AgentType) EmbedTemplateData {
 		data.HasSpawnTasks = false
 		data.IncludeToolsMetadata = false
 		data.AgentModel = ""
+		data.IncludeClaudePlanDirective = false
 	}
 
 	return data

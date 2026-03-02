@@ -51,6 +51,10 @@ agents:
 
 # Hook-based instruction injection
 hooks:
+  # Show Claude-specific plan override instructions at session start
+  # reminding users to save approved plans to thoughts/shared/plans/
+  claudePlanDirective: true
+
   # Keywords in prompts that trigger full instruction injection
   keywords:
     - research

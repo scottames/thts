@@ -883,6 +883,19 @@ Default keywords: research, plan, decision, thoughts, handoff, notes, save,
 document, capture, findings, learnings, gotchas, ADR, architecture, resume, wrap
 up, end session
 
+#### Claude Plan Directive
+
+Claude's session-start hook includes a plan mode directive by default, reminding
+users to copy approved plans into `thoughts/shared/plans/` and treat that copy
+as canonical.
+
+You can disable this behavior in `~/.config/thts/config.yaml`:
+
+```yaml
+hooks:
+  claudePlanDirective: false
+```
+
 #### What Gets Installed
 
 **Files copied to agent directories:**

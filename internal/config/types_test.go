@@ -1044,6 +1044,12 @@ func TestFullDefaults(t *testing.T) {
 	if len(cfg.Hooks.Keywords) == 0 {
 		t.Error("expected Hooks.Keywords to have values")
 	}
+	if cfg.Hooks.ClaudePlanDirective == nil {
+		t.Fatal("expected Hooks.ClaudePlanDirective to be set")
+	}
+	if !*cfg.Hooks.ClaudePlanDirective {
+		t.Error("expected Hooks.ClaudePlanDirective to default to true")
+	}
 
 	// Verify Categories
 	if cfg.Categories == nil {
@@ -1067,6 +1073,50 @@ func TestFullDefaults(t *testing.T) {
 	}
 	if cfg.Sync.CommitMessageHook == "" {
 		t.Error("expected Sync.CommitMessageHook to be set")
+	}
+}
+
+func TestGetClaudePlanDirective(t *testing.T) {
+	tests := []struct {
+		name string
+		cfg  *Config
+		want bool
+	}{
+		{
+			name: "defaults to true when hooks unset",
+			cfg:  &Config{},
+			want: true,
+		},
+		{
+			name: "defaults to true when value not configured",
+			cfg: &Config{
+				Hooks: &HooksConfig{},
+			},
+			want: true,
+		},
+		{
+			name: "returns configured true",
+			cfg: &Config{
+				Hooks: &HooksConfig{ClaudePlanDirective: boolPtr(true)},
+			},
+			want: true,
+		},
+		{
+			name: "returns configured false",
+			cfg: &Config{
+				Hooks: &HooksConfig{ClaudePlanDirective: boolPtr(false)},
+			},
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.cfg.GetClaudePlanDirective()
+			if got != tt.want {
+				t.Errorf("GetClaudePlanDirective() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
 

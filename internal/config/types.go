@@ -92,6 +92,11 @@ type HooksConfig struct {
 	// document, capture, findings, learnings, gotchas, ADR, architecture,
 	// resume, wrap up, end session
 	Keywords []string `yaml:"keywords,omitempty"`
+
+	// ClaudePlanDirective controls whether Claude's session-start hook emits
+	// the plan mode override reminding users to save canonical plans in thoughts/.
+	// Defaults to true.
+	ClaudePlanDirective *bool `yaml:"claudePlanDirective,omitempty"`
 }
 
 // Config represents the thts configuration.
@@ -160,6 +165,7 @@ func FullDefaults() *Config {
 		Agents:   ComponentModeLocal,
 	}
 	cfg.Hooks = &HooksConfig{Keywords: DefaultHookKeywords()}
+	cfg.Hooks.ClaudePlanDirective = boolPtr(true)
 	cfg.Categories = DefaultCategories()
 
 	return cfg
@@ -459,4 +465,17 @@ func (c *Config) GetHookKeywords() []string {
 		return c.Hooks.Keywords
 	}
 	return DefaultHookKeywords()
+}
+
+// GetClaudePlanDirective returns whether the Claude plan mode directive is enabled.
+// Defaults to true when unset.
+func (c *Config) GetClaudePlanDirective() bool {
+	if c.Hooks != nil && c.Hooks.ClaudePlanDirective != nil {
+		return *c.Hooks.ClaudePlanDirective
+	}
+	return true
+}
+
+func boolPtr(v bool) *bool {
+	return &v
 }

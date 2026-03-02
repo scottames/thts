@@ -3,6 +3,8 @@ package thtsfiles
 import (
 	"strings"
 	"testing"
+
+	"github.com/scottames/thts/internal/agents"
 )
 
 func TestGetInstructions_DefaultCategories(t *testing.T) {
@@ -210,4 +212,28 @@ func extractSection(content, startHeader, endHeader string) string {
 		return content[startIdx:]
 	}
 	return content[startIdx : startIdx+len(startHeader)+endIdx]
+}
+
+func TestRenderHook_ClaudePlanDirectiveByAgent(t *testing.T) {
+	claudeHook, err := RenderHook(agents.AgentClaude, "thts-session-start")
+	if err != nil {
+		t.Fatalf("RenderHook(claude) failed: %v", err)
+	}
+	if !strings.Contains(claudeHook, "Plan Mode Directive") {
+		t.Error("expected Claude session-start hook to include plan mode directive")
+	}
+	if !strings.Contains(claudeHook, "claudePlanDirective") {
+		t.Error("expected Claude session-start hook to check hooks.claudePlanDirective")
+	}
+
+	geminiHook, err := RenderHook(agents.AgentGemini, "thts-session-start")
+	if err != nil {
+		t.Fatalf("RenderHook(gemini) failed: %v", err)
+	}
+	if strings.Contains(geminiHook, "Plan Mode Directive") {
+		t.Error("expected Gemini session-start hook to exclude plan mode directive")
+	}
+	if strings.Contains(geminiHook, "claudePlanDirective") {
+		t.Error("expected Gemini session-start hook to exclude claudePlanDirective checks")
+	}
 }

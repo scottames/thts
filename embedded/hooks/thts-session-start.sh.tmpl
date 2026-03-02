@@ -35,3 +35,25 @@ is available for research, plans, decisions, and handoffs.
 
 Full instructions load automatically when relevant keywords are detected.
 BOOTSTRAP
+
+{{if .IncludeClaudePlanDirective}}
+is_claude_plan_directive_enabled() {
+	local setting
+
+	setting=$(thts config --json 2>/dev/null | jq -r '.hooks.claudePlanDirective // true' 2>/dev/null || echo "true")
+	[[ "${setting,,}" == "true" ]]
+}
+
+if is_claude_plan_directive_enabled; then
+cat << 'CLAUDE_PLAN_OVERRIDE'
+## Plan Mode Directive
+
+After plan mode approval, immediately copy the plan to `thoughts/shared/plans/`
+using the naming convention `YYYY-MM-DD-descriptive-name.md` and the plan
+template from `thoughts/.templates/plan.md`. Run `thts sync` after writing.
+
+The thoughts copy is THE CANONICAL PLAN — reference it during implementation,
+NOT the ~/.claude/plans/ file.
+CLAUDE_PLAN_OVERRIDE
+fi
+{{end}}
