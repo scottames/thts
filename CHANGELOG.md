@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.7.0](https://github.com/scottames/thts/compare/v0.6.0...v0.7.0) (2026-03-02)
+
+
+### Features
+
+* **agents:** add Claude plan directive toggle ([72e2cc3](https://github.com/scottames/thts/commit/72e2cc36d64e43330b010c08b16bb870cdb0e5fd))
+
+
+### Miscellaneous Chores
+
+* **deps:** update dependency aqua:goreleaser/goreleaser to v2.14.1 ([#26](https://github.com/scottames/thts/issues/26)) ([a5b6f06](https://github.com/scottames/thts/commit/a5b6f06c8abaf41e5b441098611de97f2615ba89))
+* **deps:** update dependency aqua:int128/ghcp to v1.15.2 ([#25](https://github.com/scottames/thts/issues/25)) ([9f2b7d2](https://github.com/scottames/thts/commit/9f2b7d2c411933e1d30f3570e483bb5c11f807ac))
+
 ## [0.6.0](https://github.com/scottames/thts/compare/v0.5.0...v0.6.0) (2026-02-20)
 
 
