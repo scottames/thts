@@ -7,7 +7,7 @@ context across sessions.
 
 <!-- prettier-ignore-start -->
 > [!WARNING]
-> This project incorporates code, comments, or documentation
+> This project incorporates code, comments, and documentation
 > generated or assisted by artificial intelligence tools (such as Claude or
 > ChatGPT). All content is actively reviewed and modified by project maintainers
 > before inclusion. Use at your own risk.
@@ -17,6 +17,9 @@ context across sessions.
 
 - [How It Works](#how-it-works)
 - [Why thts?](#why-thts)
+- [Installation](#installation)
+  - [Go Install](#go-install)
+  - [Binary Downloads](#binary-downloads)
 - [Quick Start](#quick-start)
 - [Commands](#commands)
 - [Documentation](#documentation)
@@ -43,6 +46,13 @@ Your notes live in a _central thoughts repo_ (e.g., `~/thoughts/`). When you run
 Editing `thoughts/{user}/notes.md` in your project actually edits the file in
 your central thoughts repo. Changes sync automatically on commits.
 
+<!-- prettier-ignore-start -->
+>[!TIP]
+> The _central thoughts repo_ can live inside an
+> [Obsidian](https://obsidian.md/) vault. It's all markdown at the end of the
+> day.
+<!-- prettier-ignore-end -->
+
 ## Why thts?
 
 `thts` stores thoughts, plans, dreams, research, etc. in one central repo and
@@ -68,6 +78,19 @@ teams without versioning them in every repo independently.
 > information.
 
 <!-- prettier-ignore-end -->
+
+## Installation
+
+### Go Install
+
+```bash
+go install github.com/scottames/thts/cmd/thts@latest
+```
+
+### Binary Downloads
+
+Pre-built binaries for Linux and macOS (amd64/arm64) are available on the
+[GitHub Releases](https://github.com/scottames/thts/releases) page.
 
 ## Quick Start
 
