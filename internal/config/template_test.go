@@ -69,10 +69,10 @@ func TestRenderCommitMessage(t *testing.T) {
 				Date:          fixedTime,
 				Repo:          "thts",
 				Profile:       "default",
-				User:          "scta",
+				User:          "testuser",
 				CommitMessage: "fix bug",
 			},
-			want: "[default] thts by scta at 14:30 - fix bug",
+			want: "[default] thts by testuser at 14:30 - fix bug",
 		},
 		{
 			name:     "empty variables don't panic",
