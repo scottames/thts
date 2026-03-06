@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.7.1](https://github.com/scottames/thts/compare/v0.7.0...v0.7.1) (2026-03-06)
+
+
+### Miscellaneous Chores
+
+* **deps:** update ⬆️ github-actions to v3.6.2 ([#32](https://github.com/scottames/thts/issues/32)) ([cbda9a2](https://github.com/scottames/thts/commit/cbda9a209437a72ad4644d49d45574d362164138))
+* **deps:** update ⬆️ trunk go to v1.26.1 ([#29](https://github.com/scottames/thts/issues/29)) ([beb7f2f](https://github.com/scottames/thts/commit/beb7f2f0fe51666691f0e37b9abe8cc4a2a3b621))
+* **deps:** update dependency go to v1.26.1 ([#30](https://github.com/scottames/thts/issues/30)) ([ea66a7c](https://github.com/scottames/thts/commit/ea66a7cc695c00957faaa962963ba0de932ea1e8))
+
 ## [0.7.0](https://github.com/scottames/thts/compare/v0.6.0...v0.7.0) (2026-03-02)
 
 
