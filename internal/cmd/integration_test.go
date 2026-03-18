@@ -391,6 +391,55 @@ func TestInitCommand(t *testing.T) {
 		}
 	})
 
+	t.Run("summary keeps arrow column aligned for long usernames", func(t *testing.T) {
+		env := setupTestEnv(t)
+		defer env.cleanup()
+
+		configPath := filepath.Join(env.configHome, "thts", "config.yaml")
+		configData, err := os.ReadFile(configPath)
+		if err != nil {
+			t.Fatalf("failed to read config: %v", err)
+		}
+
+		var cfg config.Config
+		if err := yaml.Unmarshal(configData, &cfg); err != nil {
+			t.Fatalf("failed to parse config: %v", err)
+		}
+
+		cfg.User = "very-long-username-for-alignment"
+
+		updatedConfigData, err := yaml.Marshal(&cfg)
+		if err != nil {
+			t.Fatalf("failed to marshal config: %v", err)
+		}
+		if err := os.WriteFile(configPath, updatedConfigData, 0644); err != nil {
+			t.Fatalf("failed to write config: %v", err)
+		}
+
+		output, err := env.runThts("init", "--name", "myproject", "--force")
+		if err != nil {
+			t.Fatalf("thts init failed: %v\nOutput: %s", err, output)
+		}
+
+		var arrowColumns []int
+		for _, line := range strings.Split(output, "\n") {
+			if !strings.Contains(line, "→") {
+				continue
+			}
+			arrowColumns = append(arrowColumns, strings.Index(line, "→"))
+		}
+
+		if len(arrowColumns) != 3 {
+			t.Fatalf("expected 3 summary lines with arrows, got %d\nOutput: %s", len(arrowColumns), output)
+		}
+
+		for i := 1; i < len(arrowColumns); i++ {
+			if arrowColumns[i] != arrowColumns[0] {
+				t.Fatalf("expected aligned arrows, got columns %v\nOutput: %s", arrowColumns, output)
+			}
+		}
+	})
+
 	t.Run("worktree init reuses existing repository mapping", func(t *testing.T) {
 		env := setupTestEnv(t)
 		defer env.cleanup()

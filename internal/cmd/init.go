@@ -290,6 +290,23 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 
 	// Print success summary
+	summaryEntries := []string{
+		cfg.User + "/",
+		"shared/",
+		"global/",
+		"AGENTS.md",
+		"CLAUDE.md",
+	}
+	entryWidth := 0
+	for _, entry := range summaryEntries {
+		if len(entry) > entryWidth {
+			entryWidth = len(entry)
+		}
+	}
+	printSummaryLine := func(branch, entry, description string) {
+		fmt.Printf("         %s %-*s  %s\n", branch, entryWidth, entry, description)
+	}
+
 	fmt.Println()
 	fmt.Println(ui.Success("Thoughts setup complete!"))
 	fmt.Println()
@@ -298,9 +315,9 @@ func runInit(cmd *cobra.Command, args []string) error {
 	fmt.Println("Repository structure created:")
 	fmt.Printf("  %s/\n", ui.Accent(config.ContractPath(currentRepo)))
 	fmt.Printf("    └── thoughts/\n")
-	fmt.Printf(
-		"         ├── %s/     %s\n",
-		cfg.User,
+	printSummaryLine(
+		"├──",
+		cfg.User+"/",
 		ui.Muted(
 			fmt.Sprintf(
 				"→ %s/%s/%s/%s/",
@@ -311,8 +328,9 @@ func runInit(cmd *cobra.Command, args []string) error {
 			),
 		),
 	)
-	fmt.Printf(
-		"         ├── shared/      %s\n",
+	printSummaryLine(
+		"├──",
+		"shared/",
 		ui.Muted(
 			fmt.Sprintf(
 				"→ %s/%s/%s/shared/",
@@ -322,8 +340,9 @@ func runInit(cmd *cobra.Command, args []string) error {
 			),
 		),
 	)
-	fmt.Printf(
-		"         ├── global/      %s\n",
+	printSummaryLine(
+		"├──",
+		"global/",
 		ui.Muted(
 			fmt.Sprintf(
 				"→ %s/%s/",
@@ -332,8 +351,8 @@ func runInit(cmd *cobra.Command, args []string) error {
 			),
 		),
 	)
-	fmt.Printf("         ├── AGENTS.md    %s\n", ui.Muted("(Claude Code documentation)"))
-	fmt.Printf("         └── CLAUDE.md    %s\n", ui.Muted("(symlink to AGENTS.md)"))
+	printSummaryLine("├──", "AGENTS.md", ui.Muted("(Claude Code documentation)"))
+	printSummaryLine("└──", "CLAUDE.md", ui.Muted("(symlink to AGENTS.md)"))
 	fmt.Println()
 	fmt.Println("Protection enabled:")
 	fmt.Println(ui.Success("Pre-commit hook: Prevents committing thoughts/"))
