@@ -4,8 +4,8 @@ go 1.26.1
 
 require (
 	github.com/alecthomas/chroma/v2 v2.23.1
-	github.com/charmbracelet/huh v0.8.0
-	github.com/charmbracelet/lipgloss v1.1.0
+	github.com/charmbracelet/huh/v2 v2.0.3
+	github.com/charmbracelet/lipgloss/v2 v2.0.2
 	github.com/muesli/termenv v0.16.0
 	github.com/spf13/cobra v1.10.2
 	go.yaml.in/yaml/v3 v3.0.4
