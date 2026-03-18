@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/charmbracelet/huh"
+	"charm.land/huh/v2"
 	thtsfiles "github.com/scottames/thts"
 	"github.com/scottames/thts/internal/agents"
 	agentscmd "github.com/scottames/thts/internal/cmd/agents"
