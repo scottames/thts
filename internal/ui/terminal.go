@@ -4,7 +4,7 @@ import (
 	"errors"
 	"os"
 
-	"github.com/charmbracelet/huh"
+	"charm.land/huh/v2"
 )
 
 // ErrNotTerminal is returned when an operation requires a terminal but stdin is not a TTY.

@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/charmbracelet/huh"
+	"charm.land/huh/v2"
 	"github.com/scottames/thts/internal/agents"
 	"github.com/scottames/thts/internal/config"
 	fsutil "github.com/scottames/thts/internal/fs"

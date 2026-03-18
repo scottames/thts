@@ -3,7 +3,7 @@ package profile
 import (
 	"fmt"
 
-	"github.com/charmbracelet/huh"
+	"charm.land/huh/v2"
 	"github.com/scottames/thts/internal/config"
 	"github.com/scottames/thts/internal/ui"
 	"github.com/spf13/cobra"
