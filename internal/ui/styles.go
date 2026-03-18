@@ -1,7 +1,7 @@
 // Package ui provides consistent terminal output styling for the thts CLI.
 package ui
 
-import "github.com/charmbracelet/lipgloss"
+import "charm.land/lipgloss/v2"
 
 // Color definitions using ANSI 256-color codes for terminal compatibility.
 var (

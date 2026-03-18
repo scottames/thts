@@ -1,6 +1,6 @@
 package ui
 
-import "github.com/charmbracelet/lipgloss"
+import "charm.land/lipgloss/v2"
 
 // HeaderStyle defines the lipgloss style for header boxes.
 var HeaderStyle = lipgloss.NewStyle().

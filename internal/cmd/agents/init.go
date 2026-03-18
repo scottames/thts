@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/huh"
+	"charm.land/huh/v2"
 	thtsfiles "github.com/scottames/thts"
 	"github.com/scottames/thts/internal/agents"
 	"github.com/scottames/thts/internal/config"
