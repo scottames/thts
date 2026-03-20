@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.3](https://github.com/scottames/thts/compare/v0.7.2...v0.7.3) (2026-03-20)
+
+
+### Miscellaneous Chores
+
+* **deps:** update github-actions (major) ([#37](https://github.com/scottames/thts/issues/37)) ([86380a2](https://github.com/scottames/thts/commit/86380a29d26e652b5a5a1695c6eb8bb01f610893))
+
 ## [0.7.2](https://github.com/scottames/thts/compare/v0.7.1...v0.7.2) (2026-03-18)
 
 
