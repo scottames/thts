@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.7.3](https://github.com/scottames/thts/compare/v0.7.2...v0.7.3) (2026-04-03)
+
+
+### Miscellaneous Chores
+
+* **deps:** update ⬆️ github-actions to v4.0.1 ([#36](https://github.com/scottames/thts/issues/36)) ([f46f805](https://github.com/scottames/thts/commit/f46f805962d693f63779431725665ede3571615e))
+* **deps:** update dependency aqua:goreleaser/goreleaser to v2.15.0 ([#39](https://github.com/scottames/thts/issues/39)) ([5fac72f](https://github.com/scottames/thts/commit/5fac72fb65b6865bff0f6876ea23c00c12f60197))
+* **deps:** update github-actions (major) ([#37](https://github.com/scottames/thts/issues/37)) ([86380a2](https://github.com/scottames/thts/commit/86380a29d26e652b5a5a1695c6eb8bb01f610893))
+
 ## [0.7.2](https://github.com/scottames/thts/compare/v0.7.1...v0.7.2) (2026-03-18)
 
 
