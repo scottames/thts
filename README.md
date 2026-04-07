@@ -112,20 +112,20 @@ thts sync -m "Added architecture notes"
 
 ## Commands
 
-| Command                        | Description                                                |
-| ------------------------------ | ---------------------------------------------------------- |
-| `thts setup`                   | First-time configuration                                   |
-| `thts init [--profile <name>]` | Initialize thoughts in current repo (uses default profile) |
-| `thts sync [-m <message>]`     | Sync thoughts to central repo                              |
-| `thts status`                  | Show thoughts status                                       |
-| `thts uninit`                  | Remove thoughts from current repo                          |
-| `thts config [--edit]`         | View/edit configuration                                    |
-| `thts profile create <name>`   | Create a profile                                           |
-| `thts profile list`            | List profiles                                              |
-| `thts profile show <name>`     | Show profile details                                       |
-| `thts profile delete <name>`   | Delete a profile                                           |
-| `thts init agents`             | Install AI agent integration                               |
-| `thts uninit agents`           | Remove AI agent integration                                |
+| Command                                      | Description                                                |
+| -------------------------------------------- | ---------------------------------------------------------- |
+| `thts setup`                                 | First-time configuration                                   |
+| `thts init [--profile <name>] [--no-agents]` | Initialize thoughts in current repo (uses default profile) |
+| `thts sync [-m <message>]`                   | Sync thoughts to central repo                              |
+| `thts status`                                | Show thoughts status                                       |
+| `thts uninit`                                | Remove thoughts from current repo                          |
+| `thts config [--edit]`                       | View/edit configuration                                    |
+| `thts profile create <name>`                 | Create a profile                                           |
+| `thts profile list`                          | List profiles                                              |
+| `thts profile show <name>`                   | Show profile details                                       |
+| `thts profile delete <name>`                 | Delete a profile                                           |
+| `thts init agents`                           | Install AI agent integration                               |
+| `thts uninit agents`                         | Remove AI agent integration                                |
 
 ## Documentation
 

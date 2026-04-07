@@ -26,6 +26,7 @@ var (
 	initInteractive bool
 	initRefresh     bool
 	initCheck       bool
+	initNoAgents    bool
 )
 
 var initCmd = &cobra.Command{
@@ -56,6 +57,8 @@ func init() {
 		BoolVar(&initRefresh, "refresh", false, "Update templates and instructions with current config (skip prompt)")
 	initCmd.Flags().
 		BoolVar(&initCheck, "check", false, "Check if repo is initialized (exit 0=yes, 1=no)")
+	initCmd.Flags().
+		BoolVar(&initNoAgents, "no-agents", false, "Skip agent integration prompt")
 
 	_ = initCmd.RegisterFlagCompletionFunc("profile", CompleteProfiles)
 
@@ -364,7 +367,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	fmt.Println()
 
 	// Prompt for agent integration in interactive mode
-	if !initRefresh && isInteractive() && !agentsAlreadyInitialized(currentRepo) {
+	if !initRefresh && !agentsAlreadyInitialized(currentRepo) && shouldPromptForAgentInit(cmd, isInteractive()) {
 		var initAgentsOpt bool
 		err := huh.NewConfirm().
 			Title("Initialize agent integration?").
@@ -382,6 +385,21 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+func shouldPromptForAgentInit(cmd *cobra.Command, interactive bool) bool {
+	if !interactive {
+		return false
+	}
+
+	if cmd != nil && cmd.Flags().Changed("no-agents") {
+		noAgents, err := cmd.Flags().GetBool("no-agents")
+		if err == nil && noAgents {
+			return false
+		}
+	}
+
+	return true
 }
 
 // resolveInitProfile resolves the profile configuration for init.

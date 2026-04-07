@@ -187,6 +187,7 @@ This:
 thts init --name custom-name    # Override project name (default: from git remote)
 thts init --profile work        # Use a specific profile
 thts init --force               # Reinitialize existing setup
+thts init --no-agents           # Skip the post-init agent integration prompt
 ```
 
 **Profile assignment:** When you run `thts init`, the current default profile is
@@ -596,7 +597,7 @@ local `thoughts/` directory:
 ```bash
 git worktree add ../feature -b feature
 cd ../feature
-thts init    # Sets up local thoughts/ for this worktree
+thts init --no-agents    # Sets up local thoughts/ for this worktree without prompting
 ```
 
 **How it works:**

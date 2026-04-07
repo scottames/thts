@@ -494,6 +494,20 @@ func TestInitCommand(t *testing.T) {
 			t.Error("expected repoIdentity to be recorded")
 		}
 	})
+
+	t.Run("accepts no-agents flag for automation", func(t *testing.T) {
+		env := setupTestEnv(t)
+		defer env.cleanup()
+
+		output, err := env.runThts("init", "--name", "myproject", "--force", "--no-agents")
+		if err != nil {
+			t.Fatalf("thts init with --no-agents failed: %v\nOutput: %s", err, output)
+		}
+
+		if !strings.Contains(output, "Thoughts setup complete") {
+			t.Errorf("expected success message, got: %s", output)
+		}
+	})
 }
 
 func TestStatusCommand(t *testing.T) {
