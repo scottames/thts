@@ -40,36 +40,36 @@ url = "https://github.com/goreleaser/goreleaser/releases/download/v2.15.2/gorele
 provenance = "github-attestations"
 
 [[tools."aqua:int128/ghcp"]]
-version = "1.15.2"
+version = "1.15.3"
 backend = "aqua:int128/ghcp"
 
 [tools."aqua:int128/ghcp"."platforms.linux-arm64"]
-checksum = "sha256:5b0a4ffdbaa27ffe4cbaf13c3c4b6ac3eab25d447947fae114f89d1ee4ebf734"
-url = "https://github.com/int128/ghcp/releases/download/v1.15.2/ghcp_linux_arm64.zip"
+checksum = "sha256:4e4a750eae73f3c63084e9e4a97b93ffc44dd60b64ff587df98f7bfa85199901"
+url = "https://github.com/int128/ghcp/releases/download/v1.15.3/ghcp_linux_arm64.zip"
 
 [tools."aqua:int128/ghcp"."platforms.linux-arm64-musl"]
-checksum = "sha256:5b0a4ffdbaa27ffe4cbaf13c3c4b6ac3eab25d447947fae114f89d1ee4ebf734"
-url = "https://github.com/int128/ghcp/releases/download/v1.15.2/ghcp_linux_arm64.zip"
+checksum = "sha256:4e4a750eae73f3c63084e9e4a97b93ffc44dd60b64ff587df98f7bfa85199901"
+url = "https://github.com/int128/ghcp/releases/download/v1.15.3/ghcp_linux_arm64.zip"
 
 [tools."aqua:int128/ghcp"."platforms.linux-x64"]
-checksum = "sha256:a1e13fb5fec92913e67984d88db6d4c39473cca3a6b9927621e410ee431f3532"
-url = "https://github.com/int128/ghcp/releases/download/v1.15.2/ghcp_linux_amd64.zip"
+checksum = "sha256:537b71c1382fc95c73702d4ba0fc1a2465842a1c20f9987d75b5c7581ba115ea"
+url = "https://github.com/int128/ghcp/releases/download/v1.15.3/ghcp_linux_amd64.zip"
 
 [tools."aqua:int128/ghcp"."platforms.linux-x64-musl"]
-checksum = "sha256:a1e13fb5fec92913e67984d88db6d4c39473cca3a6b9927621e410ee431f3532"
-url = "https://github.com/int128/ghcp/releases/download/v1.15.2/ghcp_linux_amd64.zip"
+checksum = "sha256:537b71c1382fc95c73702d4ba0fc1a2465842a1c20f9987d75b5c7581ba115ea"
+url = "https://github.com/int128/ghcp/releases/download/v1.15.3/ghcp_linux_amd64.zip"
 
 [tools."aqua:int128/ghcp"."platforms.macos-arm64"]
-checksum = "sha256:e292732ba0b6d3ef2a19fef0062ec72dc3e3e758568babfe07d27f65d90348b1"
-url = "https://github.com/int128/ghcp/releases/download/v1.15.2/ghcp_darwin_arm64.zip"
+checksum = "sha256:83c8fb1e167adbfbe767288e9679d1a34b8a59241e56f84379ff9b9e1ae709f2"
+url = "https://github.com/int128/ghcp/releases/download/v1.15.3/ghcp_darwin_arm64.zip"
 
 [tools."aqua:int128/ghcp"."platforms.macos-x64"]
-checksum = "sha256:37aac4b1d7e451abaa6d49b87608d9010ef3b1cd56e310a0a6895ce433292dbb"
-url = "https://github.com/int128/ghcp/releases/download/v1.15.2/ghcp_darwin_amd64.zip"
+checksum = "sha256:5553fba0e479ec6ae55a479399e64fe78a1b0242e85b8be2c65e2ba6a1d4aef9"
+url = "https://github.com/int128/ghcp/releases/download/v1.15.3/ghcp_darwin_amd64.zip"
 
 [tools."aqua:int128/ghcp"."platforms.windows-x64"]
-checksum = "sha256:2e513207f22897e03b54a119aceccfe623dbcc25c0dccbdcbb15a3247616cbb7"
-url = "https://github.com/int128/ghcp/releases/download/v1.15.2/ghcp_windows_amd64.zip"
+checksum = "sha256:42b101dfaa7e7a66585ecbf262c2c2111bbd00e7cdb063b554bc7df467744cb1"
+url = "https://github.com/int128/ghcp/releases/download/v1.15.3/ghcp_windows_amd64.zip"
 
 [[tools.go]]
 version = "1.26.1"
