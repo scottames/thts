@@ -34,7 +34,11 @@ This command:
   3. Commits and pushes changes to the central thoughts repository
 
 If there are merge conflicts during rebase, the command will provide
-instructions for manual resolution.`,
+instructions for manual resolution.
+
+When sync mode is local or pull, remote push is intentionally disabled.
+To push manually, use thts sync --mode=full or run git push from the
+thoughts repository.`,
 	RunE: runSync,
 }
 
@@ -293,11 +297,15 @@ func warnUnpushedCommits(repoPath, reason string, w io.Writer) {
 		if count == 1 {
 			noun = "commit"
 		}
-		fmt.Fprintln(w, ui.WarningF("%d %s not pushed (%s)", count, noun, reason))
-		fmt.Fprintf(w, "  Run %s or %s in %s to push\n",
-			ui.Accent("thts sync --mode=full"),
-			ui.Accent("git push"),
-			ui.Accent(repoPath))
+
+		mode := strings.TrimSuffix(reason, " mode")
+		if mode == "local" {
+			_, _ = fmt.Fprintln(w, ui.WarningF("%d %s remain local because sync mode is local", count, noun))
+		} else {
+			_, _ = fmt.Fprintln(w, ui.WarningF("%d %s not pushed because sync mode is %s", count, noun, mode))
+		}
+		_, _ = fmt.Fprintf(w, "  Remote push is intentionally disabled for %s.\n", ui.Accent(repoPath))
+		_, _ = fmt.Fprintf(w, "  Manual push instructions are available in %s.\n", ui.Accent("thts sync --help"))
 	}
 }
 
