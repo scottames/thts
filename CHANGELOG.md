@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.8.2](https://github.com/scottames/thts/compare/v0.8.1...v0.8.2) (2026-07-13)
+
+
+### Bug Fixes
+
+* **agents:** make OpenCode integration idempotent ([ba2070b](https://github.com/scottames/thts/commit/ba2070b2096d1337d0e3e19da1c7f5c3d09d1298))
+
+
+### Miscellaneous Chores
+
+* **deps:** update dependency aqua:goreleaser/goreleaser to v2.17.0 ([#65](https://github.com/scottames/thts/issues/65)) ([a72c076](https://github.com/scottames/thts/commit/a72c0764f5d81a657f471565c177c84a4d5966bf))
+
 ## [0.8.1](https://github.com/scottames/thts/compare/v0.8.0...v0.8.1) (2026-07-07)
 
 
