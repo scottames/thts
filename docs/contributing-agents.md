@@ -11,9 +11,9 @@ fictional "testbot" agent as a concrete example.
 - [Step 2: Add Agent Label](#step-2-add-agent-label)
 - [Step 3: Add Agent Configuration](#step-3-add-agent-configuration)
 - [Step 4: Update ParseAgentType](#step-4-update-parseagenttype)
-- [Step 5: Create Embedded Files](#step-5-create-embedded-files)
+- [Step 5: Configure Embedded Templates](#step-5-configure-embedded-templates)
 - [Step 6: Add Embed Directives](#step-6-add-embed-directives)
-- [Step 7: Update FS Switch Statements](#step-7-update-fs-switch-statements)
+- [Step 7: Add Integration Adapters](#step-7-add-integration-adapters)
 - [Step 8: Add Settings Template](#step-8-add-settings-template)
 - [Step 9: Run Tests](#step-9-run-tests)
 - [Step 10: Verify End-to-End](#step-10-verify-end-to-end)
@@ -26,16 +26,17 @@ fictional "testbot" agent as a concrete example.
 
 Adding an agent requires changes to these files:
 
-| File                            | Purpose                    |
-| ------------------------------- | -------------------------- |
-| `internal/agents/types.go`      | Agent type, label, config  |
-| `embed.go`                      | Embed directives           |
-| `internal/cmd/agents/init.go`   | FS switch statements       |
-| `skills/{agent}/*`              | Skill files                |
-| `commands/{agent}/*`            | Command files              |
-| `agents/{agent}/*`              | Agent definition files     |
-| `settings/{filename}`           | Default settings template  |
-| `internal/agents/types_test.go` | Test cases (auto-verified) |
+| File                            | Purpose                             |
+| ------------------------------- | ----------------------------------- |
+| `internal/agents/types.go`      | Agent type, capabilities, and paths |
+| `internal/agents/template.go`   | Agent-specific template data        |
+| `embed.go`                      | Shared embed and render functions   |
+| `embedded/skills/*.tmpl`        | Shared skill templates              |
+| `embedded/commands/*.tmpl`      | Shared command templates            |
+| `embedded/agents/*.tmpl`        | Shared agent templates              |
+| `embedded/plugins/{agent}/`     | Optional native plugin adapters     |
+| `embedded/settings/{filename}`  | Default settings template           |
+| `internal/agents/types_test.go` | Completeness tests                  |
 
 The `TestAgentCompleteness` test will catch most missing pieces.
 
@@ -125,7 +126,7 @@ Add your configuration (see [AgentConfig Reference](#agentconfig-reference) for 
 AgentTestbot: {
     Type:                  AgentTestbot,
     RootDir:               ".testbot",
-    InstructionsFile:      "thts-instructions.md",
+    InstructionsFile:      "",
     IntegrationType:       "marker",
     InstructionTargetFile: "TESTBOT.md",
     SkillsDir:             "skills",
@@ -170,25 +171,15 @@ func ParseAgentType(s string) (AgentType, error) {
 
 **Verify**: `go build ./...`
 
-## Step 5: Create Embedded Files
+## Step 5: Configure Embedded Templates
 
-Create the directory structure based on your `SkillNeedsDir` setting.
+Skills, commands, and sub-agents use shared templates from `embedded/`. Add the
+new agent's differences to `GetEmbedTemplateData()` in
+`internal/agents/template.go` rather than copying per-agent files.
 
-### If SkillNeedsDir is false (flat files, like testbot)
-
-```bash
-mkdir -p skills/testbot commands/testbot agents/testbot
-```
-
-### If SkillNeedsDir is true (subdirectories)
-
-```bash
-mkdir -p skills/testbot/thts-integrate commands/testbot agents/testbot
-```
-
-### Create skill file
-
-For flat structure (`skills/testbot/thts-integrate.md`):
+The `thts-integrate` skill must remain independent of the selected integration
+mode. It loads the canonical policy from the CLI when the policy is not already
+available:
 
 ```markdown
 ---
@@ -200,94 +191,45 @@ description: Activate thoughts/ integration for the current task.
 
 For this task, actively integrate with the thoughts/ directory.
 
-Read and apply the full integration instructions:
-
-@.testbot/thts-instructions.md
-
-**For this task specifically:**
-
-1. Before starting, do quick triage (use `thoughts-locator` then `thoughts-analyzer` for research/debug/resume/history-heavy tasks; skip for straightforward tasks; ask user if ambiguous via Ask question tool when available)
-2. While working, note key findings worth preserving
-3. After completing, write to the appropriate thoughts/ location and run `thts sync`
+Run `thts init --check`, then run `thts agent-instructions` from the current
+project and apply its output.
 
 Now continue with the user's task, applying these integration points throughout.
 ```
 
-For subdirectory structure, create `skills/testbot/thts-integrate/SKILL.md` with similar content.
-
-### Create command files
-
-Copy from an existing agent and adjust paths:
-
-```bash
-cp commands/claude/thts-handoff.md commands/testbot/
-cp commands/claude/thts-resume.md commands/testbot/
-```
-
-### Create agent files
-
-```bash
-cp agents/claude/thoughts-locator.md agents/testbot/
-cp agents/claude/thoughts-analyzer.md agents/testbot/
-```
+Only add an agent-specific template when the shared template cannot express a
+required native format.
 
 ## Step 6: Add Embed Directives
 
-Find the embed section in `embed.go`:
-
-```bash
-grep -n 'go:embed' embed.go
-```
-
-Add your directives. Pattern depends on `SkillNeedsDir`:
+The shared templates are already covered by:
 
 ```go
-// For flat skills (SkillNeedsDir: false)
-//go:embed skills/testbot/*.md
-var TestbotSkills embed.FS
-
-// For subdirectory skills (SkillNeedsDir: true)
-//go:embed skills/testbot/*/SKILL.md
-var TestbotSkills embed.FS
-
-// Commands and agents are always flat
-//go:embed commands/testbot/*.md
-var TestbotCommands embed.FS
-
-//go:embed agents/testbot/*.md
-var TestbotAgents embed.FS
+//go:embed embedded/**/*.tmpl
+var EmbeddedTemplates embed.FS
 ```
 
-**Verify**: `go build ./...`
+Add a dedicated embed only for native assets that are not rendered from these
+templates, such as an OpenCode plugin.
 
-## Step 7: Update FS Switch Statements
+## Step 7: Add Integration Adapters
 
-Find the FS functions:
+Set `HooksDir` for agents using shell hooks or `PluginsDir` for agents using a
+native plugin. If the agent supports neither, hook mode automatically falls
+back to managed project instructions.
 
-```bash
-grep -n 'func get.*FS' internal/cmd/agents/init.go
-```
-
-Add cases to each:
+Only native plugin assets require an FS case:
 
 ```go
-func getSkillsFS(agentType agents.AgentType) fs.FS {
+func getPluginsFS(agentType agents.AgentType) fs.FS {
     switch agentType {
-    case agents.AgentClaude:
-        return thtsfiles.ClaudeSkills
-    case agents.AgentCodex:
-        return thtsfiles.CodexSkills
-    case agents.AgentOpenCode:
-        return thtsfiles.OpenCodeSkills
-    case agents.AgentTestbot:           // Add this
-        return thtsfiles.TestbotSkills
+    case agents.AgentTestbot:
+        return thtsfiles.TestbotPlugins
     default:
         return nil
     }
 }
 ```
-
-Repeat for `getAgentsFS` and `getCommandsFS`.
 
 **Verify**: `go build ./...`
 
@@ -362,8 +304,8 @@ field list. Key fields:
 | Field                   | Description                                                      |
 | ----------------------- | ---------------------------------------------------------------- |
 | `RootDir`               | Agent's config directory (e.g., `.claude`)                       |
-| `InstructionsFile`      | Filename for thts instructions (empty = inline in target file)   |
-| `IntegrationType`       | `"marker"` (HTML comments) or `"config"` (JSON array)            |
+| `InstructionsFile`      | Legacy generated filename; empty for current agents              |
+| `IntegrationType`       | `"marker"` for current managed instruction integration           |
 | `InstructionTargetFile` | File to modify for marker integration                            |
 | `SkillsDir`             | Skills directory name                                            |
 | `SkillNeedsDir`         | `true` = subdirs with SKILL.md, `false` = flat .md files         |
@@ -382,9 +324,8 @@ Before submitting:
 
 - [ ] Added constant to `AllAgentTypes()` return value
 - [ ] Added case to `ParseAgentType()` switch
-- [ ] Added all three FS switch cases (`getSkillsFS`, `getCommandsFS`, `getAgentsFS`)
-- [ ] Embed pattern matches `SkillNeedsDir` setting
-- [ ] Copied/created all embedded files (skills, commands, agents)
-- [ ] Settings file created in `settings/` matching `SettingsFile` name
+- [ ] Added agent-specific template data in `GetEmbedTemplateData()`
+- [ ] Added native hook or plugin assets only when required
+- [ ] Settings file created in `embedded/settings/` matching `SettingsFile`
 - [ ] All tests pass: `go test ./...`
 - [ ] Linting passes: `trunk check`

@@ -237,3 +237,40 @@ func TestRenderHook_ClaudePlanDirectiveByAgent(t *testing.T) {
 		t.Error("expected Gemini session-start hook to exclude claudePlanDirective checks")
 	}
 }
+
+func TestRenderSkill_ThtsIntegrateLoadsCanonicalInstructions(t *testing.T) {
+	agentTypes := []agents.AgentType{
+		agents.AgentClaude,
+		agents.AgentCodex,
+		agents.AgentOpenCode,
+		agents.AgentGemini,
+	}
+
+	for _, agentType := range agentTypes {
+		t.Run(string(agentType), func(t *testing.T) {
+			skill, err := RenderSkill(agentType, "thts-integrate")
+			if err != nil {
+				t.Fatalf("RenderSkill(%s) failed: %v", agentType, err)
+			}
+
+			if !strings.Contains(skill, "thts agent-instructions") {
+				t.Error("expected skill to load canonical instructions from the thts CLI")
+			}
+			if !strings.Contains(skill, "thts init --check") {
+				t.Error("expected skill to verify that the current project is initialized")
+			}
+			if !strings.Contains(skill, "report that integration is unavailable") {
+				t.Error("expected skill to report activation failures")
+			}
+			if strings.Contains(skill, "injected dynamically at session start") {
+				t.Error("skill must not assume hook-based integration is installed")
+			}
+			if strings.Contains(skill, "Before starting, do quick triage") {
+				t.Error("skill must not duplicate triage from the canonical instructions")
+			}
+			if strings.Contains(skill, "# thts Integration Instructions") {
+				t.Error("skill must not satisfy its own canonical-instructions check")
+			}
+		})
+	}
+}

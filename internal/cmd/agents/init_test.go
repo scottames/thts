@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/scottames/thts/internal/config"
+	internalagents "github.com/scottames/thts/internal/agents"
 )
 
 func TestAdjustHeaderLevels(t *testing.T) {
@@ -160,145 +160,183 @@ func TestDetectExistingAgentManifests(t *testing.T) {
 	})
 }
 
-func TestBuildInstructionsData(t *testing.T) {
-	t.Run("builds data from config with categories", func(t *testing.T) {
-		cfg := &config.Config{
-			User: "testuser",
-			Categories: map[string]*config.Category{
-				"notes": {
-					Description: "Quick notes",
-					Scope:       config.CategoryScopeShared,
-				},
-				"research": {
-					Description: "Research findings",
-					Trigger:     "After research phase",
-					Scope:       config.CategoryScopeShared,
-				},
-			},
-		}
+func TestCopyPluginsToManifest_TracksPluginOnce(t *testing.T) {
+	projectDir := t.TempDir()
+	cfg := internalagents.GetConfig(internalagents.AgentOpenCode)
+	agentDir := filepath.Join(projectDir, cfg.RootDir)
+	if err := os.MkdirAll(agentDir, 0755); err != nil {
+		t.Fatalf("create agent directory: %v", err)
+	}
+	manifest := &Manifest{
+		Agent: string(internalagents.AgentOpenCode),
+		Files: []string{filepath.Join("skills", "thts-integrate", "SKILL.md")},
+	}
 
-		data := buildInstructionsData(cfg)
+	_, err := copyPluginsToManifest(
+		agentDir,
+		internalagents.AgentOpenCode,
+		cfg,
+		manifest,
+	)
+	if err != nil {
+		t.Fatalf("copyPluginsToManifest() error: %v", err)
+	}
 
-		if data.User != "testuser" {
-			t.Errorf("expected user 'testuser', got %q", data.User)
-		}
+	relativePlugin := filepath.Join("plugins", "thts-integration.ts")
+	if _, err := os.Stat(filepath.Join(agentDir, relativePlugin)); err != nil {
+		t.Fatalf("expected local plugin: %v", err)
+	}
+	if countValue(manifest.Files, relativePlugin) == 0 {
+		t.Fatalf("manifest files = %v, missing %s", manifest.Files, relativePlugin)
+	}
 
-		if len(data.Categories) != 2 {
-			t.Errorf("expected 2 categories, got %d", len(data.Categories))
-		}
-
-		// Check that categories are present
-		found := make(map[string]bool)
-		for _, cat := range data.Categories {
-			found[cat.Name] = true
-		}
-
-		if !found["notes"] {
-			t.Error("expected 'notes' category")
-		}
-		if !found["research"] {
-			t.Error("expected 'research' category")
-		}
-	})
-
-	t.Run("flattens sub-categories", func(t *testing.T) {
-		cfg := &config.Config{
-			User: "testuser",
-			Categories: map[string]*config.Category{
-				"plans": {
-					Description: "Implementation plans",
-					Scope:       config.CategoryScopeShared,
-					SubCategories: map[string]*config.SubCategory{
-						"active": {
-							Description: "Active plans",
-						},
-						"complete": {
-							Description: "Completed plans",
-						},
-					},
-				},
-			},
-		}
-
-		data := buildInstructionsData(cfg)
-
-		// Should have 3 entries: plans, plans/active, plans/complete
-		if len(data.Categories) != 3 {
-			t.Errorf("expected 3 categories (including sub-categories), got %d", len(data.Categories))
-		}
-
-		// Check paths
-		paths := make(map[string]bool)
-		for _, cat := range data.Categories {
-			paths[cat.Name] = true
-		}
-
-		if !paths["plans"] {
-			t.Error("expected 'plans' category")
-		}
-		if !paths["plans/active"] {
-			t.Error("expected 'plans/active' sub-category")
-		}
-		if !paths["plans/complete"] {
-			t.Error("expected 'plans/complete' sub-category")
-		}
-	})
-
-	t.Run("uses default categories when config has none", func(t *testing.T) {
-		cfg := &config.Config{
-			User: "testuser",
-			// No categories set - should use defaults
-		}
-
-		data := buildInstructionsData(cfg)
-
-		// Should have default categories
-		if len(data.Categories) == 0 {
-			t.Error("expected default categories to be used when config has none")
-		}
-	})
+	if _, err := copyPluginsToManifest(agentDir, internalagents.AgentOpenCode, cfg, manifest); err != nil {
+		t.Fatalf("second copyPluginsToManifest() error: %v", err)
+	}
+	if count := countValue(manifest.Files, relativePlugin); count != 1 {
+		t.Fatalf("plugin appears %d times in manifest, want 1", count)
+	}
 }
 
-func TestBuildLocationString(t *testing.T) {
-	tests := []struct {
-		name     string
-		path     string
-		scope    config.CategoryScope
-		expected string
-	}{
-		{
-			name:     "shared scope",
-			path:     "notes",
-			scope:    config.CategoryScopeShared,
-			expected: "`thoughts/shared/notes/`",
-		},
-		{
-			name:     "user scope",
-			path:     "tickets",
-			scope:    config.CategoryScopeUser,
-			expected: "`thoughts/{user}/tickets/`",
-		},
-		{
-			name:     "both scope",
-			path:     "research",
-			scope:    config.CategoryScopeBoth,
-			expected: "`thoughts/shared/research/` or `thoughts/{user}/research/`",
-		},
-		{
-			name:     "nested path",
-			path:     "plans/active",
-			scope:    config.CategoryScopeShared,
-			expected: "`thoughts/shared/plans/active/`",
-		},
+func TestBuildInstallationPlan_OpenCodeLocalIgnoresOnlyPlugin(t *testing.T) {
+	t.Setenv("THTS_CONFIG_PATH", filepath.Join(t.TempDir(), "missing.yaml"))
+
+	plan, err := buildInstallationPlan(t.TempDir(), internalagents.AgentOpenCode, IntegrationAgentsContentLocal)
+	if err != nil {
+		t.Fatalf("buildInstallationPlan() error: %v", err)
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := buildLocationString(tt.path, tt.scope)
-			if result != tt.expected {
-				t.Errorf("buildLocationString(%q, %v) = %q, want %q",
-					tt.path, tt.scope, result, tt.expected)
-			}
-		})
+	relativePlugin := filepath.Join("plugins", "thts-integration.ts")
+	if len(plan.pluginFiles) != 1 || plan.pluginFiles[0] != relativePlugin {
+		t.Fatalf("plugin files = %v, want [%s]", plan.pluginFiles, relativePlugin)
 	}
+	if len(plan.gitignorePatterns) != 0 {
+		t.Fatalf("gitignore patterns = %v, want no redundant exact plugin pattern", plan.gitignorePatterns)
+	}
+	if plan.instructionsFile != "" {
+		t.Fatalf("instructions file = %q, want empty", plan.instructionsFile)
+	}
+}
+
+func TestOpenCodeLocalPluginLifecycle(t *testing.T) {
+	t.Setenv("THTS_CONFIG_PATH", filepath.Join(t.TempDir(), "missing.yaml"))
+	projectDir := t.TempDir()
+	cfg := internalagents.GetConfig(internalagents.AgentOpenCode)
+	agentDir := filepath.Join(projectDir, cfg.RootDir)
+	relativePlugin := filepath.Join(cfg.PluginsDir, "thts-integration.ts")
+	pluginPath := filepath.Join(agentDir, relativePlugin)
+
+	if err := initAgent(projectDir, internalagents.AgentOpenCode, IntegrationAgentsContentLocal); err != nil {
+		t.Fatalf("initAgent() error: %v", err)
+	}
+	if err := updateGitignoreForAgents(projectDir, []internalagents.AgentType{internalagents.AgentOpenCode}); err != nil {
+		t.Fatalf("updateGitignoreForAgents() error: %v", err)
+	}
+
+	manifest, err := loadManifest(agentDir)
+	if err != nil {
+		t.Fatalf("loadManifest() error: %v", err)
+	}
+	if manifest.IntegrationLevel != IntegrationAgentsContentLocal {
+		t.Fatalf("integration level = %q, want %q", manifest.IntegrationLevel, IntegrationAgentsContentLocal)
+	}
+	if countValue(manifest.Files, relativePlugin) != 1 {
+		t.Fatalf("manifest files = %v, want one %s", manifest.Files, relativePlugin)
+	}
+	if _, err := os.Stat(pluginPath); err != nil {
+		t.Fatalf("expected plugin after init: %v", err)
+	}
+
+	if err := os.WriteFile(pluginPath, []byte("stale"), 0644); err != nil {
+		t.Fatalf("write stale plugin: %v", err)
+	}
+	if err := refreshAgentSetup(projectDir, []internalagents.AgentType{internalagents.AgentOpenCode}); err != nil {
+		t.Fatalf("refreshAgentSetup() error: %v", err)
+	}
+	plugin, err := os.ReadFile(pluginPath)
+	if err != nil {
+		t.Fatalf("read refreshed plugin: %v", err)
+	}
+	if string(plugin) == "stale" {
+		t.Error("refresh did not restore embedded plugin")
+	}
+	manifest, err = loadManifest(agentDir)
+	if err != nil {
+		t.Fatalf("load refreshed manifest: %v", err)
+	}
+	if countValue(manifest.Files, relativePlugin) != 1 {
+		t.Fatalf("refreshed manifest files = %v, want one %s", manifest.Files, relativePlugin)
+	}
+
+	if err := Uninit(projectDir, true, []internalagents.AgentType{internalagents.AgentOpenCode}); err != nil {
+		t.Fatalf("Uninit() error: %v", err)
+	}
+	if _, err := os.Stat(pluginPath); !os.IsNotExist(err) {
+		t.Fatalf("plugin still exists after uninit: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(agentDir, ManifestFile)); !os.IsNotExist(err) {
+		t.Fatalf("manifest still exists after uninit: %v", err)
+	}
+}
+
+func TestRefreshOpenCodeLocalPluginMigratesLegacyInstructions(t *testing.T) {
+	t.Setenv("THTS_CONFIG_PATH", filepath.Join(t.TempDir(), "missing.yaml"))
+	projectDir := t.TempDir()
+	cfg := internalagents.GetConfig(internalagents.AgentOpenCode)
+	agentDir := filepath.Join(projectDir, cfg.RootDir)
+	if err := os.MkdirAll(agentDir, 0755); err != nil {
+		t.Fatalf("create agent directory: %v", err)
+	}
+
+	legacyFile := filepath.Join(agentDir, "AGENTS.local.md")
+	if err := os.WriteFile(legacyFile, []byte("# Local Agent Instructions\n\n@thts-instructions.md\n"), 0644); err != nil {
+		t.Fatalf("write legacy instructions: %v", err)
+	}
+	legacyPattern := filepath.Join(cfg.RootDir, "AGENTS.local.md")
+	if err := os.WriteFile(filepath.Join(projectDir, ".gitignore"), []byte(legacyPattern+"\n"), 0644); err != nil {
+		t.Fatalf("write .gitignore: %v", err)
+	}
+	manifest := &Manifest{
+		Agent:            string(internalagents.AgentOpenCode),
+		IntegrationLevel: IntegrationAgentsContentLocal,
+		Modifications: ManifestModifications{
+			Gitignore: &GitignoreModification{Patterns: []string{legacyPattern}},
+		},
+	}
+	if err := writeManifest(agentDir, manifest); err != nil {
+		t.Fatalf("write legacy manifest: %v", err)
+	}
+
+	if err := refreshAgentSetup(projectDir, []internalagents.AgentType{internalagents.AgentOpenCode}); err != nil {
+		t.Fatalf("refreshAgentSetup() error: %v", err)
+	}
+	if _, err := os.Stat(legacyFile); !os.IsNotExist(err) {
+		t.Fatalf("legacy instructions still exist: %v", err)
+	}
+	gitignore, err := os.ReadFile(filepath.Join(projectDir, ".gitignore"))
+	if err != nil {
+		t.Fatalf("read .gitignore: %v", err)
+	}
+	if strings.Contains(string(gitignore), legacyPattern) {
+		t.Errorf("legacy gitignore pattern still present: %s", gitignore)
+	}
+
+	manifest, err = loadManifest(agentDir)
+	if err != nil {
+		t.Fatalf("load migrated manifest: %v", err)
+	}
+	relativePlugin := filepath.Join(cfg.PluginsDir, "thts-integration.ts")
+	if countValue(manifest.Files, relativePlugin) != 1 {
+		t.Fatalf("migrated manifest files = %v, want one %s", manifest.Files, relativePlugin)
+	}
+}
+
+func countValue(values []string, target string) int {
+	count := 0
+	for _, value := range values {
+		if value == target {
+			count++
+		}
+	}
+	return count
 }

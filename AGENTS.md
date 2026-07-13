@@ -88,12 +88,12 @@ Gemini uses TOML format for commands and doesn't support the agents feature.
 
 ### Hook Support
 
-| Agent    | Hook Support | Hook Events                             | Settings File         |
-| -------- | ------------ | --------------------------------------- | --------------------- |
-| Claude   | Yes          | `SessionStart`, `UserPromptSubmit`      | `settings.local.json` |
-| Gemini   | Yes          | `SessionStart`, `BeforeAgent`           | `settings.local.json` |
-| OpenCode | Yes (plugin) | `session.created`, `session.compacting` | N/A (plugin)          |
-| Codex    | No           | N/A                                     | N/A                   |
+| Agent    | Hook Support | Hook Events                          | Settings File         |
+| -------- | ------------ | ------------------------------------ | --------------------- |
+| Claude   | Yes          | `SessionStart`, `UserPromptSubmit`   | `settings.local.json` |
+| Gemini   | Yes          | `SessionStart`, `BeforeAgent`        | `settings.local.json` |
+| OpenCode | Yes (plugin) | `experimental.chat.system.transform` | N/A (plugin)          |
+| Codex    | No           | N/A                                  | N/A                   |
 
 ### Embedded Files
 
@@ -152,7 +152,8 @@ go build -o thts ./cmd/thts
 Tests should not be an afterthought or skipped.
 
 ```bash
-go test ./...                                    # Unit tests
+mise run test                                    # Go and OpenCode plugin unit tests
+go test ./...                                    # Go unit tests only
 go test -tags=integration ./internal/cmd/...     # Integration tests
 go test -tags=integration ./...                  # All tests
 ```

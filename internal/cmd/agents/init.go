@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -16,6 +17,7 @@ import (
 	"github.com/scottames/thts/internal/config"
 	fsutil "github.com/scottames/thts/internal/fs"
 	"github.com/scottames/thts/internal/git"
+	internalthts "github.com/scottames/thts/internal/thts"
 	"github.com/scottames/thts/internal/ui"
 	"github.com/spf13/cobra"
 )
@@ -396,10 +398,10 @@ func selectIntegrationLevel() (IntegrationLevel, error) {
 	err := huh.NewSelect[string]().
 		Title("How would you like to integrate thoughts/?").
 		Options(
-			huh.NewOption("Hook-based (recommended) - Loads on keyword detection, keeps CLAUDE.md clean", string(IntegrationHook)),
-			huh.NewOption("Always-on (AGENTS.md) - Adds @include to instructions", string(IntegrationAgentsContent)),
-			huh.NewOption("Always-on (local only) - Creates local instructions file (gitignored)", string(IntegrationAgentsContentLocal)),
-			huh.NewOption("On-demand only - Just installs skill and commands", string(IntegrationOnDemand)),
+			huh.NewOption("Hook/plugin (recommended) - Uses the agent's native integration", string(IntegrationHook)),
+			huh.NewOption("Always-on (shared) - Adds a managed block to project instructions", string(IntegrationAgentsContent)),
+			huh.NewOption("Always-on (local only) - Creates a gitignored local integration", string(IntegrationAgentsContentLocal)),
+			huh.NewOption("On-demand only - Skill loads instructions when invoked", string(IntegrationOnDemand)),
 		).
 		Value(&level).
 		Run()
@@ -497,12 +499,17 @@ func buildInstallationPlan(projectDir string, agentType agents.AgentType, level 
 	} else if level == IntegrationAgentsContent {
 		plan.instructionsFile = agentConfig.InstructionTargetFile
 	} else if level == IntegrationAgentsContentLocal {
-		if agentConfig.Type == agents.AgentClaude {
-			plan.instructionsFile = "CLAUDE.local.md"
+		if agentConfig.PluginsDir != "" {
+			relPath := filepath.Join(agentConfig.PluginsDir, "thts-integration.ts")
+			plan.pluginFiles = append(plan.pluginFiles, relPath)
 		} else {
-			plan.instructionsFile = "AGENTS.local.md"
+			if agentConfig.Type == agents.AgentClaude {
+				plan.instructionsFile = "CLAUDE.local.md"
+			} else {
+				plan.instructionsFile = "AGENTS.local.md"
+			}
+			plan.gitignorePatterns = append(plan.gitignorePatterns, filepath.Join(agentConfig.RootDir, plan.instructionsFile))
 		}
-		plan.gitignorePatterns = append(plan.gitignorePatterns, filepath.Join(agentConfig.RootDir, plan.instructionsFile))
 	}
 
 	// Plan settings file if --with-settings
@@ -765,6 +772,10 @@ func initAgent(projectDir string, agentType agents.AgentType, level IntegrationL
 		if err := setupHookIntegration(projectDir, agentDir, agentType, agentConfig, manifest); err != nil {
 			fmt.Println(ui.WarningF("  Could not setup hook integration: %v", err))
 		}
+	} else if level == IntegrationAgentsContentLocal && agentConfig.PluginsDir != "" {
+		if err := setupHookIntegration(projectDir, agentDir, agentType, agentConfig, manifest); err != nil {
+			fmt.Println(ui.WarningF("  Could not setup local plugin integration: %v", err))
+		}
 	} else {
 		// Traditional integration (markers or config)
 		instMod, gitignorePatterns, err := setupIntegrationLevel(projectDir, agentDir, agentConfig, level)
@@ -803,7 +814,7 @@ func initAgent(projectDir string, agentType agents.AgentType, level IntegrationL
 // readThtsInstructions returns the rendered thts-instructions.md content with current config.
 func readThtsInstructions() ([]byte, error) {
 	cfg := config.LoadOrDefault()
-	data := buildInstructionsData(cfg)
+	data := internalthts.BuildInstructionsData(cfg)
 	content, err := thtsfiles.GetInstructions(data)
 	if err != nil {
 		return nil, err
@@ -1743,14 +1754,11 @@ func setupHookIntegration(projectDir, agentDir string, agentType agents.AgentTyp
 	}
 
 	if cfg.PluginsDir != "" {
-		copied, files, err := copyPlugins(agentDir, agentType, cfg)
+		copied, err := copyPluginsToManifest(agentDir, agentType, cfg, manifest)
 		if err != nil {
 			return fmt.Errorf("failed to copy plugins: %w", err)
 		}
 		if copied > 0 {
-			for _, f := range files {
-				manifest.Files = append(manifest.Files, filepath.Join(cfg.PluginsDir, f))
-			}
 			fmt.Println(ui.SuccessF("  Copied %d plugin(s)", copied))
 		}
 	}
@@ -1767,17 +1775,19 @@ func setupHookIntegration(projectDir, agentDir string, agentType agents.AgentTyp
 		}
 	}
 
-	// Add gitignore pattern for settings.local.json
-	pattern := filepath.Join(cfg.RootDir, "settings.local.json")
-	added, err := fsutil.AddToGitignore(projectDir, pattern, "project")
-	if err != nil {
-		fmt.Println(ui.WarningF("  Could not update .gitignore: %v", err))
-	} else if added {
-		if manifest.Modifications.Gitignore == nil {
-			manifest.Modifications.Gitignore = &GitignoreModification{}
+	if cfg.HooksDir != "" {
+		// Hook settings are local to the user and should not be committed.
+		pattern := filepath.Join(cfg.RootDir, "settings.local.json")
+		added, err := fsutil.AddToGitignore(projectDir, pattern, "project")
+		if err != nil {
+			fmt.Println(ui.WarningF("  Could not update .gitignore: %v", err))
+		} else if added {
+			if manifest.Modifications.Gitignore == nil {
+				manifest.Modifications.Gitignore = &GitignoreModification{}
+			}
+			manifest.Modifications.Gitignore.Patterns = append(manifest.Modifications.Gitignore.Patterns, pattern)
+			fmt.Println(ui.InfoF("  Updated .gitignore to exclude %s", filepath.Base(pattern)))
 		}
-		manifest.Modifications.Gitignore.Patterns = append(manifest.Modifications.Gitignore.Patterns, pattern)
-		fmt.Println(ui.InfoF("  Updated .gitignore to exclude %s", filepath.Base(pattern)))
 	}
 
 	// Track hooks in manifest for uninit
@@ -1788,7 +1798,61 @@ func setupHookIntegration(projectDir, agentDir string, agentType agents.AgentTyp
 		}
 	}
 
-	fmt.Println(ui.Info("  Hook mode: instructions load on keyword detection"))
+	if cfg.PluginsDir != "" {
+		fmt.Println(ui.Info("  Plugin mode: instructions load dynamically"))
+	} else {
+		fmt.Println(ui.Info("  Hook mode: instructions load on keyword detection"))
+	}
+	return nil
+}
+
+func copyPluginsToManifest(agentDir string, agentType agents.AgentType, cfg *agents.AgentConfig, manifest *Manifest) (int, error) {
+	copied, files, err := copyPlugins(agentDir, agentType, cfg)
+	if err != nil {
+		return 0, err
+	}
+
+	for _, file := range files {
+		relativePlugin := filepath.Join(cfg.PluginsDir, file)
+		if !slices.Contains(manifest.Files, relativePlugin) {
+			manifest.Files = append(manifest.Files, relativePlugin)
+		}
+	}
+	return copied, nil
+}
+
+func migrateLegacyLocalInstructions(projectDir, agentDir string, cfg *agents.AgentConfig, manifest *Manifest) error {
+	const legacyContent = "# Local Agent Instructions\n\n@thts-instructions.md\n"
+	const legacyFile = "AGENTS.local.md"
+
+	path := filepath.Join(agentDir, legacyFile)
+	content, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	if string(content) != legacyContent {
+		return nil
+	}
+	if err := os.Remove(path); err != nil {
+		return err
+	}
+
+	pattern := filepath.Join(cfg.RootDir, legacyFile)
+	if _, err := fsutil.RemoveFromGitignore(projectDir, pattern, "project"); err != nil {
+		return err
+	}
+	if manifest.Modifications.Gitignore != nil {
+		manifest.Modifications.Gitignore.Patterns = slices.DeleteFunc(
+			manifest.Modifications.Gitignore.Patterns,
+			func(value string) bool { return value == pattern },
+		)
+		if len(manifest.Modifications.Gitignore.Patterns) == 0 {
+			manifest.Modifications.Gitignore = nil
+		}
+	}
 	return nil
 }
 
@@ -2040,20 +2104,25 @@ func refreshAgentSetup(projectDir string, agentTypes []agents.AgentType) error {
 					fmt.Println(ui.SuccessF("  Updated %d hook script(s)", copied))
 				}
 			}
-			// Refresh plugins
-			if agentConfig.PluginsDir != "" {
-				copied, _, err := copyPlugins(agentDir, agentType, agentConfig)
-				if err != nil {
-					fmt.Println(ui.WarningF("  Could not update plugins: %v", err))
-				} else if copied > 0 {
-					filesUpdated += copied
-					fmt.Println(ui.SuccessF("  Updated %d plugin(s)", copied))
-				}
-			}
 		case IntegrationAgentsContent:
 			// Refresh marker block content
 			if err := refreshIntegration(projectDir, agentDir, agentConfig, cfg); err != nil {
 				fmt.Println(ui.WarningF("  Could not update integration: %v", err))
+			}
+		}
+
+		if agentConfig.PluginsDir != "" && (level == IntegrationHook || level == IntegrationAgentsContentLocal) {
+			copied, err := copyPluginsToManifest(agentDir, agentType, agentConfig, manifest)
+			if err != nil {
+				fmt.Println(ui.WarningF("  Could not update plugins: %v", err))
+			} else if copied > 0 {
+				filesUpdated += copied
+				fmt.Println(ui.SuccessF("  Updated %d plugin(s)", copied))
+			}
+			if err == nil && level == IntegrationAgentsContentLocal {
+				if err := migrateLegacyLocalInstructions(projectDir, agentDir, agentConfig, manifest); err != nil {
+					fmt.Println(ui.WarningF("  Could not remove legacy local instructions: %v", err))
+				}
 			}
 		}
 
@@ -2069,51 +2138,6 @@ func refreshAgentSetup(projectDir string, agentTypes []agents.AgentType) error {
 	fmt.Println()
 	fmt.Println(ui.Success("Refresh complete."))
 	return nil
-}
-
-// buildInstructionsData creates InstructionsData from config.
-// This is a simplified version that uses the thts package's full implementation.
-func buildInstructionsData(cfg *config.Config) thtsfiles.InstructionsData {
-	categories := cfg.GetCategories()
-	var rows []thtsfiles.CategoryRow
-
-	for name, cat := range categories {
-		rows = append(rows, thtsfiles.CategoryRow{
-			Name:        name,
-			Description: cat.Description,
-			Location:    buildLocationString(name, cat.GetScope()),
-			Trigger:     cat.Trigger,
-			Template:    cat.Template,
-		})
-
-		for subName, subCat := range cat.SubCategories {
-			fullPath := fmt.Sprintf("%s/%s", name, subName)
-			rows = append(rows, thtsfiles.CategoryRow{
-				Name:        fullPath,
-				Description: subCat.Description,
-				Location:    buildLocationString(fullPath, subCat.GetScope(cat.GetScope())),
-				Trigger:     subCat.Trigger,
-				Template:    subCat.Template,
-			})
-		}
-	}
-
-	return thtsfiles.InstructionsData{
-		User:       cfg.User,
-		Categories: rows,
-	}
-}
-
-// buildLocationString creates the location string based on scope.
-func buildLocationString(path string, scope config.CategoryScope) string {
-	switch scope {
-	case config.CategoryScopeUser:
-		return fmt.Sprintf("`thoughts/{user}/%s/`", path)
-	case config.CategoryScopeBoth:
-		return fmt.Sprintf("`thoughts/shared/%s/` or `thoughts/{user}/%s/`", path, path)
-	default:
-		return fmt.Sprintf("`thoughts/shared/%s/`", path)
-	}
 }
 
 // refreshIntegration updates the integration for always-on mode.
@@ -2163,7 +2187,7 @@ func refreshIntegration(projectDir, agentDir string, agentCfg *agents.AgentConfi
 	}
 
 	// Build new inline content with current config
-	data := buildInstructionsData(cfg)
+	data := internalthts.BuildInstructionsData(cfg)
 	rendered, err := thtsfiles.GetInstructions(data)
 	if err != nil {
 		return fmt.Errorf("failed to render instructions: %w", err)

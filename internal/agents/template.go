@@ -10,17 +10,6 @@ type EmbedTemplateData struct {
 	// Empty string for agents that don't use agent-specific naming
 	AgentName string
 
-	// InstructionRef is the full text for referencing instructions
-	// Examples:
-	//   "@.claude/thts-instructions.md" (Claude)
-	//   "from thts-instructions.md in .codex/" (Codex/OpenCode)
-	//   "from AGENTS.md in the project root" (Gemini)
-	InstructionRef string
-
-	// UseAtInclude indicates whether the agent uses @ syntax for includes
-	// True for Claude, false for others
-	UseAtInclude bool
-
 	// HasTaskList indicates whether to include the TaskList step in commands
 	// True for Claude/Codex/OpenCode, false for Gemini
 	HasTaskList bool
@@ -68,8 +57,6 @@ func GetEmbedTemplateData(agentType AgentType) EmbedTemplateData {
 	switch agentType {
 	case AgentClaude:
 		data.AgentName = "Claude"
-		data.InstructionRef = "injected dynamically at session start"
-		data.UseAtInclude = true
 		data.HasTaskList = true
 		data.TaskTracking = "Use TodoWrite"
 		data.HasSpawnTasks = true
@@ -79,8 +66,6 @@ func GetEmbedTemplateData(agentType AgentType) EmbedTemplateData {
 
 	case AgentCodex:
 		data.AgentName = ""
-		data.InstructionRef = "from AGENTS.md in the project root"
-		data.UseAtInclude = false
 		data.HasTaskList = true
 		data.TaskTracking = "Use your task tracking"
 		data.HasSpawnTasks = true
@@ -90,8 +75,6 @@ func GetEmbedTemplateData(agentType AgentType) EmbedTemplateData {
 
 	case AgentOpenCode:
 		data.AgentName = ""
-		data.InstructionRef = "injected dynamically at session start"
-		data.UseAtInclude = false
 		data.HasTaskList = true
 		data.TaskTracking = "Use your task tracking"
 		data.HasSpawnTasks = true
@@ -102,8 +85,6 @@ func GetEmbedTemplateData(agentType AgentType) EmbedTemplateData {
 
 	case AgentGemini:
 		data.AgentName = ""
-		data.InstructionRef = "injected dynamically at session start"
-		data.UseAtInclude = false
 		data.HasTaskList = false
 		data.TaskTracking = ""
 		data.HasSpawnTasks = false

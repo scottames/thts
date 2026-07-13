@@ -36,7 +36,7 @@ var Settings embed.FS
 
 // OpenCodePlugins contains embedded plugin files for OpenCode.
 //
-//go:embed embedded/plugins/opencode/*.ts
+//go:embed embedded/plugins/opencode/thts-integration.ts
 var OpenCodePlugins embed.FS
 
 // Defaults contains embedded default files for the thoughts repository.

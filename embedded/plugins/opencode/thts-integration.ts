@@ -1,58 +1,56 @@
 // thts integration plugin for OpenCode
-// Injects thoughts/ instructions at session start
+// Makes thoughts/ instructions available once per model request.
 
 import type { Plugin } from "@opencode-ai/plugin";
-import { execSync } from "child_process";
 
-// Get instructions from thts CLI
-function getInstructions(): string | null {
-  try {
-    execSync("which thts", { stdio: "ignore" });
-  } catch {
-    return null;
-  }
+const THTS_MARKER = "<!-- thts-integration -->";
+const THTS_HEADING = "# thts Integration Instructions";
 
-  try {
-    return execSync("thts agent-instructions", {
-      encoding: "utf-8",
-      stdio: ["ignore", "pipe", "ignore"],
-    });
-  } catch {
-    return null;
-  }
-}
+export const ThtsIntegration: Plugin = async ({ directory, $ }) => {
+  let instructions: Promise<string | null> | undefined;
 
-// Check if thts is enabled for a directory
-function isThtsEnabled(cwd: string): boolean {
-  try {
-    execSync("thts init --check", { cwd, stdio: "ignore" });
-    return true;
-  } catch {
-    return false;
-  }
-}
+  const getInstructions = async () => {
+    instructions ??= (async () => {
+      const result = await $`thts agent-instructions`
+        .cwd(directory)
+        .quiet()
+        .nothrow();
+      if (result.exitCode !== 0) {
+        return null;
+      }
 
-export const ThtsIntegration: Plugin = async ({ directory }) => {
-  const cwd = directory || process.cwd();
+      return result.text().trim() || null;
+    })();
+
+    const content = await instructions;
+    if (!content) {
+      instructions = undefined;
+    }
+    return content;
+  };
 
   return {
-    "experimental.chat.system.transform": async (input, output) => {
-      if (!isThtsEnabled(cwd)) {
+    "experimental.chat.system.transform": async (_input, output) => {
+      const alreadyPresent = output.system.some(
+        (content) =>
+          content.includes(THTS_MARKER) || content.includes(THTS_HEADING),
+      );
+      if (alreadyPresent) {
         return;
       }
-      const content = getInstructions();
-      if (content) {
-        output.system.push(`## thts Integration\n\n${content}`);
-      }
-    },
 
-    "experimental.session.compacting": async (input, output) => {
-      if (!isThtsEnabled(cwd)) {
+      const enabled = await $`thts init --check`
+        .cwd(directory)
+        .quiet()
+        .nothrow();
+      if (enabled.exitCode !== 0) {
+        instructions = undefined;
         return;
       }
-      const content = getInstructions();
+
+      const content = await getInstructions();
       if (content) {
-        output.context.push(`## thts Integration (Preserved)\n\n${content}`);
+        output.system.push(`${THTS_MARKER}\n${content}`);
       }
     },
   };
