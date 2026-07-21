@@ -776,11 +776,13 @@ your thoughts directory and enable session continuity.
 
 #### Supported Agents
 
-| Agent       | Project Dir  | Skills Dir          | Commands Dir      | Global Path           |
-| ----------- | ------------ | ------------------- | ----------------- | --------------------- |
-| Claude Code | `.claude/`   | `skills/`           | `commands/`       | `~/.claude/`          |
-| Codex CLI   | `.codex/`    | `skills/*/SKILL.md` | `prompts/` (glob) | `~/.codex/`           |
-| OpenCode    | `.opencode/` | `skills/*/SKILL.md` | `commands/`       | `~/.config/opencode/` |
+| Agent       | Project Dir  | Skills Dir                       | Commands/Prompts Dir | Runtime Adapter | Global Path                              |
+| ----------- | ------------ | -------------------------------- | -------------------- | --------------- | ---------------------------------------- |
+| Claude Code | `.claude/`   | `skills/`                        | `commands/`          | `hooks/`        | `~/.claude/`                             |
+| Codex CLI   | `.codex/`    | `skills/*/SKILL.md`              | `prompts/` (global)  | None            | `~/.codex/`                              |
+| OpenCode    | `.opencode/` | `skills/*/SKILL.md`              | `commands/`          | `plugins/`      | `~/.config/opencode/`                    |
+| Gemini CLI  | `.gemini/`   | `skills/*/SKILL.md`              | `commands/*.toml`    | `hooks/`        | `~/.gemini/`                             |
+| Pi          | `.pi/`       | `skills/thts-integrate/SKILL.md` | `prompts/`           | `extensions/`   | `$PI_CODING_AGENT_DIR` or `~/.pi/agent/` |
 
 **Key differences:**
 
@@ -788,6 +790,11 @@ your thoughts directory and enable session continuity.
   invoked as `/prompts:<name>` (e.g., `/prompts:thts-handoff`).
 - **OpenCode XDG**: OpenCode uses XDG for global config (`~/.config/opencode/`)
   rather than a dot-folder in home.
+- **Gemini commands**: Gemini stores commands as TOML and does not support
+  native sub-agents.
+- **Pi resources**: Pi uses skills, Markdown prompt templates, and TypeScript
+  extensions. It has no native sub-agents and thts does not create or manage Pi
+  settings.
 
 #### Installing Integration
 
@@ -795,33 +802,43 @@ your thoughts directory and enable session continuity.
 thts init agents              # Install for detected agents
 thts init agents -i           # Interactive mode
 thts init agents --agents claude,codex  # Specify agents
+thts init agents --agents pi  # Install Pi's .pi/ resources in this project
 thts init agents --with-settings  # Also create settings files
 ```
 
 #### Global vs Project Configuration
 
 By default, `thts init agents` installs to project directories (`.claude/`,
-`.codex/`, `.opencode/`). You can also install globally:
+`.codex/`, `.opencode/`, `.gemini/`, or `.pi/`). You can also install globally:
 
 ```bash
 thts init agents --global all              # Install everything globally
 thts init agents --global skills,commands  # Install specific components
+thts init agents --agents pi --global=all  # Install only Pi resources globally
 ```
 
 **Global paths:**
 
-| Agent    | Global Path           |
-| -------- | --------------------- |
-| Claude   | `~/.claude/`          |
-| Codex    | `~/.codex/`           |
-| OpenCode | `~/.config/opencode/` |
-| Gemini   | `~/.gemini/`          |
+| Agent    | Global Path                                          |
+| -------- | ---------------------------------------------------- |
+| Claude   | `~/.claude/`                                         |
+| Codex    | `~/.codex/`                                          |
+| OpenCode | `~/.config/opencode/`                                |
+| Gemini   | `~/.gemini/`                                         |
+| Pi       | `$PI_CODING_AGENT_DIR`, or `~/.pi/agent/` when unset |
 
 **When to use global:**
 
 - Skills/commands you want available in all projects
 - Codex prompts (they only work globally)
 - When you don't want to modify project files
+
+Global ownership is per agent and component. A global install records its
+managed paths in the global manifest and writes a corresponding
+`agents.perAgent.<agent>.<component>` mode. Installing or removing Pi resources
+does not change another agent's mode or manifest paths. Partial global installs
+preserve successfully installed agent/component pairs and leave failed pairs
+local.
 
 #### Prerequisites
 
@@ -868,11 +885,30 @@ model request without adding another copy when another plugin instance already
 supplied it. OpenCode local-only mode installs the same project plugin, which is
 covered by the managed thts patterns in `.gitignore`.
 
-The plugin caches generated instructions for the OpenCode session. Restart
+Pi uses an idempotent TypeScript extension at
+`.pi/extensions/thts-integration.ts`. It adds the generated policy at
+`before_agent_start` after `thts init --check` succeeds. Pi's extension caches
+the generated policy per working directory for the process, so restart Pi after
+changing thts categories or instruction configuration.
+
+The OpenCode plugin also caches generated instructions for its session. Restart
 OpenCode after changing thts categories or instruction configuration.
 
 **Note:** Codex does not support hooks and will automatically fall back to
 always-on mode with a warning.
+
+#### Pi Project Trust
+
+Pi treats project-local `.pi/skills`, `.pi/prompts`, and `.pi/extensions` as
+trust-gated resources. In an interactive session, Pi asks before loading them
+when there is no saved trust decision. Trust permits project extensions to run
+with your user permissions; it is an input-loading guard, not a sandbox.
+
+Non-interactive Pi modes (`-p`, `--mode json`, and `--mode rpc`) do not prompt.
+Without an applicable saved decision, `defaultProjectTrust: "ask"` (the default)
+and `"never"` ignore the project resources, while `"always"` loads them. Use
+`pi --approve` (or `-a`) to trust this project's resources for one run, or
+`pi --no-approve` (or `-na`) to ignore them for one run.
 
 #### Customizing Hook Keywords
 
@@ -912,11 +948,12 @@ hooks:
 **Files copied to agent directories:**
 
 - `skills/thts-integrate.*` - Activation skill with a CLI fallback
-- `commands/thts-handoff.md` - Create session handoff documents
-- `commands/thts-resume.md` - Resume from handoff documents
-- `agents/thoughts-locator.md` - Find documents in thoughts/
-- `agents/thoughts-analyzer.md` - Extract insights from documents
-- Agent-specific hooks or the OpenCode `thts-integration.ts` plugin in hook mode
+- `commands/` or `prompts/` `thts-handoff` and `thts-resume` - Session handoff
+  and resume prompts
+- `agents/thoughts-locator.md` and `agents/thoughts-analyzer.md` - Where native
+  sub-agents are supported
+- Agent-specific hooks, the OpenCode `thts-integration.ts` plugin, or the Pi
+  `thts-integration.ts` extension in hook mode
 
 Full integration instructions are generated by `thts agent-instructions`; they
 are not copied as a separate file.
@@ -932,6 +969,8 @@ are not copied as a separate file.
 | `/thts-resume <path>` | Resume work from a handoff document             |
 
 **Codex note:** Use `/prompts:thts-handoff` instead of `/thts-handoff`.
+**Pi note:** Use `/skill:thts-integrate` for the skill and `/thts-handoff` or
+`/thts-resume` for its prompt templates.
 
 #### Session Handoffs
 
@@ -965,7 +1004,8 @@ thts uninit agents --global     # Remove global installation
 
 This removes:
 
-- All thts files from agent directories (instructions, skills, commands, agents)
+- All thts-managed files from agent directories (instructions, skills,
+  commands/prompts, native sub-agents, hooks/plugins/extensions)
 - Instruction file modifications
 - Gitignore patterns added by init
 

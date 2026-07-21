@@ -91,6 +91,15 @@ func GetEmbedTemplateData(agentType AgentType) EmbedTemplateData {
 		data.IncludeToolsMetadata = false
 		data.AgentModel = ""
 		data.IncludeClaudePlanDirective = false
+
+	case AgentPi:
+		data.AgentName = ""
+		data.HasTaskList = false
+		data.TaskTracking = ""
+		data.HasSpawnTasks = false
+		data.IncludeToolsMetadata = false
+		data.AgentModel = ""
+		data.IncludeClaudePlanDirective = false
 	}
 
 	return data

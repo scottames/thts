@@ -2,6 +2,7 @@ package agents
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -31,6 +32,8 @@ var (
 	initRefresh      bool
 	initDryRun       bool
 )
+
+var globalHooksInstaller = installGlobalHooks
 
 // ModelType represents the available Claude models.
 type ModelType string
@@ -145,6 +148,7 @@ type installationPlan struct {
 
 	// Modifications
 	settingsFile          string // If --with-settings
+	settingsSkipNotice    string // Why --with-settings creates no file
 	settingsLocalFile     string // For hook integration
 	instructionsFile      string // For marker integration
 	gitignorePatterns     []string
@@ -189,7 +193,7 @@ Usage: thts init agents [flags]`,
 }
 
 func init() {
-	InitCmd.Flags().StringVarP(&initAgents, "agents", "a", "", "Comma-separated list of agents (claude,codex,opencode)")
+	InitCmd.Flags().StringVarP(&initAgents, "agents", "a", "", "Comma-separated list of agents (claude,codex,opencode,gemini,pi)")
 	InitCmd.Flags().BoolVarP(&initForce, "force", "f", false, "Overwrite existing files")
 	InitCmd.Flags().BoolVarP(&initInteractive, "interactive", "i", false, "Interactively select options")
 	InitCmd.Flags().BoolVar(&initWithSettings, "with-settings", false, "Also create settings files")
@@ -366,6 +370,24 @@ func resolveAgentSelection(projectDir string) ([]agents.AgentType, error) {
 	return nil, fmt.Errorf("no agents specified. Use --agents flag, configure defaultAgents in profile, or use --interactive")
 }
 
+// resolveAgentComponentMode resolves an agent component without making config
+// depend on the global manifest. Legacy shared global settings only apply to
+// manifest-proven owners; all other agents remain local.
+func resolveAgentComponentMode(cfg *config.Config, manifest *GlobalManifest, agentType agents.AgentType, component string) config.ComponentMode {
+	if mode, ok := cfg.GetAgentComponentOverride(string(agentType), component); ok {
+		return mode
+	}
+
+	mode := cfg.GetAgentComponentMode(component)
+	if mode != config.ComponentModeGlobal {
+		return mode
+	}
+	if manifest.HasAgentComponent(string(agentType), component) {
+		return config.ComponentModeGlobal
+	}
+	return config.ComponentModeLocal
+}
+
 // promptAgentSelection shows an interactive multi-select for agent types.
 func promptAgentSelection() ([]agents.AgentType, error) {
 	var selected []string
@@ -421,6 +443,7 @@ func buildInstallationPlan(projectDir string, agentType agents.AgentType, level 
 	agentDir := filepath.Join(projectDir, agentConfig.RootDir)
 	globalDir := config.GlobalAgentDir(string(agentType))
 	cfg := config.LoadOrDefault()
+	globalManifest, _ := LoadGlobalManifest()
 
 	plan := &installationPlan{
 		agentType:        agentType,
@@ -431,7 +454,7 @@ func buildInstallationPlan(projectDir string, agentType agents.AgentType, level 
 	}
 
 	// Plan skills (check component mode)
-	skillsMode := cfg.GetAgentComponentMode("skills")
+	skillsMode := resolveAgentComponentMode(cfg, globalManifest, agentType, "skills")
 	for _, skillName := range thtsfiles.GetAvailableSkills() {
 		var relPath string
 		if agentConfig.SkillNeedsDir {
@@ -449,7 +472,7 @@ func buildInstallationPlan(projectDir string, agentType agents.AgentType, level 
 
 	// Plan commands/prompts (check component mode)
 	if agentConfig.SupportsCommands && !agentConfig.CommandsGlobalOnly {
-		commandsMode := cfg.GetAgentComponentMode("commands")
+		commandsMode := resolveAgentComponentMode(cfg, globalManifest, agentType, "commands")
 		ext := ".md"
 		if agentConfig.CommandsFormat == "toml" {
 			ext = ".toml"
@@ -467,7 +490,7 @@ func buildInstallationPlan(projectDir string, agentType agents.AgentType, level 
 
 	// Plan agents (check component mode)
 	if agentConfig.AgentsDir != "" {
-		agentsMode := cfg.GetAgentComponentMode("agents")
+		agentsMode := resolveAgentComponentMode(cfg, globalManifest, agentType, "agents")
 		for _, agentName := range thtsfiles.GetAvailableAgents() {
 			relPath := filepath.Join(agentConfig.AgentsDir, agentName+".md")
 			switch agentsMode {
@@ -481,7 +504,7 @@ func buildInstallationPlan(projectDir string, agentType agents.AgentType, level 
 
 	// Plan hooks and settings based on integration level
 	level = normalizeIntegrationLevel(level)
-	if level == IntegrationHook && agentConfig.SupportsHooks {
+	if level == IntegrationHook && agentConfig.SupportsHooks && resolveAgentComponentMode(cfg, globalManifest, agentType, "hooks") == config.ComponentModeLocal {
 		// Hook-based integration
 		if agentConfig.HooksDir != "" {
 			for _, hookName := range thtsfiles.GetAvailableHooks() {
@@ -499,10 +522,11 @@ func buildInstallationPlan(projectDir string, agentType agents.AgentType, level 
 	} else if level == IntegrationAgentsContent {
 		plan.instructionsFile = agentConfig.InstructionTargetFile
 	} else if level == IntegrationAgentsContentLocal {
-		if agentConfig.PluginsDir != "" {
+		hooksMode := resolveAgentComponentMode(cfg, globalManifest, agentType, "hooks")
+		if agentConfig.PluginsDir != "" && hooksMode == config.ComponentModeLocal {
 			relPath := filepath.Join(agentConfig.PluginsDir, "thts-integration.ts")
 			plan.pluginFiles = append(plan.pluginFiles, relPath)
-		} else {
+		} else if !usesGlobalPiRuntimeAdapter(agentType, agentConfig, hooksMode) {
 			if agentConfig.Type == agents.AgentClaude {
 				plan.instructionsFile = "CLAUDE.local.md"
 			} else {
@@ -512,9 +536,13 @@ func buildInstallationPlan(projectDir string, agentType agents.AgentType, level 
 		}
 	}
 
-	// Plan settings file if --with-settings
+	// Plan settings only when thts has a dynamic or embedded default to create.
 	if initWithSettings {
-		plan.settingsFile = agentConfig.SettingsFile
+		if agentConfig.Type == agents.AgentClaude || agentConfig.SettingsTemplate != "" {
+			plan.settingsFile = agentConfig.SettingsFile
+		} else {
+			plan.settingsSkipNotice = fmt.Sprintf("%s has no thts-managed settings; skipping", agents.AgentTypeLabels[agentType])
+		}
 	}
 
 	// Calculate file counts
@@ -551,7 +579,7 @@ func printInstallationPlan(plan *installationPlan) {
 		{name: cmdLabel, global: len(plan.globalCommandFiles) > 0, files: plan.commandFiles, hasData: len(plan.commandFiles) > 0 || len(plan.globalCommandFiles) > 0},
 		{name: "Agents", global: len(plan.globalAgentFiles) > 0, files: plan.agentFiles, hasData: len(plan.agentFiles) > 0 || len(plan.globalAgentFiles) > 0},
 		{name: "Hooks", files: plan.hookFiles, hasData: len(plan.hookFiles) > 0},
-		{name: "Plugins", files: plan.pluginFiles, hasData: len(plan.pluginFiles) > 0},
+		{name: pluginDisplayName(plan.agentType), files: plan.pluginFiles, hasData: len(plan.pluginFiles) > 0},
 	}
 
 	// Add settings section if applicable
@@ -610,6 +638,9 @@ func printInstallationPlan(plan *installationPlan) {
 			fmt.Printf("%s %s %s\n", branch, sec.name, ui.Muted("(local)"))
 			printFilesTree(sec.files, childPrefix)
 		}
+	}
+	if plan.settingsSkipNotice != "" {
+		fmt.Println(ui.InfoF("  Settings: %s", plan.settingsSkipNotice))
 	}
 
 	// Print summary
@@ -680,6 +711,7 @@ func initAgent(projectDir string, agentType agents.AgentType, level IntegrationL
 
 	// Load config to check component modes
 	cfg := config.LoadOrDefault()
+	globalManifest, _ := LoadGlobalManifest()
 
 	manifest := &Manifest{
 		Agent:            string(agentType),
@@ -690,7 +722,7 @@ func initAgent(projectDir string, agentType agents.AgentType, level IntegrationL
 	var filesCopied int
 
 	// Copy skills (check component mode)
-	skillsMode := cfg.GetAgentComponentMode("skills")
+	skillsMode := resolveAgentComponentMode(cfg, globalManifest, agentType, "skills")
 	switch skillsMode {
 	case config.ComponentModeGlobal:
 		fmt.Println(ui.InfoF("  Skills: using global installation"))
@@ -712,7 +744,7 @@ func initAgent(projectDir string, agentType agents.AgentType, level IntegrationL
 	// Copy commands/prompts (check component mode)
 	if agentConfig.SupportsCommands {
 		cmdLabel := agents.CommandsDirLabel(agentType)
-		commandsMode := cfg.GetAgentComponentMode("commands")
+		commandsMode := resolveAgentComponentMode(cfg, globalManifest, agentType, "commands")
 		switch commandsMode {
 		case config.ComponentModeGlobal:
 			fmt.Println(ui.InfoF("  %s: using global installation", capitalize(cmdLabel)))
@@ -739,7 +771,7 @@ func initAgent(projectDir string, agentType agents.AgentType, level IntegrationL
 	}
 
 	// Copy agents (check component mode)
-	agentsMode := cfg.GetAgentComponentMode("agents")
+	agentsMode := resolveAgentComponentMode(cfg, globalManifest, agentType, "agents")
 	switch agentsMode {
 	case config.ComponentModeGlobal:
 		fmt.Println(ui.InfoF("  Agents: using global installation"))
@@ -766,17 +798,26 @@ func initAgent(projectDir string, agentType agents.AgentType, level IntegrationL
 	// Setup integration level
 	// Normalize level for legacy manifests
 	level = normalizeIntegrationLevel(level)
+	hooksMode := resolveAgentComponentMode(cfg, globalManifest, agentType, "hooks")
+	removeLocalPiExtension := level == IntegrationAgentsContent || level == IntegrationOnDemand || usesGlobalPiRuntimeAdapter(agentType, agentConfig, hooksMode)
+	if err := removeManifestOwnedPiExtension(agentDir, agentConfig, removeLocalPiExtension); err != nil {
+		return fmt.Errorf("remove previous Pi extension: %w", err)
+	}
 
 	if level == IntegrationHook {
-		// Hook-based integration
-		if err := setupHookIntegration(projectDir, agentDir, agentType, agentConfig, manifest); err != nil {
-			fmt.Println(ui.WarningF("  Could not setup hook integration: %v", err))
+		switch hooksMode {
+		case config.ComponentModeGlobal:
+			fmt.Printf("%s\n", ui.InfoF("  %s: using global installation", runtimeAdapterDisplayName(agentType)))
+		case config.ComponentModeLocal:
+			if err := setupHookIntegration(projectDir, agentDir, agentType, agentConfig, manifest); err != nil {
+				fmt.Println(ui.WarningF("  Could not setup hook integration: %v", err))
+			}
 		}
-	} else if level == IntegrationAgentsContentLocal && agentConfig.PluginsDir != "" {
+	} else if level == IntegrationAgentsContentLocal && agentConfig.PluginsDir != "" && hooksMode == config.ComponentModeLocal {
 		if err := setupHookIntegration(projectDir, agentDir, agentType, agentConfig, manifest); err != nil {
 			fmt.Println(ui.WarningF("  Could not setup local plugin integration: %v", err))
 		}
-	} else {
+	} else if !usesGlobalPiRuntimeAdapter(agentType, agentConfig, hooksMode) {
 		// Traditional integration (markers or config)
 		instMod, gitignorePatterns, err := setupIntegrationLevel(projectDir, agentDir, agentConfig, level)
 		if err != nil {
@@ -793,12 +834,14 @@ func initAgent(projectDir string, agentType agents.AgentType, level IntegrationL
 
 	// Handle settings if --with-settings flag is set
 	if initWithSettings {
-		if err := writeAgentSettings(agentDir, agentType); err != nil {
+		if agentType != agents.AgentClaude && agentConfig.SettingsTemplate == "" {
+			fmt.Println(ui.InfoF("  Settings: thts does not manage %s settings; skipping", agents.AgentTypeLabels[agentType]))
+		} else if err := writeAgentSettings(agentDir, agentType); err != nil {
 			fmt.Println(ui.WarningF("  Could not write settings: %v", err))
 		} else {
 			manifest.SettingsCreated = true
-			manifest.Files = append(manifest.Files, agents.GetConfig(agentType).SettingsFile)
-			fmt.Println(ui.SuccessF("  Created %s", agents.GetConfig(agentType).SettingsFile))
+			manifest.Files = append(manifest.Files, agentConfig.SettingsFile)
+			fmt.Println(ui.SuccessF("  Created %s", agentConfig.SettingsFile))
 		}
 	}
 
@@ -1040,6 +1083,8 @@ func getPluginsFS(agentType agents.AgentType) fs.FS {
 	switch agentType {
 	case agents.AgentOpenCode:
 		return thtsfiles.OpenCodePlugins
+	case agents.AgentPi:
+		return thtsfiles.PiExtensions
 	default:
 		return nil
 	}
@@ -1401,7 +1446,7 @@ func writeAgentSettings(agentDir string, agentType agents.AgentType) error {
 		content = buildClaudeSettings()
 	default:
 		// Other agents use embedded settings files
-		content = thtsfiles.GetDefaultSettings(cfg.SettingsFile)
+		content = thtsfiles.GetDefaultSettings(cfg.SettingsTemplate)
 		if content == "" {
 			return fmt.Errorf("no default settings for agent: %s", agentType)
 		}
@@ -1759,7 +1804,7 @@ func setupHookIntegration(projectDir, agentDir string, agentType agents.AgentTyp
 			return fmt.Errorf("failed to copy plugins: %w", err)
 		}
 		if copied > 0 {
-			fmt.Println(ui.SuccessF("  Copied %d plugin(s)", copied))
+			fmt.Println(ui.SuccessF("  Copied %d %s(s)", copied, pluginName(agentType)))
 		}
 	}
 
@@ -1799,7 +1844,7 @@ func setupHookIntegration(projectDir, agentDir string, agentType agents.AgentTyp
 	}
 
 	if cfg.PluginsDir != "" {
-		fmt.Println(ui.Info("  Plugin mode: instructions load dynamically"))
+		fmt.Println(ui.InfoF("  %s mode: instructions load dynamically", capitalize(pluginName(agentType))))
 	} else {
 		fmt.Println(ui.Info("  Hook mode: instructions load on keyword detection"))
 	}
@@ -1819,6 +1864,46 @@ func copyPluginsToManifest(agentDir string, agentType agents.AgentType, cfg *age
 		}
 	}
 	return copied, nil
+}
+
+func usesGlobalPiRuntimeAdapter(agentType agents.AgentType, cfg *agents.AgentConfig, hooksMode config.ComponentMode) bool {
+	return agentType == agents.AgentPi && cfg.PluginsDir != "" && hooksMode == config.ComponentModeGlobal
+}
+
+func removeManifestOwnedPiExtension(agentDir string, cfg *agents.AgentConfig, shouldRemove bool) error {
+	if cfg.Type != agents.AgentPi || !shouldRemove {
+		return nil
+	}
+
+	manifest, err := loadManifest(agentDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	if previousLevel := normalizeIntegrationLevel(manifest.IntegrationLevel); previousLevel != IntegrationHook && previousLevel != IntegrationAgentsContentLocal {
+		return nil
+	}
+
+	return removePiExtensionFromManifest(agentDir, cfg, manifest)
+}
+
+func removePiExtensionFromManifest(agentDir string, cfg *agents.AgentConfig, manifest *Manifest) error {
+	relativeExtension := filepath.Join(cfg.PluginsDir, "thts-integration.ts")
+	if !slices.Contains(manifest.Files, relativeExtension) {
+		return nil
+	}
+	if err := os.Remove(filepath.Join(agentDir, relativeExtension)); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	manifest.Files = removeStringValue(manifest.Files, relativeExtension)
+	cleanEmptyDirs(filepath.Join(agentDir, cfg.PluginsDir))
+	return nil
+}
+
+func removeStringValue(values []string, target string) []string {
+	return slices.DeleteFunc(values, func(value string) bool { return value == target })
 }
 
 func migrateLegacyLocalInstructions(projectDir, agentDir string, cfg *agents.AgentConfig, manifest *Manifest) error {
@@ -2031,6 +2116,7 @@ func refreshAgentSetup(projectDir string, agentTypes []agents.AgentType) error {
 	fmt.Println()
 
 	cfg := config.LoadOrDefault()
+	globalManifest, _ := LoadGlobalManifest()
 
 	for _, agentType := range agentTypes {
 		agentConfig := agents.GetConfig(agentType)
@@ -2048,7 +2134,7 @@ func refreshAgentSetup(projectDir string, agentTypes []agents.AgentType) error {
 		var filesUpdated int
 
 		// Re-copy skills (check component mode)
-		skillsMode := cfg.GetAgentComponentMode("skills")
+		skillsMode := resolveAgentComponentMode(cfg, globalManifest, agentType, "skills")
 		if skillsMode == config.ComponentModeLocal {
 			copied, _, err := copySkills(agentDir, agentType, agentConfig)
 			if err != nil {
@@ -2061,7 +2147,7 @@ func refreshAgentSetup(projectDir string, agentTypes []agents.AgentType) error {
 
 		// Re-copy commands (check component mode)
 		if agentConfig.SupportsCommands && !agentConfig.CommandsGlobalOnly {
-			commandsMode := cfg.GetAgentComponentMode("commands")
+			commandsMode := resolveAgentComponentMode(cfg, globalManifest, agentType, "commands")
 			if commandsMode == config.ComponentModeLocal {
 				copied, _, err := copyCommands(agentDir, agentType)
 				if err != nil {
@@ -2075,7 +2161,7 @@ func refreshAgentSetup(projectDir string, agentTypes []agents.AgentType) error {
 
 		// Re-copy agents (check component mode)
 		if agentConfig.AgentsDir != "" {
-			agentsMode := cfg.GetAgentComponentMode("agents")
+			agentsMode := resolveAgentComponentMode(cfg, globalManifest, agentType, "agents")
 			if agentsMode == config.ComponentModeLocal {
 				copied, _, err := copyAgents(agentDir, agentType, agentConfig)
 				if err != nil {
@@ -2092,7 +2178,7 @@ func refreshAgentSetup(projectDir string, agentTypes []agents.AgentType) error {
 		switch level {
 		case IntegrationHook:
 			// Refresh hook scripts
-			if agentConfig.HooksDir != "" {
+			if agentConfig.HooksDir != "" && resolveAgentComponentMode(cfg, globalManifest, agentType, "hooks") == config.ComponentModeLocal {
 				copied, files, err := copyHooks(agentDir, agentType, agentConfig)
 				if err != nil {
 					fmt.Println(ui.WarningF("  Could not update hooks: %v", err))
@@ -2111,13 +2197,20 @@ func refreshAgentSetup(projectDir string, agentTypes []agents.AgentType) error {
 			}
 		}
 
-		if agentConfig.PluginsDir != "" && (level == IntegrationHook || level == IntegrationAgentsContentLocal) {
+		hooksMode := resolveAgentComponentMode(cfg, globalManifest, agentType, "hooks")
+		if usesGlobalPiRuntimeAdapter(agentType, agentConfig, hooksMode) && (level == IntegrationHook || level == IntegrationAgentsContentLocal) {
+			if err := removePiExtensionFromManifest(agentDir, agentConfig, manifest); err != nil {
+				fmt.Println(ui.WarningF("  Could not remove local Pi extension: %v", err))
+			} else {
+				filesUpdated++
+			}
+		} else if agentConfig.PluginsDir != "" && (level == IntegrationHook || level == IntegrationAgentsContentLocal) && hooksMode == config.ComponentModeLocal {
 			copied, err := copyPluginsToManifest(agentDir, agentType, agentConfig, manifest)
 			if err != nil {
 				fmt.Println(ui.WarningF("  Could not update plugins: %v", err))
 			} else if copied > 0 {
 				filesUpdated += copied
-				fmt.Println(ui.SuccessF("  Updated %d plugin(s)", copied))
+				fmt.Println(ui.SuccessF("  Updated %d %s(s)", copied, pluginName(agentType)))
 			}
 			if err == nil && level == IntegrationAgentsContentLocal {
 				if err := migrateLegacyLocalInstructions(projectDir, agentDir, agentConfig, manifest); err != nil {
@@ -2326,7 +2419,11 @@ func buildGlobalInstallationPlans(components []string, agentTypes []agents.Agent
 
 // printGlobalInstallationPlan displays what would be installed globally using tree structure.
 func printGlobalInstallationPlan(plan *globalInstallationPlan) {
-	fmt.Printf("%s\n", ui.SubHeader(capitalize(plan.component)))
+	componentName := capitalize(plan.component)
+	if plan.component == "hooks" && len(plan.agentPlans) == 1 && plan.agentPlans[agents.AgentPi] != nil {
+		componentName = "Runtime Adapters"
+	}
+	fmt.Printf("%s\n", ui.SubHeader(componentName))
 
 	// Get sorted agent types for consistent output
 	agentTypes := make([]agents.AgentType, 0, len(plan.agentPlans))
@@ -2403,11 +2500,16 @@ func runGlobalInit(_ *cobra.Command, _ []string) error {
 		manifest = NewGlobalManifest()
 	}
 
-	// Install each component globally
+	// Install each component globally. Successful pairs are retained even when
+	// another requested pair fails.
+	successfulPairs := make(map[string][]agents.AgentType)
+	var installErrors []error
 	for _, component := range components {
-		if err := installGlobalComponent(component, agentTypes, manifest); err != nil {
+		successful, err := installGlobalComponent(component, agentTypes, manifest)
+		successfulPairs[component] = successful
+		if err != nil {
 			fmt.Println(ui.ErrorF("Failed to install %s globally: %v", component, err))
-			continue
+			installErrors = append(installErrors, err)
 		}
 	}
 
@@ -2419,8 +2521,10 @@ func runGlobalInit(_ *cobra.Command, _ []string) error {
 	// Update config to mark components as global
 	cfg := config.LoadOrDefault()
 
-	for _, component := range components {
-		cfg.SetAgentComponentMode(component, config.ComponentModeGlobal)
+	for component, agentTypes := range successfulPairs {
+		for _, agentType := range agentTypes {
+			cfg.SetAgentComponentOverride(string(agentType), component, config.ComponentModeGlobal)
+		}
 	}
 
 	if err := config.Save(cfg); err != nil {
@@ -2433,7 +2537,7 @@ func runGlobalInit(_ *cobra.Command, _ []string) error {
 	fmt.Println(ui.InfoF("Config updated: %s", config.ContractPath(config.ThtsConfigPath())))
 	fmt.Println(ui.InfoF("Manifest saved: %s", config.ContractPath(config.GlobalManifestPath())))
 
-	return nil
+	return errors.Join(installErrors...)
 }
 
 // parseGlobalComponents parses the --global flag value into component names.
@@ -2500,8 +2604,12 @@ func promptGlobalComponentSelection() ([]string, error) {
 }
 
 // resolveGlobalAgentSelection determines which agents to install globally.
-// Uses profile's defaultAgents or falls back to all agents.
+// Uses --agents, profile defaultAgents, then all agents.
 func resolveGlobalAgentSelection() ([]agents.AgentType, error) {
+	if initAgents != "" {
+		return agents.ParseAgentTypes(initAgents)
+	}
+
 	// Check profile's defaultAgents
 	cfg, err := config.Load()
 	if err == nil {
@@ -2519,9 +2627,9 @@ func resolveGlobalAgentSelection() ([]agents.AgentType, error) {
 }
 
 // installGlobalComponent installs a component to global directories for all specified agents.
-func installGlobalComponent(component string, agentTypes []agents.AgentType, manifest *GlobalManifest) error {
-	var allFiles []string
-	var agentNames []string
+func installGlobalComponent(component string, agentTypes []agents.AgentType, manifest *GlobalManifest) ([]agents.AgentType, error) {
+	var successful []agents.AgentType
+	var installErrors []error
 
 	for _, agentType := range agentTypes {
 		globalDir := config.GlobalAgentDir(string(agentType))
@@ -2547,19 +2655,23 @@ func installGlobalComponent(component string, agentTypes []agents.AgentType, man
 				continue // agent doesn't support commands
 			}
 		case "agents":
+			if agentCfg.AgentsDir == "" {
+				continue
+			}
 			_, files, err = copyAgents(globalDir, agentType, agentCfg)
 		case "hooks":
 			if !agentCfg.SupportsHooks {
 				fmt.Printf("  %s hooks: %s does not support hooks\n", ui.Warning(""), agents.AgentTypeLabels[agentType])
 				continue
 			}
-			files, err = installGlobalHooks(globalDir, agentType, agentCfg)
+			files, err = globalHooksInstaller(globalDir, agentType, agentCfg)
 		default:
-			return fmt.Errorf("unknown component: %s", component)
+			return successful, fmt.Errorf("unknown component: %s", component)
 		}
 
 		if err != nil {
-			return fmt.Errorf("failed to copy %s for %s: %w", component, agentType, err)
+			installErrors = append(installErrors, fmt.Errorf("failed to copy %s for %s: %w", component, agentType, err))
+			continue
 		}
 
 		// Skip if no files were copied (e.g., Gemini doesn't support agents)
@@ -2567,7 +2679,8 @@ func installGlobalComponent(component string, agentTypes []agents.AgentType, man
 			continue
 		}
 
-		// Convert relative file names to absolute paths
+		// Convert relative file names to absolute paths.
+		var fullPaths []string
 		for _, f := range files {
 			var fullPath string
 			switch component {
@@ -2581,20 +2694,15 @@ func installGlobalComponent(component string, agentTypes []agents.AgentType, man
 				// Hooks files are already full paths from installGlobalHooks
 				fullPath = f
 			}
-			allFiles = append(allFiles, fullPath)
+			fullPaths = append(fullPaths, fullPath)
 		}
 
-		agentNames = append(agentNames, string(agentType))
-		fmt.Printf("  %s %s: installed to %s\n", ui.Success(""), component, config.ContractPath(globalDir))
+		manifest.RecordAgentComponent(component, agentType, fullPaths)
+		successful = append(successful, agentType)
+		fmt.Printf("  %s %s: installed to %s\n", ui.Success(""), globalComponentDisplayName(component, agentType), config.ContractPath(globalDir))
 	}
 
-	// Update manifest
-	manifest.AddComponent(component, &GlobalComponentInfo{
-		Agents: agentNames,
-		Files:  allFiles,
-	})
-
-	return nil
+	return successful, errors.Join(installErrors...)
 }
 
 // capitalize returns the string with the first letter capitalized.
@@ -2603,4 +2711,29 @@ func capitalize(s string) string {
 		return s
 	}
 	return strings.ToUpper(s[:1]) + s[1:]
+}
+
+func pluginDisplayName(agentType agents.AgentType) string {
+	return capitalize(pluginName(agentType)) + "s"
+}
+
+func pluginName(agentType agents.AgentType) string {
+	if agentType == agents.AgentPi {
+		return "extension"
+	}
+	return "plugin"
+}
+
+func runtimeAdapterDisplayName(agentType agents.AgentType) string {
+	if agentType == agents.AgentPi {
+		return "Runtime adapter"
+	}
+	return "Hooks"
+}
+
+func globalComponentDisplayName(component string, agentType agents.AgentType) string {
+	if component == "hooks" && agentType == agents.AgentPi {
+		return "runtime adapter"
+	}
+	return component
 }

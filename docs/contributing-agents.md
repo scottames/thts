@@ -18,6 +18,7 @@ fictional "testbot" agent as a concrete example.
 - [Step 9: Run Tests](#step-9-run-tests)
 - [Step 10: Verify End-to-End](#step-10-verify-end-to-end)
 - [AgentConfig Reference](#agentconfig-reference)
+- [Global Component Ownership](#global-component-ownership)
 - [Common Pitfalls](#common-pitfalls)
 
 <!-- mtoc-end -->
@@ -34,8 +35,8 @@ Adding an agent requires changes to these files:
 | `embedded/skills/*.tmpl`        | Shared skill templates              |
 | `embedded/commands/*.tmpl`      | Shared command templates            |
 | `embedded/agents/*.tmpl`        | Shared agent templates              |
-| `embedded/plugins/{agent}/`     | Optional native plugin adapters     |
-| `embedded/settings/{filename}`  | Default settings template           |
+| `embedded/plugins/{agent}/`     | Optional native runtime adapters    |
+| `embedded/settings/{filename}`  | Optional default settings template  |
 | `internal/agents/types_test.go` | Completeness tests                  |
 
 The `TestAgentCompleteness` test will catch most missing pieces.
@@ -46,11 +47,14 @@ Before starting, gather this information about your agent:
 
 1. **Config directory name**: What directory does the agent use? (e.g., `.claude`)
 2. **Skill file structure**: Flat files or subdirectories with SKILL.md?
-3. **Settings file format**: JSON or TOML?
+3. **Settings file format**: JSON or TOML? Does thts own a safe default?
 4. **Global config location**: Standard dotfile or XDG?
 5. **Commands directory name**: "commands", "prompts", "command", or other?
 6. **Commands file format**: Markdown (`.md`) or TOML (`.toml`)? (Most use markdown)
-7. **Agents support**: Does the agent support sub-agents? (Leave AgentsDir empty if not)
+7. **Agents support**: Does the agent support native sub-agents? (Leave
+   `AgentsDir` empty if not.)
+8. **Runtime adapter**: Does it use shell hooks, a plugin, an extension, or no
+   native adapter? Pi uses an `extensions/` directory.
 
 For testbot, we'll assume:
 
@@ -75,6 +79,8 @@ const (
     AgentClaude   AgentType = "claude"
     AgentCodex    AgentType = "codex"
     AgentOpenCode AgentType = "opencode"
+    AgentGemini   AgentType = "gemini"
+    AgentPi       AgentType = "pi"
     AgentTestbot  AgentType = "testbot"  // Add this
 )
 ```
@@ -87,7 +93,7 @@ grep -n 'func AllAgentTypes' internal/agents/types.go
 
 ```go
 func AllAgentTypes() []AgentType {
-    return []AgentType{AgentClaude, AgentCodex, AgentOpenCode, AgentTestbot}
+    return []AgentType{AgentClaude, AgentCodex, AgentOpenCode, AgentGemini, AgentPi, AgentTestbot}
 }
 ```
 
@@ -108,6 +114,8 @@ var AgentTypeLabels = map[AgentType]string{
     AgentClaude:   "Claude Code",
     AgentCodex:    "OpenAI Codex CLI",
     AgentOpenCode: "OpenCode",
+    AgentGemini:   "Google Gemini CLI",
+    AgentPi:       "Pi",
     AgentTestbot:  "Testbot",  // Add this
 }
 ```
@@ -131,13 +139,16 @@ AgentTestbot: {
     InstructionTargetFile: "TESTBOT.md",
     SkillsDir:             "skills",
     SkillNeedsDir:         false,
-    AgentsDir:             "agents",
+    AgentsDir:             "agents", // Empty when native sub-agents are unsupported
     SupportsCommands:      true,
     CommandsDir:           "commands",
     CommandsGlobalOnly:    false,
     GlobalUsesXDG:         false,
     SettingsFile:          "config.json",
+    SettingsTemplate:      "testbot.json", // Empty when thts must not manage settings
     SettingsFormat:        "json",
+    SupportsHooks:         true,
+    HooksDir:              "hooks",
 },
 ```
 
@@ -161,10 +172,14 @@ func ParseAgentType(s string) (AgentType, error) {
         return AgentCodex, nil
     case "opencode":
         return AgentOpenCode, nil
+    case "gemini":
+        return AgentGemini, nil
+    case "pi":
+        return AgentPi, nil
     case "testbot":              // Add this case
         return AgentTestbot, nil
     default:
-        return "", fmt.Errorf("unknown agent type: %q (valid: claude, codex, opencode, testbot)", s)
+        return "", fmt.Errorf("unknown agent type: %q (valid: claude, codex, opencode, gemini, pi, testbot)", s)
     }
 }
 ```
@@ -173,8 +188,8 @@ func ParseAgentType(s string) (AgentType, error) {
 
 ## Step 5: Configure Embedded Templates
 
-Skills, commands, and sub-agents use shared templates from `embedded/`. Add the
-new agent's differences to `GetEmbedTemplateData()` in
+Skills, commands or prompts, and native sub-agents use shared templates from
+`embedded/`. Add the new agent's differences to `GetEmbedTemplateData()` in
 `internal/agents/template.go` rather than copying per-agent files.
 
 The `thts-integrate` skill must remain independent of the selected integration
@@ -214,11 +229,19 @@ templates, such as an OpenCode plugin.
 
 ## Step 7: Add Integration Adapters
 
-Set `HooksDir` for agents using shell hooks or `PluginsDir` for agents using a
-native plugin. If the agent supports neither, hook mode automatically falls
-back to managed project instructions.
+Set `HooksDir` for agents using shell hooks or `PluginsDir` for a native runtime
+adapter. `PluginsDir` is the existing generic field: use `plugins/` for an
+OpenCode plugin and `extensions/` for a Pi extension. In user-facing output and
+documentation, call a Pi runtime adapter an **extension**, not a plugin. If an
+agent supports neither, hook mode automatically falls back to managed project
+instructions.
 
-Only native plugin assets require an FS case:
+Pi is the reference configuration for an extension-only agent: it uses
+`.pi/skills/`, `.pi/prompts/`, and `.pi/extensions/`, with no native sub-agents
+and no thts-managed settings. Do not add an empty settings template merely to
+make `--with-settings` create `settings.json`.
+
+Only native runtime-adapter assets require an FS case:
 
 ```go
 func getPluginsFS(agentType agents.AgentType) fs.FS {
@@ -235,8 +258,10 @@ func getPluginsFS(agentType agents.AgentType) fs.FS {
 
 ## Step 8: Add Settings Template
 
-If your agent has a settings file, create it in the `settings/` directory. The
-filename must match `SettingsFile` in your AgentConfig.
+Create a settings template only when thts should manage a default settings file.
+The template filename must match `SettingsTemplate`; `SettingsFile` remains the
+destination name. Leave `SettingsTemplate` empty when the agent's settings are
+user-owned, as for Pi.
 
 For testbot with `SettingsFile: "config.json"`:
 
@@ -252,8 +277,8 @@ cat > settings/config.json << 'EOF'
 EOF
 ```
 
-The settings are automatically embedded via `//go:embed settings/*` in embed.go
-and looked up by filename using `GetDefaultSettings()`.
+Settings are automatically embedded via `//go:embed settings/*` in `embed.go`
+and looked up by `SettingsTemplate` using `GetDefaultSettings()`.
 
 **Note**: Claude is special - its settings are built dynamically with user input
 in `buildClaudeSettings()`. If your agent needs dynamic settings, you'll need to
@@ -315,8 +340,22 @@ field list. Key fields:
 | `CommandsFormat`        | `"md"` (default) or `"toml"` for command file format             |
 | `GlobalUsesXDG`         | `true` = uses `~/.config/` instead of `~/.`                      |
 | `SettingsFile`          | Settings filename                                                |
+| `SettingsTemplate`      | Embedded default identity; empty when settings are user-owned    |
 | `SettingsFormat`        | `"json"` or `"toml"`                                             |
 | `SettingsContextKey`    | JSON key for context file (e.g., `"contextFileName"` for Gemini) |
+
+## Global Component Ownership
+
+Global components are owned per agent, not as one all-or-nothing switch. Record
+successful paths with `GlobalManifest.RecordAgentComponent`, which replaces only
+that agent's paths for a component and preserves the other agents' paths. Set
+the matching `agents.perAgent.<agent>.<component>` mode only after that
+agent/component pair installs successfully.
+
+When removing global files, retain manifest ownership and the global mode for
+paths that could not be removed. Reset only the successfully removed agent's
+component mode; never downgrade another agent because a shared component was
+selected.
 
 ## Common Pitfalls
 
@@ -325,7 +364,10 @@ Before submitting:
 - [ ] Added constant to `AllAgentTypes()` return value
 - [ ] Added case to `ParseAgentType()` switch
 - [ ] Added agent-specific template data in `GetEmbedTemplateData()`
-- [ ] Added native hook or plugin assets only when required
-- [ ] Settings file created in `embedded/settings/` matching `SettingsFile`
+- [ ] Added native hook, plugin, or extension assets only when required
+- [ ] Used extension terminology and `extensions/` for Pi-like adapters
+- [ ] Left `AgentsDir` and `SettingsTemplate` empty when unsupported or user-owned
+- [ ] Global manifest updates preserve other agents' component ownership
+- [ ] Settings template created in `embedded/settings/` only when it matches `SettingsTemplate`
 - [ ] All tests pass: `go test ./...`
 - [ ] Linting passes: `trunk check`

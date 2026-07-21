@@ -3,6 +3,7 @@ package agents
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -21,6 +22,8 @@ func TestParseAgentType(t *testing.T) {
 		{"OpenCode", AgentOpenCode, false},
 		{"gemini", AgentGemini, false},
 		{"GEMINI", AgentGemini, false},
+		{"pi", AgentPi, false},
+		{"PI", AgentPi, false},
 		{"invalid", "", true},
 		{"", "", true},
 	}
@@ -36,6 +39,19 @@ func TestParseAgentType(t *testing.T) {
 				t.Errorf("ParseAgentType(%q) = %v, want %v", tt.input, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestParseAgentTypeUnknownListsAllAgents(t *testing.T) {
+	_, err := ParseAgentType("invalid")
+	if err == nil {
+		t.Fatal("ParseAgentType(invalid) returned nil error")
+	}
+
+	for _, name := range []string{"claude", "codex", "opencode", "gemini", "pi"} {
+		if !strings.Contains(err.Error(), name) {
+			t.Errorf("ParseAgentType(invalid) error = %q, missing %q", err, name)
+		}
 	}
 }
 
@@ -251,6 +267,28 @@ func TestDetectExistingAgents(t *testing.T) {
 	}
 }
 
+func TestDetectExistingPi(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	if err := os.WriteFile(filepath.Join(tmpDir, "AGENTS.md"), []byte("# Instructions\n"), 0644); err != nil {
+		t.Fatalf("failed to create AGENTS.md: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "pi"), []byte(""), 0755); err != nil {
+		t.Fatalf("failed to create executable: %v", err)
+	}
+
+	if found := DetectExistingAgents(tmpDir); len(found) != 0 {
+		t.Errorf("DetectExistingAgents() = %v with AGENTS.md and executable only, want none", found)
+	}
+
+	if err := os.Mkdir(filepath.Join(tmpDir, ".pi"), 0755); err != nil {
+		t.Fatalf("failed to create .pi directory: %v", err)
+	}
+	if found := DetectExistingAgents(tmpDir); len(found) != 1 || found[0] != AgentPi {
+		t.Errorf("DetectExistingAgents() = %v, want [pi]", found)
+	}
+}
+
 func TestSortAgentTypes(t *testing.T) {
 	agents := []AgentType{AgentOpenCode, AgentClaude, AgentCodex}
 	SortAgentTypes(agents)
@@ -303,8 +341,15 @@ func TestStringsToAgentTypes(t *testing.T) {
 
 func TestAllAgentTypes(t *testing.T) {
 	all := AllAgentTypes()
-	if len(all) != 4 {
-		t.Errorf("Expected 4 agent types, got %d", len(all))
+	if len(all) != 5 {
+		t.Errorf("Expected 5 agent types, got %d", len(all))
+	}
+	seen := make(map[AgentType]bool)
+	for _, agentType := range all {
+		if seen[agentType] {
+			t.Errorf("AllAgentTypes() contains duplicate %q", agentType)
+		}
+		seen[agentType] = true
 	}
 	// Verify canonical order
 	if all[0] != AgentClaude {
@@ -319,6 +364,9 @@ func TestAllAgentTypes(t *testing.T) {
 	if all[3] != AgentGemini {
 		t.Error("Fourth agent should be gemini")
 	}
+	if all[4] != AgentPi {
+		t.Error("Fifth agent should be pi")
+	}
 }
 
 func TestCommandsDirLabel(t *testing.T) {
@@ -330,6 +378,7 @@ func TestCommandsDirLabel(t *testing.T) {
 		{AgentCodex, "prompts"},
 		{AgentOpenCode, "commands"},
 		{AgentGemini, "commands"},
+		{AgentPi, "prompts"},
 	}
 
 	for _, tt := range tests {
@@ -387,5 +436,41 @@ func TestAgentCompleteness(t *testing.T) {
 				t.Errorf("Agent %q config missing SettingsFormat", agentType)
 			}
 		})
+	}
+}
+
+func TestPiNativeCapabilities(t *testing.T) {
+	pi := GetConfig(AgentPi)
+	if pi == nil {
+		t.Fatal("GetConfig(pi) returned nil")
+	}
+	if pi.RootDir != ".pi" {
+		t.Errorf("Pi RootDir = %q, want .pi", pi.RootDir)
+	}
+	if !pi.SkillNeedsDir {
+		t.Error("Pi skills should require subdirectories")
+	}
+	if pi.CommandsDir != "prompts" {
+		t.Errorf("Pi CommandsDir = %q, want prompts", pi.CommandsDir)
+	}
+	if pi.AgentsDir != "" {
+		t.Errorf("Pi AgentsDir = %q, want empty", pi.AgentsDir)
+	}
+	if pi.SettingsFile != "settings.json" || pi.SettingsFormat != "json" {
+		t.Errorf("Pi settings destination = %s (%s), want settings.json (json)", pi.SettingsFile, pi.SettingsFormat)
+	}
+	if pi.SettingsTemplate != "" {
+		t.Errorf("Pi settings template = %q, want empty", pi.SettingsTemplate)
+	}
+	if !pi.SupportsHooks || pi.PluginsDir != "extensions" || pi.HooksDir != "" {
+		t.Errorf("Pi hooks/plugins = supports %t, hooks %q, plugins %q; want true, empty, extensions", pi.SupportsHooks, pi.HooksDir, pi.PluginsDir)
+	}
+	if pi.InstructionTargetFile != "AGENTS.md" {
+		t.Errorf("Pi InstructionTargetFile = %q, want AGENTS.md", pi.InstructionTargetFile)
+	}
+
+	data := GetEmbedTemplateData(AgentPi)
+	if data.HasTaskList || data.TaskTracking != "" || data.HasSpawnTasks || data.HasAgentsFeature {
+		t.Errorf("Pi template capabilities = %+v, want no task tracking, task spawning, or agents metadata", data)
 	}
 }

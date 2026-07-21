@@ -21,6 +21,58 @@ func TestDefaults(t *testing.T) {
 	}
 }
 
+func TestAgentComponentOverrides(t *testing.T) {
+	cfg := &Config{
+		Agents: &AgentsConfig{
+			Skills: ComponentModeLocal,
+			PerAgent: map[string]*AgentComponentModes{
+				"pi": {
+					Skills: ComponentModeGlobal,
+					Hooks:  ComponentModeDisabled,
+				},
+			},
+		},
+	}
+
+	mode, ok := cfg.GetAgentComponentOverride("pi", "skills")
+	if !ok || mode != ComponentModeGlobal {
+		t.Fatalf("Pi skills override = (%q, %t), want (global, true)", mode, ok)
+	}
+
+	if _, ok := cfg.GetAgentComponentOverride("claude", "skills"); ok {
+		t.Fatal("Claude must not inherit Pi's explicit override")
+	}
+
+	cfg.SetAgentComponentOverride("pi", "commands", ComponentModeGlobal)
+	mode, ok = cfg.GetAgentComponentOverride("pi", "commands")
+	if !ok || mode != ComponentModeGlobal {
+		t.Fatalf("Pi commands override after set = (%q, %t), want (global, true)", mode, ok)
+	}
+}
+
+func TestAgentComponentOverridesParseFromYAML(t *testing.T) {
+	var cfg Config
+	if err := yaml.Unmarshal([]byte(`agents:
+  skills: local
+  perAgent:
+    pi:
+      skills: global
+      hooks: disabled
+`), &cfg); err != nil {
+		t.Fatalf("unmarshal config: %v", err)
+	}
+
+	for component, want := range map[string]ComponentMode{
+		"skills": ComponentModeGlobal,
+		"hooks":  ComponentModeDisabled,
+	} {
+		got, ok := cfg.GetAgentComponentOverride("pi", component)
+		if !ok || got != want {
+			t.Errorf("Pi %s override = (%q, %t), want (%q, true)", component, got, ok, want)
+		}
+	}
+}
+
 // NOTE: TestResolveProfileForRepo has been moved to state_test.go
 // as ResolveProfileForRepo is now a method on State, not Config.
 

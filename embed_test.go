@@ -274,3 +274,32 @@ func TestRenderSkill_ThtsIntegrateLoadsCanonicalInstructions(t *testing.T) {
 		})
 	}
 }
+
+func TestGetDefaultSettingsByTemplateIdentity(t *testing.T) {
+	tests := []struct {
+		template string
+		want     string
+	}{
+		{template: "codex.toml", want: "# Codex CLI configuration"},
+		{template: "gemini.json", want: `"contextFileName": "AGENTS.md"`},
+		{template: "opencode.json", want: `"model": "anthropic/claude-sonnet-4-20250514"`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.template, func(t *testing.T) {
+			if got := GetDefaultSettings(tt.template); !strings.Contains(got, tt.want) {
+				t.Errorf("GetDefaultSettings(%q) = %q, want content containing %q", tt.template, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestPiExtensionIsEmbeddedSeparately(t *testing.T) {
+	extension, err := PiExtensions.ReadFile("embedded/plugins/pi/thts-integration.ts")
+	if err != nil {
+		t.Fatalf("read embedded Pi extension: %v", err)
+	}
+	if !strings.Contains(string(extension), "before_agent_start") {
+		t.Error("embedded Pi extension is missing its runtime adapter")
+	}
+}

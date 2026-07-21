@@ -214,6 +214,27 @@ func TestHookIntegration_OpenCode(t *testing.T) {
 	}
 }
 
+func TestHookIntegration_Pi(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := agents.GetConfig(agents.AgentPi)
+	agentDir := filepath.Join(tmpDir, cfg.RootDir)
+	if err := os.MkdirAll(agentDir, 0755); err != nil {
+		t.Fatalf("create Pi directory: %v", err)
+	}
+
+	manifest := &Manifest{Agent: string(agents.AgentPi), IntegrationLevel: IntegrationHook}
+	if err := setupHookIntegration(tmpDir, agentDir, agents.AgentPi, cfg, manifest); err != nil {
+		t.Fatalf("setupHookIntegration() error: %v", err)
+	}
+	extensionPath := filepath.Join(agentDir, "extensions", "thts-integration.ts")
+	if _, err := os.Stat(extensionPath); err != nil {
+		t.Fatalf("Pi extension: %v", err)
+	}
+	if countValue(manifest.Files, filepath.Join("extensions", "thts-integration.ts")) != 1 {
+		t.Fatalf("Pi manifest files = %v, want one extension", manifest.Files)
+	}
+}
+
 func TestHookIntegration_CodexFallback(t *testing.T) {
 	// Create temp directory
 	tmpDir := t.TempDir()

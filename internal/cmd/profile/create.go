@@ -40,7 +40,7 @@ func init() {
 	createCmd.Flags().StringVar(&createRepo, "repo", "", "Thoughts repository path for this profile")
 	createCmd.Flags().StringVar(&createReposDir, "repos-dir", "", "Repository-specific thoughts directory name (default: repos)")
 	createCmd.Flags().StringVar(&createGlobalDir, "global-dir", "", "Global thoughts directory name (default: global)")
-	createCmd.Flags().StringVar(&createDefaultAgents, "default-agents", "", "Comma-separated list of default agents (claude,codex,opencode)")
+	createCmd.Flags().StringVar(&createDefaultAgents, "default-agents", "", "Comma-separated list of default agents (claude,codex,opencode,gemini,pi)")
 }
 
 func runCreate(cmd *cobra.Command, args []string) error {

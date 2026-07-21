@@ -153,6 +153,11 @@ func GlobalAgentDir(agentType string) string {
 		return filepath.Join(XDGConfigHome(), "opencode")
 	case "gemini":
 		return filepath.Join(home, ".gemini")
+	case "pi":
+		if piDir := os.Getenv("PI_CODING_AGENT_DIR"); piDir != "" {
+			return ExpandPath(piDir)
+		}
+		return filepath.Join(home, ".pi", "agent")
 	}
 	return ""
 }

@@ -64,9 +64,19 @@ const (
 
 // AgentsConfig holds configuration for agent component management.
 type AgentsConfig struct {
+	Skills   ComponentMode                   `yaml:"skills,omitempty"`
+	Commands ComponentMode                   `yaml:"commands,omitempty"`
+	Agents   ComponentMode                   `yaml:"agents,omitempty"`
+	Hooks    ComponentMode                   `yaml:"hooks,omitempty"`
+	PerAgent map[string]*AgentComponentModes `yaml:"perAgent,omitempty"`
+}
+
+// AgentComponentModes holds optional component modes for one agent.
+type AgentComponentModes struct {
 	Skills   ComponentMode `yaml:"skills,omitempty"`
 	Commands ComponentMode `yaml:"commands,omitempty"`
 	Agents   ComponentMode `yaml:"agents,omitempty"`
+	Hooks    ComponentMode `yaml:"hooks,omitempty"`
 }
 
 // SyncMode specifies the sync behavior for remote operations.
@@ -163,6 +173,7 @@ func FullDefaults() *Config {
 		Skills:   ComponentModeLocal,
 		Commands: ComponentModeLocal,
 		Agents:   ComponentModeLocal,
+		Hooks:    ComponentModeLocal,
 	}
 	cfg.Hooks = &HooksConfig{Keywords: DefaultHookKeywords()}
 	cfg.Hooks.ClaudePlanDirective = boolPtr(true)
@@ -345,6 +356,10 @@ func (c *Config) GetAgentComponentMode(component string) ComponentMode {
 		if c.Agents.Agents != "" {
 			return c.Agents.Agents
 		}
+	case "hooks":
+		if c.Agents.Hooks != "" {
+			return c.Agents.Hooks
+		}
 	}
 	return ComponentModeLocal
 }
@@ -361,6 +376,52 @@ func (c *Config) SetAgentComponentMode(component string, mode ComponentMode) {
 		c.Agents.Commands = mode
 	case "agents":
 		c.Agents.Agents = mode
+	case "hooks":
+		c.Agents.Hooks = mode
+	}
+}
+
+// GetAgentComponentOverride returns an explicit per-agent component mode.
+func (c *Config) GetAgentComponentOverride(agent, component string) (ComponentMode, bool) {
+	if c.Agents == nil || c.Agents.PerAgent == nil || c.Agents.PerAgent[agent] == nil {
+		return "", false
+	}
+
+	var mode ComponentMode
+	switch component {
+	case "skills":
+		mode = c.Agents.PerAgent[agent].Skills
+	case "commands":
+		mode = c.Agents.PerAgent[agent].Commands
+	case "agents":
+		mode = c.Agents.PerAgent[agent].Agents
+	case "hooks":
+		mode = c.Agents.PerAgent[agent].Hooks
+	}
+	return mode, mode != ""
+}
+
+// SetAgentComponentOverride sets an explicit mode for one agent component.
+func (c *Config) SetAgentComponentOverride(agent, component string, mode ComponentMode) {
+	if c.Agents == nil {
+		c.Agents = &AgentsConfig{}
+	}
+	if c.Agents.PerAgent == nil {
+		c.Agents.PerAgent = make(map[string]*AgentComponentModes)
+	}
+	if c.Agents.PerAgent[agent] == nil {
+		c.Agents.PerAgent[agent] = &AgentComponentModes{}
+	}
+
+	switch component {
+	case "skills":
+		c.Agents.PerAgent[agent].Skills = mode
+	case "commands":
+		c.Agents.PerAgent[agent].Commands = mode
+	case "agents":
+		c.Agents.PerAgent[agent].Agents = mode
+	case "hooks":
+		c.Agents.PerAgent[agent].Hooks = mode
 	}
 }
 

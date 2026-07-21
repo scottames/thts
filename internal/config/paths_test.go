@@ -275,6 +275,29 @@ func TestHumanLayerConfigPath(t *testing.T) {
 	}
 }
 
+func TestGlobalAgentDirPi(t *testing.T) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatalf("failed to get home directory: %v", err)
+	}
+
+	t.Run("default", func(t *testing.T) {
+		t.Setenv("PI_CODING_AGENT_DIR", "")
+		want := filepath.Join(home, ".pi", "agent")
+		if got := GlobalAgentDir("pi"); got != want {
+			t.Errorf("GlobalAgentDir(pi) = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("override expands without agent suffix", func(t *testing.T) {
+		t.Setenv("PI_CODING_AGENT_DIR", "~/custom-pi")
+		want := filepath.Join(home, "custom-pi")
+		if got := GlobalAgentDir("pi"); got != want {
+			t.Errorf("GlobalAgentDir(pi) = %q, want %q", got, want)
+		}
+	})
+}
+
 func TestDefaultThoughtsRepo(t *testing.T) {
 	home, err := os.UserHomeDir()
 	if err != nil {

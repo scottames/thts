@@ -1,5 +1,5 @@
 // Package agents provides multi-agent tool support for thts.
-// Currently supports Claude Code, OpenAI Codex CLI, OpenCode, and Google Gemini CLI.
+// Currently supports Claude Code, OpenAI Codex CLI, OpenCode, Google Gemini CLI, and Pi.
 package agents
 
 import (
@@ -18,11 +18,12 @@ const (
 	AgentCodex    AgentType = "codex"
 	AgentOpenCode AgentType = "opencode"
 	AgentGemini   AgentType = "gemini"
+	AgentPi       AgentType = "pi"
 )
 
 // AllAgentTypes returns all supported agent types in canonical order.
 func AllAgentTypes() []AgentType {
-	return []AgentType{AgentClaude, AgentCodex, AgentOpenCode, AgentGemini}
+	return []AgentType{AgentClaude, AgentCodex, AgentOpenCode, AgentGemini, AgentPi}
 }
 
 // AgentTypeLabels provides human-readable labels for agent types.
@@ -31,6 +32,7 @@ var AgentTypeLabels = map[AgentType]string{
 	AgentCodex:    "OpenAI Codex CLI",
 	AgentOpenCode: "OpenCode",
 	AgentGemini:   "Google Gemini CLI",
+	AgentPi:       "Pi",
 }
 
 // AgentConfig describes the configuration and conventions for a specific agent.
@@ -78,6 +80,10 @@ type AgentConfig struct {
 	// SettingsFile is the settings file name for this agent.
 	SettingsFile string
 
+	// SettingsTemplate is the optional embedded default settings template name.
+	// Claude settings are generated dynamically; Pi has no thts-managed settings.
+	SettingsTemplate string
+
 	// SettingsFormat is the format of the settings file ("json", "toml").
 	SettingsFormat string
 
@@ -119,6 +125,7 @@ var AgentConfigs = map[AgentType]*AgentConfig{
 		CommandsGlobalOnly:    false,
 		GlobalUsesXDG:         false,
 		SettingsFile:          "settings.json",
+		SettingsTemplate:      "",
 		SettingsFormat:        "json",
 		SupportsHooks:         true,
 		HooksDir:              "hooks",
@@ -138,6 +145,7 @@ var AgentConfigs = map[AgentType]*AgentConfig{
 		CommandsGlobalOnly:    true, // Codex prompts are global-only per docs
 		GlobalUsesXDG:         false,
 		SettingsFile:          "config.toml",
+		SettingsTemplate:      "codex.toml",
 		SettingsFormat:        "toml",
 		SupportsHooks:         false, // Codex does not support hooks
 		HooksDir:              "",
@@ -157,6 +165,7 @@ var AgentConfigs = map[AgentType]*AgentConfig{
 		CommandsGlobalOnly:    false,
 		GlobalUsesXDG:         true, // OpenCode uses ~/.config/opencode/ for global
 		SettingsFile:          "opencode.json",
+		SettingsTemplate:      "opencode.json",
 		SettingsFormat:        "json",
 		SupportsHooks:         true,
 		HooksDir:              "",
@@ -176,12 +185,33 @@ var AgentConfigs = map[AgentType]*AgentConfig{
 		CommandsGlobalOnly:    false,
 		GlobalUsesXDG:         false, // Uses ~/.gemini/
 		SettingsFile:          "settings.json",
+		SettingsTemplate:      "gemini.json",
 		SettingsFormat:        "json",
 		CommandsFormat:        "toml", // Gemini uses TOML for commands
 		SettingsContextKey:    "contextFileName",
 		SupportsHooks:         true,
 		HooksDir:              "hooks",
 		PluginsDir:            "",
+	},
+	AgentPi: {
+		Type:                  AgentPi,
+		RootDir:               ".pi",
+		InstructionsFile:      "",
+		IntegrationType:       "marker",
+		InstructionTargetFile: "AGENTS.md",
+		SkillsDir:             "skills",
+		SkillNeedsDir:         true,
+		AgentsDir:             "",
+		SupportsCommands:      true,
+		CommandsDir:           "prompts",
+		CommandsGlobalOnly:    false,
+		GlobalUsesXDG:         false,
+		SettingsFile:          "settings.json",
+		SettingsTemplate:      "",
+		SettingsFormat:        "json",
+		SupportsHooks:         true,
+		HooksDir:              "",
+		PluginsDir:            "extensions",
 	},
 }
 
@@ -212,8 +242,10 @@ func ParseAgentType(s string) (AgentType, error) {
 		return AgentOpenCode, nil
 	case "gemini":
 		return AgentGemini, nil
+	case "pi":
+		return AgentPi, nil
 	default:
-		return "", fmt.Errorf("unknown agent type: %q (valid: claude, codex, opencode, gemini)", s)
+		return "", fmt.Errorf("unknown agent type: %q (valid: claude, codex, opencode, gemini, pi)", s)
 	}
 }
 

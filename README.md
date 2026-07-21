@@ -2,8 +2,8 @@
 
 A CLI for storing developer thoughts, plans, and dreams in a central repo while
 keeping them accessible in any project. Integrates with AI coding agents (Claude
-Code, Codex, OpenCode), giving them persistent memory for research, plans, and
-context across sessions.
+Code, Codex, OpenCode, Gemini CLI, and Pi), giving them persistent memory for
+research, plans, and context across sessions.
 
 <!-- prettier-ignore-start -->
 > [!WARNING]
@@ -134,21 +134,29 @@ thts sync -m "Added architecture notes"
 
 ## AI Agent Integration
 
-`thts` integrates with AI coding agents to give them awareness of your thoughts
-directory. Supports Claude Code, OpenAI Codex, and OpenCode.
+`thts` integrates with Claude Code, OpenAI Codex CLI, OpenCode, Google Gemini
+CLI, and Pi to give them awareness of your thoughts directory.
 
 ```bash
 thts init agents              # Install for detected agents
 thts init agents -i           # Interactive mode
 thts init agents --global     # Install to global config directories
+thts init agents --agents pi  # Install Pi's project integration only
 thts uninit agents            # Remove integration
 ```
 
-This installs skills, commands, and agents for thoughts/ integration including:
+This installs skills, commands or prompts, and native runtime adapters where the
+selected agent supports them. Agents with native sub-agent support also receive
+the thoughts search and analysis agents. The shared resources include:
 
 - `/thts-integrate` - Activate thoughts/ awareness for current task
 - `/thts-handoff`, `/thts-resume` - Session handoff and resume
-- Specialized agents for searching/analyzing thoughts
+- `thoughts-locator` and `thoughts-analyzer` where supported
+
+Pi installs `.pi/skills/thts-integrate/SKILL.md`, prompt templates in
+`.pi/prompts/`, and its `thts-integration.ts` extension in `.pi/extensions/`.
+Pi loads project-local resources only after the project is trusted; use
+`pi --approve` for a one-run override in non-interactive use.
 
 See [User Guide](docs/guide.md#ai-agent-integration) for details.
 

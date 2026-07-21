@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	internalagents "github.com/scottames/thts/internal/agents"
 	"github.com/scottames/thts/internal/config"
 )
 
@@ -95,6 +96,28 @@ func (m *GlobalManifest) AddComponent(name string, info *GlobalComponentInfo) {
 	m.Components[name] = info
 }
 
+// RecordAgentComponent replaces one agent's paths for a component while
+// preserving the component's other owners and their paths.
+func (m *GlobalManifest) RecordAgentComponent(component string, agent internalagents.AgentType, files []string) {
+	if m.Components == nil {
+		m.Components = make(map[string]*GlobalComponentInfo)
+	}
+	info := m.Components[component]
+	if info == nil {
+		info = &GlobalComponentInfo{}
+		m.Components[component] = info
+	}
+
+	agentName := string(agent)
+	info.Agents = appendUnique(nil, removeFromAgentSlice(info.Agents, map[string]bool{agentName: true})...)
+	info.Files = appendUnique(nil, removeFilesForAgent(info.Files, agentName)...)
+	if len(files) == 0 {
+		return
+	}
+	info.Agents = appendUnique(info.Agents, agentName)
+	info.Files = appendUnique(info.Files, files...)
+}
+
 // RemoveComponent removes a component from the manifest.
 func (m *GlobalManifest) RemoveComponent(name string) {
 	if m.Components != nil {
@@ -109,6 +132,24 @@ func (m *GlobalManifest) HasComponent(name string) bool {
 	}
 	_, ok := m.Components[name]
 	return ok
+}
+
+// HasAgentComponent reports whether an agent has a component path in the manifest.
+func (m *GlobalManifest) HasAgentComponent(agent, component string) bool {
+	if m == nil || m.Components == nil || m.Components[component] == nil {
+		return false
+	}
+	info := m.Components[component]
+	for _, owner := range info.Agents {
+		if owner == agent {
+			for _, file := range info.Files {
+				if getAgentFromPath(file) == agent {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 // GetAllFiles returns all files across all components.
@@ -181,19 +222,46 @@ func filterFilesByAgents(files []string, agentSet map[string]bool) []string {
 
 // getAgentFromPath determines which agent a file belongs to based on its path.
 func getAgentFromPath(filePath string) string {
+	cleanFilePath := filepath.Clean(filePath)
+
 	// Check each known agent's global directory
-	agentTypes := []string{"claude", "codex", "opencode", "gemini"}
-	for _, agent := range agentTypes {
+	for _, agentType := range internalagents.AllAgentTypes() {
+		agent := string(agentType)
 		globalDir := config.GlobalAgentDir(agent)
 		if globalDir == "" {
 			continue
 		}
+		cleanGlobalDir := filepath.Clean(globalDir)
 		// Check if file is under this agent's directory
-		if strings.HasPrefix(filePath, globalDir+string(filepath.Separator)) || filePath == globalDir {
+		if strings.HasPrefix(cleanFilePath, cleanGlobalDir+string(filepath.Separator)) || cleanFilePath == cleanGlobalDir {
 			return agent
 		}
 	}
 	return ""
+}
+
+func removeFilesForAgent(files []string, agent string) []string {
+	var result []string
+	for _, file := range files {
+		if getAgentFromPath(file) != agent {
+			result = append(result, file)
+		}
+	}
+	return result
+}
+
+func appendUnique(values []string, additions ...string) []string {
+	seen := make(map[string]bool, len(values)+len(additions))
+	for _, value := range values {
+		seen[value] = true
+	}
+	for _, value := range additions {
+		if !seen[value] {
+			values = append(values, value)
+			seen[value] = true
+		}
+	}
+	return values
 }
 
 // RemoveAgents removes the specified agents and their files from all components.

@@ -7,19 +7,19 @@ HumanLayer's `thoughts` subcommand with full feature compatibility.
 
 ## Commands
 
-| Command              | Description                                         |
-| -------------------- | --------------------------------------------------- |
-| `thts setup`         | Initial setup - configure thoughts repo location    |
-| `thts init`          | Initialize thoughts in current git repo             |
-| `thts sync`          | Sync thoughts to central repo                       |
-| `thts status`        | Show thoughts status                                |
-| `thts uninit`        | Remove thoughts from current repo                   |
-| `thts config`        | View/edit configuration                             |
-| `thts edit`          | Open thoughts directory in editor                   |
-| `thts profile`       | Manage profiles (create/list/show/delete)           |
-| `thts init agents`   | Install agent integration (claude, codex, opencode) |
-| `thts uninit agents` | Remove agent integration from project               |
-| `thts completion`    | Generate shell completion scripts (bash/zsh/fish)   |
+| Command              | Description                                                     |
+| -------------------- | --------------------------------------------------------------- |
+| `thts setup`         | Initial setup - configure thoughts repo location                |
+| `thts init`          | Initialize thoughts in current git repo                         |
+| `thts sync`          | Sync thoughts to central repo                                   |
+| `thts status`        | Show thoughts status                                            |
+| `thts uninit`        | Remove thoughts from current repo                               |
+| `thts config`        | View/edit configuration                                         |
+| `thts edit`          | Open thoughts directory in editor                               |
+| `thts profile`       | Manage profiles (create/list/show/delete)                       |
+| `thts init agents`   | Install agent integration (claude, codex, opencode, gemini, pi) |
+| `thts uninit agents` | Remove agent integration from project                           |
+| `thts completion`    | Generate shell completion scripts (bash/zsh/fish)               |
 
 ## Project Structure
 
@@ -33,9 +33,9 @@ internal/
   git/             # Git operations, hooks
   thts/            # Searchable directory (hard links)
 instructions/      # Embedded: AGENTS.md (shared instructions)
-skills/            # Embedded: skills per agent (claude/codex/opencode)
-commands/          # Embedded: thts-handoff.md, thts-resume.md per agent
-agents/            # Embedded: thoughts-locator.md, thoughts-analyzer.md
+skills/            # Embedded: thts-integrate skill for all agents
+commands/          # Embedded: thts-handoff.md, thts-resume.md prompts/commands
+agents/            # Embedded: thoughts-locator.md, thoughts-analyzer.md where supported
 embed.go           # Go embed declarations for above
 ```
 
@@ -75,39 +75,57 @@ binary and copied to agent directories by `thts init agents`.
 
 ### Supported Agents
 
-| Agent    | Directory    | Skill Format        | Commands Dir        | Settings File   |
-| -------- | ------------ | ------------------- | ------------------- | --------------- |
-| Claude   | `.claude/`   | `skills/*.md`       | `commands/`         | `settings.json` |
-| Codex    | `.codex/`    | `skills/*/SKILL.md` | `prompts/` (global) | `config.toml`   |
-| OpenCode | `.opencode/` | `skills/*/SKILL.md` | `commands/`         | `opencode.json` |
-| Gemini   | `.gemini/`   | `skills/*/SKILL.md` | `commands/*.toml`   | `settings.json` |
+| Agent    | Directory    | Skill Format                     | Commands/Prompts Dir | Runtime Adapter | Settings         |
+| -------- | ------------ | -------------------------------- | -------------------- | --------------- | ---------------- |
+| Claude   | `.claude/`   | `skills/*.md`                    | `commands/`          | `hooks/`        | `settings.json`  |
+| Codex    | `.codex/`    | `skills/*/SKILL.md`              | `prompts/` (global)  | None            | `config.toml`    |
+| OpenCode | `.opencode/` | `skills/*/SKILL.md`              | `commands/`          | `plugins/`      | `opencode.json`  |
+| Gemini   | `.gemini/`   | `skills/*/SKILL.md`              | `commands/*.toml`    | `hooks/`        | `settings.json`  |
+| Pi       | `.pi/`       | `skills/thts-integrate/SKILL.md` | `prompts/`           | `extensions/`   | Not thts-managed |
 
 **Note:** Codex calls commands "prompts" and they are global-only (`~/.codex/prompts/`).
 OpenCode uses XDG for global config (`~/.config/opencode/`).
 Gemini uses TOML format for commands and doesn't support the agents feature.
+Pi uses `$PI_CODING_AGENT_DIR` when set, otherwise `~/.pi/agent/`, for global
+resources. Pi has no native sub-agents; do not create its `settings.json`.
 
 ### Hook Support
 
-| Agent    | Hook Support | Hook Events                          | Settings File         |
-| -------- | ------------ | ------------------------------------ | --------------------- |
-| Claude   | Yes          | `SessionStart`, `UserPromptSubmit`   | `settings.local.json` |
-| Gemini   | Yes          | `SessionStart`, `BeforeAgent`        | `settings.local.json` |
-| OpenCode | Yes (plugin) | `experimental.chat.system.transform` | N/A (plugin)          |
-| Codex    | No           | N/A                                  | N/A                   |
+| Agent    | Hook Support    | Hook Events                          | Settings File         |
+| -------- | --------------- | ------------------------------------ | --------------------- |
+| Claude   | Yes             | `SessionStart`, `UserPromptSubmit`   | `settings.local.json` |
+| Gemini   | Yes             | `SessionStart`, `BeforeAgent`        | `settings.local.json` |
+| OpenCode | Yes (plugin)    | `experimental.chat.system.transform` | N/A (plugin)          |
+| Pi       | Yes (extension) | `before_agent_start`                 | N/A (extension)       |
+| Codex    | No              | N/A                                  | N/A                   |
+
+Pi's project `.pi/` resources require Pi project trust. Non-interactive Pi
+runs do not prompt, so use `pi --approve` to load them for one run or
+`pi --no-approve` to skip them. Its extension caches generated policy by working
+directory; restart Pi after changing thts instruction configuration.
 
 ### Embedded Files
 
-| File                    | Purpose                       | Agent Support  |
-| ----------------------- | ----------------------------- | -------------- |
-| `AGENTS.md`             | Shared thoughts/ instructions | All            |
-| `thts-integrate`        | On-demand activation skill    | All            |
-| `thts-handoff.md`       | Session handoff command       | All            |
-| `thts-resume.md`        | Resume from handoff command   | All            |
-| `thoughts-locator.md`   | Find documents agent          | All            |
-| `thoughts-analyzer.md`  | Analyze documents agent       | All            |
-| `thts-session-start.sh` | Hook: bootstrap instructions  | Claude, Gemini |
-| `thts-prompt-check.sh`  | Hook: keyword detection       | Claude, Gemini |
-| `thts-integration.ts`   | Plugin: instruction injection | OpenCode       |
+| File                    | Purpose                          | Agent Support           |
+| ----------------------- | -------------------------------- | ----------------------- |
+| `AGENTS.md`             | Shared thoughts/ instructions    | All                     |
+| `thts-integrate`        | On-demand activation skill       | All                     |
+| `thts-handoff.md`       | Session handoff command/prompt   | All                     |
+| `thts-resume.md`        | Resume command/prompt            | All                     |
+| `thoughts-locator.md`   | Find documents agent             | Claude, Codex, OpenCode |
+| `thoughts-analyzer.md`  | Analyze documents agent          | Claude, Codex, OpenCode |
+| `thts-session-start.sh` | Hook: bootstrap instructions     | Claude, Gemini          |
+| `thts-prompt-check.sh`  | Hook: keyword detection          | Claude, Gemini          |
+| `thts-integration.ts`   | Plugin: instruction injection    | OpenCode                |
+| `thts-integration.ts`   | Extension: instruction injection | Pi                      |
+
+For Pi, the skill is `thts-integrate` (`/skill:thts-integrate`); prompt files
+`thts-handoff.md` and `thts-resume.md` invoke as `/thts-handoff` and
+`/thts-resume`.
+
+Global component modes are per agent. The global manifest records each
+agent/component path independently, so install and removal code must preserve
+other agents' ownership and leave failed cleanup paths global.
 
 ## Reference
 

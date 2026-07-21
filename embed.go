@@ -39,16 +39,21 @@ var Settings embed.FS
 //go:embed embedded/plugins/opencode/thts-integration.ts
 var OpenCodePlugins embed.FS
 
+// PiExtensions contains embedded extension files for Pi.
+//
+//go:embed embedded/plugins/pi/thts-integration.ts
+var PiExtensions embed.FS
+
 // Defaults contains embedded default files for the thoughts repository.
 // Currently includes the root README.md created during setup.
 //
 //go:embed embedded/defaults/*
 var Defaults embed.FS
 
-// GetDefaultSettings returns the default settings content for an agent.
+// GetDefaultSettings returns the default settings content for a template identity.
 // Returns empty string if no default settings exist (e.g., Claude builds dynamically).
-func GetDefaultSettings(filename string) string {
-	content, err := Settings.ReadFile("embedded/settings/" + filename)
+func GetDefaultSettings(templateName string) string {
+	content, err := Settings.ReadFile("embedded/settings/" + templateName)
 	if err != nil {
 		return ""
 	}
