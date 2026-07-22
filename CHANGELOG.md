@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.9.0](https://github.com/scottames/thts/compare/v0.8.2...v0.9.0) (2026-07-22)
+
+
+### Features
+
+* **agents:** add Pi coding agent support ([2b00e70](https://github.com/scottames/thts/commit/2b00e7030f0bc21a1ef393e608309f1270754a73))
+* **agents:** complete Pi lifecycle support ([2b00e70](https://github.com/scottames/thts/commit/2b00e7030f0bc21a1ef393e608309f1270754a73))
+
 ## [0.8.2](https://github.com/scottames/thts/compare/v0.8.1...v0.8.2) (2026-07-13)
 
 
