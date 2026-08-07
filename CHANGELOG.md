@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.9.1](https://github.com/scottames/thts/compare/v0.9.0...v0.9.1) (2026-08-07)
+
+
+### Miscellaneous Chores
+
+* **deps:** update ⬆️ github-actions to v4.2.1 ([#71](https://github.com/scottames/thts/issues/71)) ([d758006](https://github.com/scottames/thts/commit/d75800685a611113eac0c160a88a4771490a44f4))
+* **deps:** update ⬆️ github-actions to v4.2.4 ([#76](https://github.com/scottames/thts/issues/76)) ([b82003a](https://github.com/scottames/thts/commit/b82003a1d23cc4253eadccb850149fce88a6621d))
+* **deps:** update ⬆️ gomod patching to v3.0.5 ([#73](https://github.com/scottames/thts/issues/73)) ([3bdba7a](https://github.com/scottames/thts/commit/3bdba7ac2e902eb894d85bd8c2ea3fe87b31199c))
+* **deps:** update ⬆️ trunk go to v1.26.5 ([#68](https://github.com/scottames/thts/issues/68)) ([1bff4e9](https://github.com/scottames/thts/commit/1bff4e9d483db2fbf505fb55a47bba1afe910628))
+* **deps:** update github-actions ([#75](https://github.com/scottames/thts/issues/75)) ([2bb8adb](https://github.com/scottames/thts/commit/2bb8adb92fee6069d02888c20f9e4e5d73f4d8be))
+
 ## [0.9.0](https://github.com/scottames/thts/compare/v0.8.2...v0.9.0) (2026-07-22)
 
 
