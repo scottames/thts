@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.9.1](https://github.com/scottames/thts/compare/v0.9.0...v0.9.1) (2026-09-04)
+
+
+### Miscellaneous Chores
+
+* **deps:** update ⬆️ github-actions to v2 ([#83](https://github.com/scottames/thts/issues/83)) ([3403360](https://github.com/scottames/thts/commit/3403360563682b559481efeed9b674a67f5eceb3))
+* **deps:** update ⬆️ github-actions to v4.2.1 ([#71](https://github.com/scottames/thts/issues/71)) ([d758006](https://github.com/scottames/thts/commit/d75800685a611113eac0c160a88a4771490a44f4))
+* **deps:** update ⬆️ github-actions to v4.2.4 ([#76](https://github.com/scottames/thts/issues/76)) ([b82003a](https://github.com/scottames/thts/commit/b82003a1d23cc4253eadccb850149fce88a6621d))
+* **deps:** update ⬆️ github-actions to v4.2.5 ([#79](https://github.com/scottames/thts/issues/79)) ([26e44cf](https://github.com/scottames/thts/commit/26e44cfa0c19c690a54da27fe151be9a522cada6))
+* **deps:** update ⬆️ github-actions to v4.3.0 ([#84](https://github.com/scottames/thts/issues/84)) ([8d0db79](https://github.com/scottames/thts/commit/8d0db79c45e3b46052df8a605730716ab81ac3b3))
+* **deps:** update ⬆️ gomod patching to v2.0.6 ([#77](https://github.com/scottames/thts/issues/77)) ([f3829da](https://github.com/scottames/thts/commit/f3829da3cbe2e3a86e7a0f4359fa033e6c879fcd))
+* **deps:** update ⬆️ gomod patching to v3.0.5 ([#73](https://github.com/scottames/thts/issues/73)) ([3bdba7a](https://github.com/scottames/thts/commit/3bdba7ac2e902eb894d85bd8c2ea3fe87b31199c))
+* **deps:** update ⬆️ trunk go to v1.26.5 ([#68](https://github.com/scottames/thts/issues/68)) ([1bff4e9](https://github.com/scottames/thts/commit/1bff4e9d483db2fbf505fb55a47bba1afe910628))
+* **deps:** update ⬆️ trunk go to v1.26.6 ([#78](https://github.com/scottames/thts/issues/78)) ([5970fdd](https://github.com/scottames/thts/commit/5970fddae05b4b6f4169da655df4b2cf7923f1b7))
+* **deps:** update ⬆️ trunk go to v1.27.0 ([#80](https://github.com/scottames/thts/issues/80)) ([f35f7aa](https://github.com/scottames/thts/commit/f35f7aa4c79f9475bb40817fa4dc89eed252f1a7))
+* **deps:** update dependency aqua:goreleaser/goreleaser to v2.17.1 ([#74](https://github.com/scottames/thts/issues/74)) ([b034579](https://github.com/scottames/thts/commit/b03457908a8b777645c9d0d57fda4849a4130ca0))
+* **deps:** update dependency aqua:goreleaser/goreleaser to v2.18.0 ([#82](https://github.com/scottames/thts/issues/82)) ([378f238](https://github.com/scottames/thts/commit/378f2384d7675c15a8dfaff62b5edb3b01733cf2))
+* **deps:** update github-actions ([#75](https://github.com/scottames/thts/issues/75)) ([2bb8adb](https://github.com/scottames/thts/commit/2bb8adb92fee6069d02888c20f9e4e5d73f4d8be))
+
 ## [0.9.0](https://github.com/scottames/thts/compare/v0.8.2...v0.9.0) (2026-07-22)
 
 
