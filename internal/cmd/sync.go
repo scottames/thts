@@ -57,7 +57,7 @@ type syncOptions struct {
 }
 
 // syncPrint prints to the sync output writer, defaulting to stdout.
-func (o *syncOptions) print(a ...interface{}) {
+func (o *syncOptions) print(a ...any) {
 	w := o.Output
 	if w == nil {
 		w = os.Stdout

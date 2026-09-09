@@ -1003,7 +1003,7 @@ func TestDefaultCategoriesScope(t *testing.T) {
 // This test prevents drift between the Config struct and the template.
 func TestConfigTemplateCoversAllFields(t *testing.T) {
 	// Parse the embedded template
-	var templateConfig map[string]interface{}
+	var templateConfig map[string]any
 	if err := yaml.Unmarshal([]byte(ConfigTemplate), &templateConfig); err != nil {
 		t.Fatalf("failed to parse ConfigTemplate: %v", err)
 	}
@@ -1149,14 +1149,14 @@ func TestGetClaudePlanDirective(t *testing.T) {
 		{
 			name: "returns configured true",
 			cfg: &Config{
-				Hooks: &HooksConfig{ClaudePlanDirective: boolPtr(true)},
+				Hooks: &HooksConfig{ClaudePlanDirective: new(true)},
 			},
 			want: true,
 		},
 		{
 			name: "returns configured false",
 			cfg: &Config{
-				Hooks: &HooksConfig{ClaudePlanDirective: boolPtr(false)},
+				Hooks: &HooksConfig{ClaudePlanDirective: new(false)},
 			},
 			want: false,
 		},

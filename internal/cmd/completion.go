@@ -158,9 +158,9 @@ func completeCategoriesFromConfig(categories map[string]*config.Category, toComp
 // completeCategoryPaths returns sorted category paths matching the input.
 func completeCategoryPaths(categories map[string]*config.Category, toComplete string) []string {
 	// Check if we're completing a sub-category (input contains /)
-	if idx := strings.IndexByte(toComplete, '/'); idx >= 0 {
-		categoryName := toComplete[:idx]
-		subPrefix := toComplete[idx+1:]
+	if before, after, ok := strings.Cut(toComplete, "/"); ok {
+		categoryName := before
+		subPrefix := after
 
 		cat, exists := categories[categoryName]
 		if !exists || cat.SubCategories == nil {

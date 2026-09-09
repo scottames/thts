@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -92,7 +93,7 @@ type Manifest struct {
 	IntegrationLevel IntegrationLevel      `json:"integrationLevel"`
 	Files            []string              `json:"files"`
 	SettingsCreated  bool                  `json:"settingsCreated,omitempty"`
-	Modifications    ManifestModifications `json:"modifications,omitempty"`
+	Modifications    ManifestModifications `json:"modifications"`
 }
 
 // ManifestModifications tracks changes to existing files.
@@ -1749,9 +1750,7 @@ func filterOutThtsHooksFromMap(hooks map[string]any, thtsEvents, thtsCommands []
 
 			if len(filteredInner) > 0 {
 				newEntry := make(map[string]any)
-				for k, v := range entryMap {
-					newEntry[k] = v
-				}
+				maps.Copy(newEntry, entryMap)
 				newEntry["hooks"] = filteredInner
 				filteredList = append(filteredList, newEntry)
 			}
@@ -2563,7 +2562,7 @@ func parseGlobalComponents(value string) ([]string, error) {
 		"hooks":    true,
 	}
 
-	for _, c := range strings.Split(value, ",") {
+	for c := range strings.SplitSeq(value, ",") {
 		c = strings.TrimSpace(c)
 		if c == "" {
 			continue
