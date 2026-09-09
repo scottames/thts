@@ -1,0 +1,36 @@
+---
+name: trunk upgrade
+on:
+  schedule:
+    - cron: 0 16 * * 2 # At 16:00 on Tuesday
+  workflow_dispatch: {}
+permissions: read-all
+jobs:
+  trunk_upgrade:
+    name: run trunk upgrade
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # For trunk to create PRs
+      pull-requests: write # For trunk to create PRs
+    steps:
+      - name: Checkout
+        # yamllint disable-line rule:line-length
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - name: Generate GitHub token
+        # https://github.com/actions/create-github-app-token
+        uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf # v2.2.1
+        id: generate-token
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+          permission-issues: write
+      - name: Trunk Upgrade
+        # yamllint disable-line rule:line-length
+        uses: trunk-io/trunk-action/upgrade@75699af9e26881e564e9d832ef7dc3af25ec031b # v1
+        with:
+          github-token: ${{ steps.generate-token.outputs.token }}
+          prefix: "chore: "
+          lowercase-title: true
+          sign-commits: true
