@@ -26,6 +26,16 @@ jobs:
           # https://github.com/marketplace/actions/add-commit#working-with-prs
           repository: ${{ github.event.pull_request.head.repo.full_name }}
           ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+      - name: detect Go update
+        id: go-update
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          mise_diff=$(git diff "$BASE_SHA" -- mise.toml)
+          if grep -Eq '^[+-]go[[:space:]]*=' <<< "$mise_diff"; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
       # yamllint disable-line rule:line-length
       - name: Generate GitHub token
         # https://github.com/actions/create-github-app-token
@@ -41,12 +51,17 @@ jobs:
         uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
         with:
           install: true
-          install_args: aqua:int128/ghcp
+          install_args: aqua:int128/ghcp go
           cache: true
           experimental: true
           github_token: ${{ steps.generate-token.outputs.token }}
       - name: mise lock
         run: rm -f mise.lock && mise lock # rm to prune
+      - name: refresh Go code
+        if: steps.go-update.outputs.changed == 'true'
+        run: |
+          go fix ./...
+          go mod tidy
       - name: push changes with ghcp
         env:
           GITHUB_REPOSITORY: ${{ github.repository }}
