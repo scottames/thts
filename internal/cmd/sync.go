@@ -65,15 +65,6 @@ func (o *syncOptions) print(a ...interface{}) {
 	fmt.Fprintln(w, a...)
 }
 
-// syncPrintf prints formatted output to the sync output writer.
-func (o *syncOptions) printf(format string, a ...interface{}) {
-	w := o.Output
-	if w == nil {
-		w = os.Stdout
-	}
-	fmt.Fprintf(w, format, a...)
-}
-
 // getOutput returns the output writer, defaulting to stdout.
 func (o *syncOptions) getOutput() io.Writer {
 	if o.Output == nil {
