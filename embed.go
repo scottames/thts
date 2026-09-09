@@ -213,13 +213,13 @@ func convertMarkdownToTOML(content string) (string, error) {
 
 	// Find end of frontmatter
 	rest := content[3:]
-	endIdx := strings.Index(rest, "---")
-	if endIdx == -1 {
+	before, after, ok := strings.Cut(rest, "---")
+	if !ok {
 		return "", fmt.Errorf("expected closing --- for frontmatter")
 	}
 
-	frontmatter := strings.TrimSpace(rest[:endIdx])
-	body := strings.TrimSpace(rest[endIdx+3:])
+	frontmatter := strings.TrimSpace(before)
+	body := strings.TrimSpace(after)
 
 	// Extract description from frontmatter
 	var description string

@@ -34,8 +34,8 @@ func AddToGitignore(repoPath, pattern string, location config.ComponentMode) (bo
 	}
 
 	// Check if pattern already exists
-	lines := strings.Split(string(content), "\n")
-	for _, line := range lines {
+	lines := strings.SplitSeq(string(content), "\n")
+	for line := range lines {
 		if strings.TrimSpace(line) == pattern {
 			return false, nil // Already exists
 		}
@@ -222,7 +222,7 @@ func RemoveGitignoreMarkerBlock(repoPath string) ([]string, error) {
 	}
 	blockContent := text[blockStart:endIdx]
 	var patterns []string
-	for _, line := range strings.Split(blockContent, "\n") {
+	for line := range strings.SplitSeq(blockContent, "\n") {
 		line = strings.TrimSpace(line)
 		if line != "" && !strings.HasPrefix(line, "#") {
 			patterns = append(patterns, line)
@@ -284,7 +284,7 @@ func GetGitignoreMarkerPatterns(repoPath string) []string {
 	blockContent := text[blockStart:endIdx]
 
 	var patterns []string
-	for _, line := range strings.Split(blockContent, "\n") {
+	for line := range strings.SplitSeq(blockContent, "\n") {
 		line = strings.TrimSpace(line)
 		if line != "" && !strings.HasPrefix(line, "#") {
 			patterns = append(patterns, line)

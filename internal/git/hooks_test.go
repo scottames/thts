@@ -3,6 +3,7 @@ package git
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -122,13 +123,7 @@ func TestSetupHooks(t *testing.T) {
 		}
 
 		// Should be updated
-		updated := false
-		for _, hook := range result.Updated {
-			if hook == "pre-commit" {
-				updated = true
-				break
-			}
-		}
+		updated := slices.Contains(result.Updated, "pre-commit")
 		if !updated {
 			t.Error("expected pre-commit to be in updated list")
 		}

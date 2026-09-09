@@ -91,8 +91,8 @@ func TestLoad(t *testing.T) {
 			t.Fatalf("failed to create humanlayer dir: %v", err)
 		}
 
-		hlConfig := map[string]interface{}{
-			"thoughts": map[string]interface{}{
+		hlConfig := map[string]any{
+			"thoughts": map[string]any{
 				"thoughtsRepo": "~/hl-thoughts",
 				"reposDir":     "repos",
 				"globalDir":    "global",
@@ -157,8 +157,8 @@ func TestLoad(t *testing.T) {
 			t.Fatalf("failed to write thts config: %v", err)
 		}
 
-		hlConfig := map[string]interface{}{
-			"thoughts": map[string]interface{}{
+		hlConfig := map[string]any{
+			"thoughts": map[string]any{
 				"thoughtsRepo": "~/hl-thoughts",
 				"user":         "hluser",
 			},
@@ -199,7 +199,7 @@ func TestLoad(t *testing.T) {
 			t.Fatalf("failed to create humanlayer dir: %v", err)
 		}
 
-		hlConfig := map[string]interface{}{
+		hlConfig := map[string]any{
 			"someOtherKey": "value",
 		}
 
@@ -307,14 +307,14 @@ profiles:
 			t.Fatalf("failed to create humanlayer dir: %v", err)
 		}
 
-		hlConfig := map[string]interface{}{
-			"thoughts": map[string]interface{}{
+		hlConfig := map[string]any{
+			"thoughts": map[string]any{
 				"thoughtsRepo": "~/thoughts",
 				"reposDir":     "repos",
 				"globalDir":    "global",
 				"user":         "testuser",
-				"profiles": map[string]interface{}{
-					"work": map[string]interface{}{
+				"profiles": map[string]any{
+					"work": map[string]any{
 						"thoughtsRepo": "~/work-thoughts",
 						"reposDir":     "work-repos",
 						"globalDir":    "work-global",
@@ -537,8 +537,8 @@ func TestExists(t *testing.T) {
 			t.Fatalf("failed to create humanlayer dir: %v", err)
 		}
 
-		hlConfig := map[string]interface{}{
-			"thoughts": map[string]interface{}{
+		hlConfig := map[string]any{
+			"thoughts": map[string]any{
 				"thoughtsRepo": "~/thoughts",
 			},
 		}
@@ -561,7 +561,7 @@ func TestExists(t *testing.T) {
 			t.Fatalf("failed to create humanlayer dir: %v", err)
 		}
 
-		hlConfig := map[string]interface{}{
+		hlConfig := map[string]any{
 			"someOtherKey": "value",
 		}
 		data, _ := json.Marshal(hlConfig)

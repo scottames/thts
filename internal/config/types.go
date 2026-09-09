@@ -176,7 +176,7 @@ func FullDefaults() *Config {
 		Hooks:    ComponentModeLocal,
 	}
 	cfg.Hooks = &HooksConfig{Keywords: DefaultHookKeywords()}
-	cfg.Hooks.ClaudePlanDirective = boolPtr(true)
+	cfg.Hooks.ClaudePlanDirective = new(true)
 	cfg.Categories = DefaultCategories()
 
 	return cfg
@@ -537,6 +537,7 @@ func (c *Config) GetClaudePlanDirective() bool {
 	return true
 }
 
+//go:fix inline
 func boolPtr(v bool) *bool {
-	return &v
+	return new(v)
 }

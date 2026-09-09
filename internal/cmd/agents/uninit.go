@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"charm.land/huh/v2"
@@ -1009,9 +1011,7 @@ func filterOutThtsHooksFromMapForRemoval(hooks map[string]any, removeSet map[str
 
 			if len(filteredInner) > 0 {
 				newEntry := make(map[string]any)
-				for k, v := range entryMap {
-					newEntry[k] = v
-				}
+				maps.Copy(newEntry, entryMap)
 				newEntry["hooks"] = filteredInner
 				filteredList = append(filteredList, newEntry)
 			}
@@ -1082,13 +1082,7 @@ func updateGitignoreAfterUninit(projectDir string, removedAgents []agents.AgentT
 	var remainingAgents []agents.AgentType
 	for _, agentType := range agents.AllAgentTypes() {
 		// Skip agents we just removed
-		removed := false
-		for _, ra := range removedAgents {
-			if ra == agentType {
-				removed = true
-				break
-			}
-		}
+		removed := slices.Contains(removedAgents, agentType)
 		if removed {
 			continue
 		}

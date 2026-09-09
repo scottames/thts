@@ -162,8 +162,7 @@ func walkFollowingSymlinks(root, dir string, visited map[string]bool, files *[]s
 func isCrossFilesystemError(err error) bool {
 	// Check for EXDEV (cross-device link)
 	// os.Link returns *os.LinkError, not *fs.PathError
-	var linkErr *os.LinkError
-	if errors.As(err, &linkErr) {
+	if linkErr, ok := errors.AsType[*os.LinkError](err); ok {
 		if errno, ok := linkErr.Err.(syscall.Errno); ok {
 			return errno == syscall.EXDEV
 		}

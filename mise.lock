@@ -155,15 +155,7 @@ url = "https://dl.google.com/go/go1.27.1.linux-arm64.tar.gz"
 checksum = "sha256:63d339f0da5ab53635a56f2490a7984dfe12dfcff22ad749f63edaf590168445"
 url = "https://dl.google.com/go/go1.27.1.linux-amd64.tar.gz"
 
-[tools.go."platforms.linux-x64-baseline"]
-checksum = "sha256:63d339f0da5ab53635a56f2490a7984dfe12dfcff22ad749f63edaf590168445"
-url = "https://dl.google.com/go/go1.27.1.linux-amd64.tar.gz"
-
 [tools.go."platforms.linux-x64-musl"]
-checksum = "sha256:63d339f0da5ab53635a56f2490a7984dfe12dfcff22ad749f63edaf590168445"
-url = "https://dl.google.com/go/go1.27.1.linux-amd64.tar.gz"
-
-[tools.go."platforms.linux-x64-musl-baseline"]
 checksum = "sha256:63d339f0da5ab53635a56f2490a7984dfe12dfcff22ad749f63edaf590168445"
 url = "https://dl.google.com/go/go1.27.1.linux-amd64.tar.gz"
 
@@ -175,15 +167,7 @@ url = "https://dl.google.com/go/go1.27.1.darwin-arm64.tar.gz"
 checksum = "sha256:8f8f52c6649542cf027bbc9b9c68d1ec042f9f34808a40413f0b8b3f66f3caa4"
 url = "https://dl.google.com/go/go1.27.1.darwin-amd64.tar.gz"
 
-[tools.go."platforms.macos-x64-baseline"]
-checksum = "sha256:8f8f52c6649542cf027bbc9b9c68d1ec042f9f34808a40413f0b8b3f66f3caa4"
-url = "https://dl.google.com/go/go1.27.1.darwin-amd64.tar.gz"
-
 [tools.go."platforms.windows-x64"]
-checksum = "sha256:a3911b5e0e1b1053f25ed0675f4c1c6aad1e2bfcf253df2b9be4caabd2edd95d"
-url = "https://dl.google.com/go/go1.27.1.windows-amd64.zip"
-
-[tools.go."platforms.windows-x64-baseline"]
 checksum = "sha256:a3911b5e0e1b1053f25ed0675f4c1c6aad1e2bfcf253df2b9be4caabd2edd95d"
 url = "https://dl.google.com/go/go1.27.1.windows-amd64.zip"
 
