@@ -3,6 +3,9 @@
   extends: [
     'github>scottames/renovate:default.json5',
   ],
+  gitIgnoredAuthors: [
+    '162828115+scottames-github-bot[bot]@users.noreply.github.com',
+  ],
   customManagers: [
     {
       customType: 'regex',
@@ -21,7 +24,7 @@
   ],
   packageRules: [
     {
-      matchPackageNames: ['go'],
+      matchPackageNames: ['go', 'golang/go'],
       groupName: 'go',
       branchTopic: 'go',
     },
