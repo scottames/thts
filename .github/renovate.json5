@@ -6,6 +6,9 @@
   gitIgnoredAuthors: [
     '162828115+scottames-github-bot[bot]@users.noreply.github.com',
   ],
+  lockFileMaintenance: {
+    enabled: false,
+  },
   customManagers: [
     {
       customType: 'regex',
