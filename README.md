@@ -164,7 +164,9 @@ Droid CLI installs the `/thts-integrate`, `/thts-handoff`, and
 `/thts-resume` resources under `.factory/skills/` and `.factory/commands/`, plus
 read-only custom droids under `.factory/droids/`. Its default integration uses
 executable scripts in `.factory/hooks/` registered through standalone
-`.factory/hooks.json`; thts never creates or modifies `.factory/settings.json`.
+`.factory/hooks.json`. The project hook registration and scripts are committed
+together so they work in other checkouts; thts never creates or modifies
+`.factory/settings.json`.
 
 See [User Guide](docs/guide.md#ai-agent-integration) for details.
 

@@ -908,8 +908,12 @@ Droid CLI installs `SessionStart` and `UserPromptSubmit` shell hooks in
 merged into `.factory/hooks.json`; global registrations use absolute paths and
 are merged into `~/.factory/hooks.json`. These standalone hook files are distinct
 from Factory's user-owned `settings.json` and unrelated hooks are preserved on
-refresh and uninit. Existing same-name skills, commands, droids, or hook scripts
-are not overwritten unless `--force` is used.
+refresh and uninit. Commit project `hooks.json` and its two thts hook scripts
+together so the registrations work in other checkouts; the local ownership
+manifest remains ignored. A checkout can initialize its remaining local Droid
+resources when the registered scripts still exactly match thts output. Existing
+same-name skills, commands, droids, or different hook scripts are not overwritten
+unless `--force` is used.
 
 Droid snapshots hooks when a session starts. Restart Droid after changing the
 integration, or review and reload hooks through `/hooks`. Factory's

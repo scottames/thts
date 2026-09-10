@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	thtsfiles "github.com/scottames/thts"
 	internalagents "github.com/scottames/thts/internal/agents"
 	"github.com/scottames/thts/internal/config"
 )
@@ -68,6 +69,147 @@ func TestDroidInitCLIPropagatesResourceCollision(t *testing.T) {
 
 	if err := runAgentsInit(nil, nil); err == nil || !strings.Contains(err.Error(), "not owned by thts") {
 		t.Fatalf("runAgentsInit() error = %v, want unowned-resource error", err)
+	}
+}
+
+func TestDroidInitRejectsMalformedManifest(t *testing.T) {
+	setupDroidTest(t)
+	projectDir := t.TempDir()
+	droidDir := filepath.Join(projectDir, ".factory")
+	if err := os.MkdirAll(droidDir, 0755); err != nil {
+		t.Fatalf("create Droid directory: %v", err)
+	}
+	const malformed = "{not-json\n"
+	manifestPath := filepath.Join(droidDir, ManifestFile)
+	if err := os.WriteFile(manifestPath, []byte(malformed), 0644); err != nil {
+		t.Fatalf("write malformed manifest: %v", err)
+	}
+
+	err := initAgent(projectDir, internalagents.AgentDroid, IntegrationOnDemand)
+	if err == nil || !strings.Contains(err.Error(), "invalid manifest") {
+		t.Fatalf("initAgent() error = %v, want invalid manifest", err)
+	}
+	data, readErr := os.ReadFile(manifestPath)
+	if readErr != nil || string(data) != malformed {
+		t.Fatalf("manifest after rejected init = %q, %v", data, readErr)
+	}
+}
+
+func TestDroidInitAdoptsMatchingRegisteredHookScripts(t *testing.T) {
+	setupDroidTest(t)
+	projectDir := t.TempDir()
+	droidDir := filepath.Join(projectDir, ".factory")
+	hooksDir := filepath.Join(droidDir, "hooks")
+	if err := os.MkdirAll(hooksDir, 0755); err != nil {
+		t.Fatalf("create hooks directory: %v", err)
+	}
+	for _, name := range thtsfiles.GetAvailableHooks() {
+		content, err := thtsfiles.RenderHook(internalagents.AgentDroid, name)
+		if err != nil {
+			t.Fatalf("render hook %s: %v", name, err)
+		}
+		if err := os.WriteFile(filepath.Join(hooksDir, name+".sh"), []byte(content), 0755); err != nil {
+			t.Fatalf("write hook %s: %v", name, err)
+		}
+	}
+	commands := getThtsHookNames(internalagents.AgentDroid, false)
+	writeDroidHooks(t, filepath.Join(droidDir, "hooks.json"), map[string]any{
+		"SessionStart":     []any{droidHookEntry(commands[0])},
+		"UserPromptSubmit": []any{droidHookEntry(commands[1])},
+	})
+
+	if err := initAgent(projectDir, internalagents.AgentDroid, IntegrationHook); err != nil {
+		t.Fatalf("initAgent() error: %v", err)
+	}
+	manifest, err := loadManifest(droidDir)
+	if err != nil {
+		t.Fatalf("load manifest: %v", err)
+	}
+	for _, name := range thtsfiles.GetAvailableHooks() {
+		relativePath := filepath.Join("hooks", name+".sh")
+		if !slices.Contains(manifest.Files, relativePath) {
+			t.Errorf("adopted manifest missing %s: %v", relativePath, manifest.Files)
+		}
+	}
+}
+
+func TestDroidInitDoesNotAdoptMatchingHookSymlink(t *testing.T) {
+	setupDroidTest(t)
+	projectDir := t.TempDir()
+	droidDir := filepath.Join(projectDir, ".factory")
+	hooksDir := filepath.Join(droidDir, "hooks")
+	if err := os.MkdirAll(hooksDir, 0755); err != nil {
+		t.Fatalf("create hooks directory: %v", err)
+	}
+	for _, name := range thtsfiles.GetAvailableHooks() {
+		content, err := thtsfiles.RenderHook(internalagents.AgentDroid, name)
+		if err != nil {
+			t.Fatalf("render hook %s: %v", name, err)
+		}
+		path := filepath.Join(hooksDir, name+".sh")
+		if name == "thts-session-start" {
+			target := filepath.Join(projectDir, "user-hook.sh")
+			if err := os.WriteFile(target, []byte(content), 0755); err != nil {
+				t.Fatalf("write symlink target: %v", err)
+			}
+			if err := os.Symlink(target, path); err != nil {
+				t.Fatalf("create hook symlink: %v", err)
+			}
+		} else if err := os.WriteFile(path, []byte(content), 0755); err != nil {
+			t.Fatalf("write hook %s: %v", name, err)
+		}
+	}
+	commands := getThtsHookNames(internalagents.AgentDroid, false)
+	writeDroidHooks(t, filepath.Join(droidDir, "hooks.json"), map[string]any{
+		"SessionStart":     []any{droidHookEntry(commands[0])},
+		"UserPromptSubmit": []any{droidHookEntry(commands[1])},
+	})
+
+	err := initAgent(projectDir, internalagents.AgentDroid, IntegrationHook)
+	if err == nil || !strings.Contains(err.Error(), "not owned by thts") {
+		t.Fatalf("initAgent() error = %v, want symlink collision", err)
+	}
+}
+
+func TestDroidProjectHooksAreTrackableWithConfiguration(t *testing.T) {
+	setupDroidTest(t)
+	projectDir := t.TempDir()
+	gitCmd := exec.Command("git", "init", "-q", projectDir)
+	gitCmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1")
+	if output, err := gitCmd.CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v: %s", err, output)
+	}
+	if err := initAgent(projectDir, internalagents.AgentDroid, IntegrationHook); err != nil {
+		t.Fatalf("initAgent() error: %v", err)
+	}
+	if err := updateGitignoreForAgents(projectDir, []internalagents.AgentType{internalagents.AgentDroid}); err != nil {
+		t.Fatalf("updateGitignoreForAgents() error: %v", err)
+	}
+	isIgnored := func(relativePath string) bool {
+		t.Helper()
+		cmd := exec.Command("git", "-C", projectDir, "check-ignore", "-q", "--", relativePath)
+		err := cmd.Run()
+		if err == nil {
+			return true
+		}
+		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
+			return false
+		}
+		t.Fatalf("git check-ignore %s: %v", relativePath, err)
+		return false
+	}
+
+	for _, relativePath := range []string{
+		".factory/hooks.json",
+		".factory/hooks/thts-session-start.sh",
+		".factory/hooks/thts-prompt-check.sh",
+	} {
+		if isIgnored(relativePath) {
+			t.Errorf("shared Droid hook resource %s is ignored", relativePath)
+		}
+	}
+	if !isIgnored(".factory/thts-manifest.json") {
+		t.Error("Droid ownership manifest is trackable")
 	}
 }
 

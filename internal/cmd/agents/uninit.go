@@ -120,20 +120,17 @@ func runAgentsUninit(cmd *cobra.Command, args []string) error {
 	for _, plan := range allPlans {
 		printRemovalPlan(plan)
 	}
-	if len(analysisErrors) > 0 {
-		return errors.Join(analysisErrors...)
-	}
 
 	if uninitDryRun {
 		fmt.Println()
 		fmt.Println(ui.Info("Dry run complete. No files were removed."))
-		return nil
+		return errors.Join(analysisErrors...)
 	}
 
 	// Confirm unless --force
 	if !uninitForce && !confirmRemoval() {
 		fmt.Println("Cancelled.")
-		return nil
+		return errors.Join(analysisErrors...)
 	}
 
 	fmt.Println()
@@ -141,8 +138,12 @@ func runAgentsUninit(cmd *cobra.Command, args []string) error {
 	// Perform removal for each agent
 	var removedAgents []agents.AgentType
 	var removalErrors []error
+	removingAgents := make(map[agents.AgentType]bool, len(allPlans))
 	for _, plan := range allPlans {
-		if err := performRemoval(plan); err != nil {
+		removingAgents[plan.agentType] = true
+	}
+	for _, plan := range allPlans {
+		if err := performRemoval(plan, removingAgents); err != nil {
 			fmt.Println(ui.ErrorF("Error removing %s: %v", plan.agentType, err))
 			removalErrors = append(removalErrors, fmt.Errorf("remove %s: %w", plan.agentType, err))
 			continue
@@ -156,8 +157,9 @@ func runAgentsUninit(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Println()
-	if len(removalErrors) > 0 {
-		return errors.Join(removalErrors...)
+	allErrors := append(slices.Clone(analysisErrors), removalErrors...)
+	if len(allErrors) > 0 {
+		return errors.Join(allErrors...)
 	}
 	fmt.Println(ui.Success("Successfully removed thts integration."))
 
@@ -568,7 +570,7 @@ func isPathSafeForRemoval(relativePath, baseDir string) bool {
 }
 
 // performRemoval removes all thts integration files and reverts modifications.
-func performRemoval(plan *removalPlan) error {
+func performRemoval(plan *removalPlan, removingAgents map[agents.AgentType]bool) error {
 	cfg := agents.GetConfig(plan.agentType)
 	var warnings []string
 	droidHooksRemoved := false
@@ -659,7 +661,7 @@ func performRemoval(plan *removalPlan) error {
 
 	// 6. Revert instruction file modification
 	if plan.modifications.InstructionsMD != nil {
-		if err := removeThtsIntegration(plan.modifications.InstructionsMD, plan.agentType, plan.projectDir); err != nil {
+		if err := removeThtsIntegration(plan.modifications.InstructionsMD, plan.agentType, plan.projectDir, removingAgents); err != nil {
 			warnings = append(warnings, fmt.Sprintf("failed to clean instruction file: %v", err))
 		} else {
 			if plan.agentType == agents.AgentDroid {
@@ -710,11 +712,11 @@ func performRemoval(plan *removalPlan) error {
 }
 
 // removeThtsIntegration removes thts integration based on the integration type.
-func removeThtsIntegration(mod *InstructionsMDModification, agentType agents.AgentType, projectDir string) error {
+func removeThtsIntegration(mod *InstructionsMDModification, agentType agents.AgentType, projectDir string, removingAgents map[agents.AgentType]bool) error {
 	// Dispatch based on integration type
 	switch mod.IntegrationType {
 	case "marker":
-		transferred, err := transferSharedMarkerOwnership(mod, agentType, projectDir)
+		transferred, err := transferSharedMarkerOwnership(mod, agentType, projectDir, removingAgents)
 		if err != nil {
 			return err
 		}
@@ -746,7 +748,7 @@ func removeThtsIntegration(mod *InstructionsMDModification, agentType agents.Age
 	}
 }
 
-func transferSharedMarkerOwnership(mod *InstructionsMDModification, agentType agents.AgentType, projectDir string) (bool, error) {
+func transferSharedMarkerOwnership(mod *InstructionsMDModification, agentType agents.AgentType, projectDir string, removingAgents map[agents.AgentType]bool) (bool, error) {
 	// Instructions are written at the Git root even when initialization starts
 	// from a nested directory, where the per-agent manifests remain.
 	gitRoot, err := git.GetRepoTopLevelAt(projectDir)
@@ -757,7 +759,7 @@ func transferSharedMarkerOwnership(mod *InstructionsMDModification, agentType ag
 		return false, nil
 	}
 	for _, candidate := range agents.AllAgentTypes() {
-		if candidate == agentType {
+		if candidate == agentType || removingAgents[candidate] {
 			continue
 		}
 		cfg := agents.GetConfig(candidate)
@@ -995,13 +997,14 @@ func removeHooksFromSettings(agentDir string, cfg *agents.AgentConfig, mod *Hook
 		return err
 	}
 	standalone := cfg.HookConfigFile != ""
-	return removeHooksFromDocument(settingsPath, document, standalone, getThtsHookEventNames(cfg.Type), mod.HookCommands, !standalone || mod.ConfigCreated)
+	restoreGeminiEnablement := cfg.Type == agents.AgentGemini && (mod.ConfigCreated || mod.GeminiEnablement != nil)
+	return removeHooksFromDocument(settingsPath, document, standalone, getThtsHookEventNames(cfg.Type), mod.HookCommands, !standalone || mod.ConfigCreated, mod.GeminiEnablement, restoreGeminiEnablement)
 }
 
 // removeGlobalHooksFromSettings removes thts hooks from a settings file (settings.json or settings.local.json).
 // Takes the full path to the settings file and the list of agent names that had hooks installed.
 // Handles the new hooks format (map with event names as keys).
-func removeGlobalHooksFromSettings(settingsPath string, agentNames []string, removeEmpty bool) error {
+func removeGlobalHooksFromSettings(settingsPath string, agentNames []string, removeEmpty bool, modification *HooksModification) error {
 	if !fsutil.Exists(settingsPath) {
 		return nil
 	}
@@ -1020,6 +1023,7 @@ func removeGlobalHooksFromSettings(settingsPath string, agentNames []string, rem
 	var commands []string
 	var events []string
 	standalone := false
+	restoreGeminiEnablement := false
 	for _, agentName := range agentNames {
 		agentType := agents.AgentType(agentName)
 		cfg := agents.GetConfig(agentType)
@@ -1027,13 +1031,18 @@ func removeGlobalHooksFromSettings(settingsPath string, agentNames []string, rem
 			continue
 		}
 		standalone = cfg.HookConfigFile != ""
+		restoreGeminiEnablement = restoreGeminiEnablement || (agentType == agents.AgentGemini && modification != nil && (modification.ConfigCreated || modification.GeminiEnablement != nil))
 		commands = append(commands, getThtsHookNames(agentType, true)...)
 		events = append(events, getThtsHookEventNames(agentType)...)
 	}
 	if len(commands) == 0 {
 		return nil
 	}
-	return removeHooksFromDocument(settingsPath, document, standalone, events, commands, removeEmpty)
+	var geminiEnablement *GeminiEnablementModification
+	if modification != nil {
+		geminiEnablement = modification.GeminiEnablement
+	}
+	return removeHooksFromDocument(settingsPath, document, standalone, events, commands, removeEmpty, geminiEnablement, restoreGeminiEnablement)
 }
 
 func hookEventsFromDocument(document map[string]any, standalone bool) map[string]any {
@@ -1044,16 +1053,39 @@ func hookEventsFromDocument(document map[string]any, standalone bool) map[string
 	return hooks
 }
 
-func removeHooksFromDocument(path string, document map[string]any, standalone bool, events, commands []string, removeEmpty bool) error {
+func removeHooksFromDocument(path string, document map[string]any, standalone bool, events, commands []string, removeEmpty bool, geminiEnablement *GeminiEnablementModification, restoreGeminiEnablement bool) error {
 	hooks := hookEventsFromDocument(document, standalone)
 	if hooks == nil {
-		return nil
+		if !restoreGeminiEnablement {
+			return nil
+		}
+		hooks = make(map[string]any)
 	}
 	removeSet := make(map[string]bool, len(commands))
 	for _, command := range commands {
 		removeSet[command] = true
 	}
 	newHooks := filterOutThtsHooksFromMapForRemoval(hooks, events, removeSet)
+	if restoreGeminiEnablement {
+		if geminiEnablement != nil && geminiEnablement.HooksEnabledExisted {
+			newHooks["enabled"] = geminiEnablement.HooksEnabled
+		} else {
+			delete(newHooks, "enabled")
+		}
+		tools, _ := document["tools"].(map[string]any)
+		if geminiEnablement != nil && geminiEnablement.ToolsEnableHooksExisted {
+			if tools == nil {
+				tools = make(map[string]any)
+				document["tools"] = tools
+			}
+			tools["enableHooks"] = geminiEnablement.ToolsEnableHooks
+		} else if tools != nil {
+			delete(tools, "enableHooks")
+			if len(tools) == 0 {
+				delete(document, "tools")
+			}
+		}
+	}
 	if standalone {
 		document = newHooks
 	} else if len(newHooks) == 0 {
@@ -1192,13 +1224,17 @@ func Uninit(targetDir string, force bool, agentTypesToRemove []agents.AgentType)
 		agentTypesToRemove = agents.DetectExistingAgents(targetDir)
 	}
 
+	removingAgents := make(map[agents.AgentType]bool, len(agentTypesToRemove))
+	for _, agentType := range agentTypesToRemove {
+		removingAgents[agentType] = true
+	}
 	for _, agentType := range agentTypesToRemove {
 		plan, err := buildRemovalPlan(targetDir, agentType)
 		if err != nil {
 			return err
 		}
 		if plan != nil {
-			if err := performRemoval(plan); err != nil {
+			if err := performRemoval(plan, removingAgents); err != nil {
 				return err
 			}
 		}
@@ -1362,8 +1398,15 @@ func runGlobalUninit(_ *cobra.Command, _ []string) error {
 				if len(requestedAgentStrings) > 0 {
 					agentsToRemove = intersectStrings(hooksInfo.Agents, requestedAgentStrings)
 				}
+				modification := info.HookModifications[f]
 				removeEmpty := !slices.Contains(info.PreexistingFiles, f)
-				if err := removeGlobalHooksFromSettings(f, agentsToRemove, removeEmpty); err != nil {
+				if slices.Contains(agentsToRemove, string(agents.AgentGemini)) && modification == nil {
+					// Legacy manifests cannot distinguish a user file from one created by thts.
+					removeEmpty = false
+				} else if modification != nil {
+					removeEmpty = modification.ConfigCreated
+				}
+				if err := removeGlobalHooksFromSettings(f, agentsToRemove, removeEmpty, modification); err != nil {
 					fmt.Println(ui.WarningF("  Could not remove hooks from %s: %v", config.ContractPath(f), err))
 					cleanupErrors = append(cleanupErrors, fmt.Errorf("remove hooks from %s: %w", f, err))
 				} else {
@@ -1495,6 +1538,11 @@ func removeCleanedGlobalManifestFiles(manifest *GlobalManifest, agentsToRemove [
 		info.PreexistingFiles = slices.DeleteFunc(info.PreexistingFiles, func(path string) bool {
 			return !slices.Contains(remainingFiles, path)
 		})
+		for path := range info.HookModifications {
+			if !slices.Contains(remainingFiles, path) {
+				delete(info.HookModifications, path)
+			}
+		}
 
 		var remainingAgents []string
 		for _, agent := range info.Agents {

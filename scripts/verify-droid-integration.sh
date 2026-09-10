@@ -29,12 +29,13 @@ require_hook_count() {
   local command=$2
   local expected=$3
   local count
-  count=$(jq --arg command "$command" '[to_entries[] | select(.key == "SessionStart" or .key == "UserPromptSubmit") | .value[]? | .hooks[]? | select(.command == $command)] | length' "$file")
+  count=$("$jq_binary" --arg command "$command" '[to_entries[] | select(.key == "SessionStart" or .key == "UserPromptSubmit") | .value[]? | .hooks[]? | select(.command == $command)] | length' "$file")
   [[ "$count" == "$expected" ]] || fail "expected $expected registrations for $command in $file, found $count"
 }
 
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 repo_root=$(git -C "$script_dir/.." rev-parse --show-toplevel)
+jq_binary=$(mise which jq 2>/dev/null || command -v jq)
 temp_dir=$(mktemp -d "${TMPDIR:-/tmp}/thts-droid-verify.XXXXXX")
 trap 'rm -rf "$temp_dir"' EXIT
 
@@ -55,6 +56,7 @@ dry_run_project="$temp_dir/projects/dry-run"
 hook_project="$temp_dir/projects/hook"
 global_project="$temp_dir/projects/global"
 mkdir -p "$dry_run_project" "$hook_project" "$global_project"
+git -C "$hook_project" init -q
 
 info "project and global dry-runs are isolated"
 output=$(cd "$dry_run_project" && "$binary" init agents --agents droid --dry-run)
@@ -108,13 +110,22 @@ require_contains "$factory_dir/hooks.json" '"customKey"'
 require_hook_count "$factory_dir/hooks.json" "$project_session" 1
 require_hook_count "$factory_dir/hooks.json" "$project_prompt" 1
 require_contains "$factory_dir/thts-manifest.json" '"settingsFile": "hooks.json"'
-if grep -Fxq 'hooks.json' <(jq -r '.files[]' "$factory_dir/thts-manifest.json"); then
+if grep -Fxq 'hooks.json' <("$jq_binary" -r '.files[]' "$factory_dir/thts-manifest.json"); then
   fail "project manifest owns hooks.json as a file"
 fi
+if git -C "$hook_project" check-ignore -q .factory/hooks.json; then
+  fail "project hooks.json is ignored"
+fi
+for relative in .factory/hooks/thts-session-start.sh .factory/hooks/thts-prompt-check.sh; do
+  if git -C "$hook_project" check-ignore -q "$relative"; then
+    fail "project hook script is ignored: $relative"
+  fi
+done
+git -C "$hook_project" check-ignore -q .factory/thts-manifest.json || fail "project manifest is trackable"
 cmp -s "$factory_dir/settings.json" "$temp_dir/project-settings.expected" || fail "project settings.json was modified"
 
 printf 'stale hook\n' >"$factory_dir/hooks/thts-session-start.sh"
-jq 'del(.UserPromptSubmit)' "$factory_dir/hooks.json" >"$temp_dir/hooks.refresh.json"
+"$jq_binary" 'del(.UserPromptSubmit)' "$factory_dir/hooks.json" >"$temp_dir/hooks.refresh.json"
 mv "$temp_dir/hooks.refresh.json" "$factory_dir/hooks.json"
 "$binary" init agents --agents droid --refresh >/dev/null
 require_contains "$factory_dir/hooks/thts-session-start.sh" "# thts session start hook"
