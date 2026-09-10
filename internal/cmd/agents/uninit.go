@@ -1186,12 +1186,7 @@ func findThtsHookCommands(hooks map[string]any, events, commands []string) []str
 }
 
 func slicesContains(values []string, target string) bool {
-	for _, value := range values {
-		if value == target {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(values, target)
 }
 
 // confirmRemoval prompts for confirmation.
