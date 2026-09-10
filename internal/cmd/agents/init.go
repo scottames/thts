@@ -2553,7 +2553,10 @@ func refreshAgentSetup(projectDir string, agentTypes []agents.AgentType) error {
 					fmt.Println(ui.SuccessF("  Updated %d hook script(s)", copied))
 				}
 				if _, modified, err := mergeHooksIntoSettings(agentDir, agentType, agentConfig, false); err != nil {
-					return fmt.Errorf("refresh hook configuration: %w", err)
+					if agentType == agents.AgentDroid {
+						return fmt.Errorf("refresh hook configuration: %w", err)
+					}
+					fmt.Println(ui.WarningF("  Could not refresh hook configuration: %v", err))
 				} else if modified {
 					configCreated := manifest.Modifications.Hooks != nil && manifest.Modifications.Hooks.ConfigCreated
 					manifest.Modifications.Hooks = &HooksModification{

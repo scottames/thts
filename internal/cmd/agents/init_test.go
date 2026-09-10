@@ -670,6 +670,47 @@ func TestOpenCodeLocalPluginLifecycle(t *testing.T) {
 	}
 }
 
+func TestRefreshContinuesAfterNonDroidHookConfigError(t *testing.T) {
+	t.Setenv("THTS_CONFIG_PATH", filepath.Join(t.TempDir(), "missing.yaml"))
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	projectDir := t.TempDir()
+
+	if err := initAgent(projectDir, internalagents.AgentClaude, IntegrationHook); err != nil {
+		t.Fatalf("initialize Claude: %v", err)
+	}
+	if err := initAgent(projectDir, internalagents.AgentPi, IntegrationHook); err != nil {
+		t.Fatalf("initialize Pi: %v", err)
+	}
+
+	claudeDir := filepath.Join(projectDir, internalagents.GetConfig(internalagents.AgentClaude).RootDir)
+	if err := os.WriteFile(filepath.Join(claudeDir, "settings.local.json"), []byte("{not-json\n"), 0644); err != nil {
+		t.Fatalf("write malformed Claude settings: %v", err)
+	}
+	piConfig := internalagents.GetConfig(internalagents.AgentPi)
+	extensionPath := filepath.Join(projectDir, piConfig.RootDir, piConfig.PluginsDir, "thts-integration.ts")
+	if err := os.WriteFile(extensionPath, []byte("stale"), 0644); err != nil {
+		t.Fatalf("write stale Pi extension: %v", err)
+	}
+
+	var refreshErr error
+	output := captureStdout(t, func() {
+		refreshErr = refreshAgentSetup(projectDir, []internalagents.AgentType{internalagents.AgentClaude, internalagents.AgentPi})
+	})
+	if refreshErr != nil {
+		t.Fatalf("refreshAgentSetup() error: %v", refreshErr)
+	}
+	if !strings.Contains(output, "Could not refresh hook configuration") {
+		t.Errorf("refresh output = %q, want hook configuration warning", output)
+	}
+	content, err := os.ReadFile(extensionPath)
+	if err != nil {
+		t.Fatalf("read refreshed Pi extension: %v", err)
+	}
+	if string(content) == "stale" {
+		t.Fatal("refresh stopped before updating Pi")
+	}
+}
+
 func TestRefreshOpenCodeLocalPluginMigratesLegacyInstructions(t *testing.T) {
 	t.Setenv("THTS_CONFIG_PATH", filepath.Join(t.TempDir(), "missing.yaml"))
 	projectDir := t.TempDir()

@@ -108,7 +108,7 @@ require_contains "$factory_dir/hooks.json" '"customKey"'
 require_hook_count "$factory_dir/hooks.json" "$project_session" 1
 require_hook_count "$factory_dir/hooks.json" "$project_prompt" 1
 require_contains "$factory_dir/thts-manifest.json" '"settingsFile": "hooks.json"'
-if grep -Fq '"hooks.json"' <(jq -r '.files[]' "$factory_dir/thts-manifest.json"); then
+if grep -Fxq 'hooks.json' <(jq -r '.files[]' "$factory_dir/thts-manifest.json"); then
   fail "project manifest owns hooks.json as a file"
 fi
 cmp -s "$factory_dir/settings.json" "$temp_dir/project-settings.expected" || fail "project settings.json was modified"

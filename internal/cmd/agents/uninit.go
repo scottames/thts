@@ -298,10 +298,7 @@ func detectInstallation(agentDir, projectDir string, agentType agents.AgentType)
 	}
 
 	// Check for known thts files
-	knownFiles := []string{"thts-instructions.md"}
-	if agentType != agents.AgentDroid {
-		knownFiles = append(knownFiles, "AGENTS.md")
-	}
+	knownFiles := []string{"AGENTS.md", "thts-instructions.md"}
 
 	// Add agent-specific instruction file
 	if cfg.InstructionsFile != "" && cfg.InstructionsFile != "AGENTS.md" {
@@ -398,18 +395,6 @@ func detectInstallation(agentDir, projectDir string, agentType agents.AgentType)
 			}
 		}
 	}
-	if agentType == agents.AgentDroid {
-		localPath := filepath.Join(agentDir, "AGENTS.md")
-		if content, err := os.ReadFile(localPath); err == nil && strings.Contains(string(content), ThtsMarkerStart) {
-			manifest.Modifications.InstructionsMD = &InstructionsMDModification{
-				Path:            localPath,
-				Action:          "appended",
-				IntegrationType: "marker",
-				MarkerBased:     true,
-			}
-		}
-	}
-
 	// Check for config-based integration (OpenCode)
 	if cfg.IntegrationType == "config" && manifest.Modifications.InstructionsMD == nil {
 		configPath := filepath.Join(projectDir, cfg.SettingsFile)
@@ -447,9 +432,6 @@ func detectInstallation(agentDir, projectDir string, agentType agents.AgentType)
 			filepath.Join(cfg.RootDir, "AGENTS.local.md"),
 			filepath.Join(cfg.RootDir, "settings.local.json"),
 		}
-		if agentType == agents.AgentDroid {
-			localPatterns = append(localPatterns, filepath.Join(cfg.RootDir, "AGENTS.md"))
-		}
 		for _, p := range localPatterns {
 			if strings.Contains(string(content), p) {
 				patterns = append(patterns, p)
@@ -485,9 +467,6 @@ func detectInstallation(agentDir, projectDir string, agentType agents.AgentType)
 		manifest.IntegrationLevel = IntegrationHook
 	} else if fsutil.Exists(filepath.Join(agentDir, "CLAUDE.local.md")) ||
 		fsutil.Exists(filepath.Join(agentDir, "AGENTS.local.md")) {
-		manifest.IntegrationLevel = IntegrationAgentsContentLocal
-	} else if agentType == agents.AgentDroid && manifest.Modifications.InstructionsMD != nil &&
-		filepath.Clean(manifest.Modifications.InstructionsMD.Path) == filepath.Join(agentDir, "AGENTS.md") {
 		manifest.IntegrationLevel = IntegrationAgentsContentLocal
 	} else if manifest.Modifications.InstructionsMD != nil {
 		manifest.IntegrationLevel = IntegrationAgentsContent

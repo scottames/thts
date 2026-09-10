@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -887,6 +888,9 @@ func TestDroidFailedGlobalHookInitDoesNotClaimUncreatedResources(t *testing.T) {
 }
 
 func TestDroidPartialGlobalHookInstallRetainsScriptOwnership(t *testing.T) {
+	if currentUser, err := user.Current(); err == nil && currentUser.Uid == "0" {
+		t.Skip("root can write read-only hooks.json")
+	}
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	setupDroidTest(t)
