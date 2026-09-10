@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -160,6 +161,57 @@ func TestHookIntegration_Gemini(t *testing.T) {
 	settingsPath := filepath.Join(agentDir, "settings.local.json")
 	if _, err := os.Stat(settingsPath); os.IsNotExist(err) {
 		t.Error("expected settings.local.json to exist")
+	}
+}
+
+func TestHookIntegration_DroidStandalonePreservesExisting(t *testing.T) {
+	tmpDir := t.TempDir()
+	agentDir := filepath.Join(tmpDir, ".factory")
+	if err := os.MkdirAll(agentDir, 0755); err != nil {
+		t.Fatalf("create Droid directory: %v", err)
+	}
+	hooksPath := filepath.Join(agentDir, "hooks.json")
+	writeDroidHooks(t, hooksPath, map[string]any{
+		"SessionStart": []any{droidHookEntry("./custom.sh")},
+		"CustomEvent":  []any{droidHookEntry("./custom-event.sh")},
+	})
+	cfg := agents.GetConfig(agents.AgentDroid)
+	manifest := &Manifest{Agent: string(agents.AgentDroid), IntegrationLevel: IntegrationHook}
+	for range 2 {
+		if err := setupHookIntegration(tmpDir, agentDir, agents.AgentDroid, cfg, manifest); err != nil {
+			t.Fatalf("setupHookIntegration() error: %v", err)
+		}
+	}
+	document := readDroidHooks(t, hooksPath)
+	if _, wrapped := document["hooks"]; wrapped {
+		t.Fatal("standalone Droid hook config contains a wrapped hooks key")
+	}
+	if len(document["SessionStart"].([]any)) != 2 {
+		t.Fatalf("SessionStart entries = %+v, want one custom and one thts entry", document["SessionStart"])
+	}
+	if len(document["UserPromptSubmit"].([]any)) != 1 || document["CustomEvent"] == nil {
+		t.Fatalf("Droid hooks were not merged idempotently: %+v", document)
+	}
+	if slices.Contains(manifest.Files, "hooks.json") {
+		t.Fatal("hooks.json was tracked as a wholly owned manifest file")
+	}
+	if manifest.Modifications.Hooks == nil || manifest.Modifications.Hooks.SettingsFile != "hooks.json" {
+		t.Fatalf("Droid hook modification = %+v", manifest.Modifications.Hooks)
+	}
+}
+
+func TestFilterOutThtsHooksPreservesSameCommandOnOtherEvent(t *testing.T) {
+	command := getThtsHookNames(agents.AgentDroid, false)[0]
+	hooks := map[string]any{
+		"SessionStart": []any{droidHookEntry(command)},
+		"CustomEvent":  []any{droidHookEntry(command)},
+	}
+	filtered := filterOutThtsHooksFromMap(hooks, getThtsHookEventNames(agents.AgentDroid), []string{command})
+	if _, exists := filtered["SessionStart"]; exists {
+		t.Fatal("thts command remained on its managed event")
+	}
+	if _, exists := filtered["CustomEvent"]; !exists {
+		t.Fatal("same command on an unrelated event was removed")
 	}
 }
 

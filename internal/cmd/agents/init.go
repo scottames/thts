@@ -123,8 +123,9 @@ type GitignoreModification struct {
 
 // HooksModification tracks hooks added to settings files.
 type HooksModification struct {
-	SettingsFile string   `json:"settingsFile"`
-	HookCommands []string `json:"hookCommands"`
+	SettingsFile  string   `json:"settingsFile"`
+	HookCommands  []string `json:"hookCommands"`
+	ConfigCreated bool     `json:"configCreated,omitempty"`
 }
 
 // installationPlan holds information about what would be installed for an agent.
@@ -150,7 +151,7 @@ type installationPlan struct {
 	// Modifications
 	settingsFile          string // If --with-settings
 	settingsSkipNotice    string // Why --with-settings creates no file
-	settingsLocalFile     string // For hook integration
+	settingsLocalFile     string // Hook configuration file for project integration
 	instructionsFile      string // For marker integration
 	gitignorePatterns     []string
 	hooksSettingsModified bool // Whether hooks config will be added
@@ -194,11 +195,11 @@ Usage: thts init agents [flags]`,
 }
 
 func init() {
-	InitCmd.Flags().StringVarP(&initAgents, "agents", "a", "", "Comma-separated list of agents (claude,codex,opencode,gemini,pi)")
+	InitCmd.Flags().StringVarP(&initAgents, "agents", "a", "", "Comma-separated list of agents (claude,codex,opencode,gemini,pi,droid)")
 	InitCmd.Flags().BoolVarP(&initForce, "force", "f", false, "Overwrite existing files")
 	InitCmd.Flags().BoolVarP(&initInteractive, "interactive", "i", false, "Interactively select options")
 	InitCmd.Flags().BoolVar(&initWithSettings, "with-settings", false, "Also create settings files")
-	InitCmd.Flags().StringVar(&initGlobal, "global", "", "Install components globally (all, or: skills,commands,agents)")
+	InitCmd.Flags().StringVar(&initGlobal, "global", "", "Install components globally (all, or: skills,commands,agents,hooks)")
 	// NoOptDefVal allows --global without value to trigger interactive mode
 	InitCmd.Flags().Lookup("global").NoOptDefVal = "interactive"
 	InitCmd.Flags().BoolVar(&initRefresh, "refresh", false, "Update agent files with current config (skip prompt)")
@@ -315,19 +316,26 @@ func runAgentsInit(cmd *cobra.Command, args []string) error {
 	}
 
 	// Initialize each agent
+	var initializedAgents []agents.AgentType
+	var initErrors []error
 	for _, agentType := range agentTypes {
 		if err := initAgent(targetDir, agentType, integrationLevel); err != nil {
 			fmt.Println(ui.ErrorF("Failed to initialize %s: %v", agentType, err))
+			initErrors = append(initErrors, fmt.Errorf("initialize %s: %w", agentType, err))
 			continue
 		}
+		initializedAgents = append(initializedAgents, agentType)
 	}
 
 	// Add gitignore patterns for all initialized agents
-	if err := updateGitignoreForAgents(targetDir, agentTypes); err != nil {
+	if err := updateGitignoreForAgents(targetDir, initializedAgents); err != nil {
 		fmt.Println(ui.WarningF("Could not update .gitignore: %v", err))
 	}
 
 	fmt.Println()
+	if len(initErrors) > 0 {
+		return errors.Join(initErrors...)
+	}
 	fmt.Println(ui.Success("Agent initialization complete."))
 
 	return nil
@@ -512,9 +520,11 @@ func buildInstallationPlan(projectDir string, agentType agents.AgentType, level 
 				relPath := filepath.Join(agentConfig.HooksDir, hookName+".sh")
 				plan.hookFiles = append(plan.hookFiles, relPath)
 			}
-			plan.settingsLocalFile = "settings.local.json"
+			plan.settingsLocalFile = hookConfigFile(agentConfig, false)
 			plan.hooksSettingsModified = true
-			plan.gitignorePatterns = append(plan.gitignorePatterns, filepath.Join(agentConfig.RootDir, "settings.local.json"))
+			if agentConfig.HookConfigFile == "" {
+				plan.gitignorePatterns = append(plan.gitignorePatterns, filepath.Join(agentConfig.RootDir, plan.settingsLocalFile))
+			}
 		}
 		if agentConfig.PluginsDir != "" {
 			relPath := filepath.Join(agentConfig.PluginsDir, "thts-integration.ts")
@@ -530,6 +540,8 @@ func buildInstallationPlan(projectDir string, agentType agents.AgentType, level 
 		} else if !usesGlobalPiRuntimeAdapter(agentType, agentConfig, hooksMode) {
 			if agentConfig.Type == agents.AgentClaude {
 				plan.instructionsFile = "CLAUDE.local.md"
+			} else if agentConfig.Type == agents.AgentDroid {
+				plan.instructionsFile = "AGENTS.md"
 			} else {
 				plan.instructionsFile = "AGENTS.local.md"
 			}
@@ -578,7 +590,7 @@ func printInstallationPlan(plan *installationPlan) {
 	sections := []section{
 		{name: "Skills", global: len(plan.globalSkillFiles) > 0, files: plan.skillFiles, hasData: len(plan.skillFiles) > 0 || len(plan.globalSkillFiles) > 0},
 		{name: cmdLabel, global: len(plan.globalCommandFiles) > 0, files: plan.commandFiles, hasData: len(plan.commandFiles) > 0 || len(plan.globalCommandFiles) > 0},
-		{name: "Agents", global: len(plan.globalAgentFiles) > 0, files: plan.agentFiles, hasData: len(plan.agentFiles) > 0 || len(plan.globalAgentFiles) > 0},
+		{name: agentsComponentDisplayName(plan.agentType), global: len(plan.globalAgentFiles) > 0, files: plan.agentFiles, hasData: len(plan.agentFiles) > 0 || len(plan.globalAgentFiles) > 0},
 		{name: "Hooks", files: plan.hookFiles, hasData: len(plan.hookFiles) > 0},
 		{name: pluginDisplayName(plan.agentType), files: plan.pluginFiles, hasData: len(plan.pluginFiles) > 0},
 	}
@@ -630,7 +642,7 @@ func printInstallationPlan(plan *installationPlan) {
 				globalFiles = plan.globalSkillFiles
 			case cmdLabel:
 				globalFiles = plan.globalCommandFiles
-			case "Agents":
+			case agentsComponentDisplayName(plan.agentType):
 				globalFiles = plan.globalAgentFiles
 			}
 			fmt.Printf("%s %s %s\n", branch, sec.name, ui.Muted(fmt.Sprintf("(global: %s)", globalDir)))
@@ -713,11 +725,49 @@ func initAgent(projectDir string, agentType agents.AgentType, level IntegrationL
 	// Load config to check component modes
 	cfg := config.LoadOrDefault()
 	globalManifest, _ := LoadGlobalManifest()
+	hooksMode := resolveAgentComponentMode(cfg, globalManifest, agentType, "hooks")
+
+	var previousManifest *Manifest
+	if existing, err := loadManifest(agentDir); err == nil {
+		previousManifest = existing
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("read previous manifest: %w", err)
+	}
+	level = normalizeIntegrationLevel(level)
+	if agentType == agents.AgentDroid {
+		if err := validateDroidProjectResourceCollisions(agentDir, agentConfig, cfg, globalManifest, previousManifest, level); err != nil {
+			return err
+		}
+		if level == IntegrationHook && hooksMode == config.ComponentModeLocal {
+			if err := validateHookConfig(agentDir, agentConfig, false); err != nil {
+				return err
+			}
+		}
+		if err := reconcileDroidIntegration(projectDir, agentDir, agentConfig, previousManifest, level, hooksMode); err != nil {
+			reconcileErr := fmt.Errorf("remove previous Droid integration: %w", err)
+			if previousManifest != nil {
+				if saveErr := writeManifest(agentDir, previousManifest); saveErr != nil {
+					return errors.Join(reconcileErr, fmt.Errorf("save partial Droid reconciliation: %w", saveErr))
+				}
+			}
+			return reconcileErr
+		}
+	}
 
 	manifest := &Manifest{
 		Agent:            string(agentType),
 		IntegrationLevel: level,
 		Files:            []string{},
+	}
+	if agentType == agents.AgentDroid {
+		if previousManifest != nil {
+			manifest.Files = slices.Clone(previousManifest.Files)
+			manifest.Modifications = previousManifest.Modifications
+		}
+		appendManifestFiles(manifest, "", droidProjectResourcePaths(agentConfig, cfg, globalManifest, level))
+		if err := writeManifest(agentDir, manifest); err != nil {
+			return fmt.Errorf("reserve Droid resource ownership: %w", err)
+		}
 	}
 
 	var filesCopied int
@@ -733,11 +783,12 @@ func initAgent(projectDir string, agentType agents.AgentType, level IntegrationL
 		skillsCopied, skillFiles, err := copySkills(agentDir, agentType, agentConfig)
 		if err != nil {
 			fmt.Println(ui.WarningF("  Could not copy skills: %v", err))
+			if agentType == agents.AgentDroid {
+				return fmt.Errorf("copy Droid skills: %w", err)
+			}
 		} else if skillsCopied > 0 {
 			filesCopied += skillsCopied
-			for _, f := range skillFiles {
-				manifest.Files = append(manifest.Files, filepath.Join(agentConfig.SkillsDir, f))
-			}
+			appendManifestFiles(manifest, agentConfig.SkillsDir, skillFiles)
 			fmt.Println(ui.SuccessF("  Copied %d skill(s)", skillsCopied))
 		}
 	}
@@ -760,11 +811,12 @@ func initAgent(projectDir string, agentType agents.AgentType, level IntegrationL
 				cmdsCopied, cmdFiles, err := copyCommands(agentDir, agentType)
 				if err != nil {
 					fmt.Println(ui.WarningF("  Could not copy %s: %v", cmdLabel, err))
+					if agentType == agents.AgentDroid {
+						return fmt.Errorf("copy Droid %s: %w", cmdLabel, err)
+					}
 				} else if cmdsCopied > 0 {
 					filesCopied += cmdsCopied
-					for _, f := range cmdFiles {
-						manifest.Files = append(manifest.Files, filepath.Join(agentConfig.CommandsDir, f))
-					}
+					appendManifestFiles(manifest, agentConfig.CommandsDir, cmdFiles)
 					fmt.Println(ui.SuccessF("  Copied %d %s", cmdsCopied, cmdLabel))
 				}
 			}
@@ -775,23 +827,24 @@ func initAgent(projectDir string, agentType agents.AgentType, level IntegrationL
 	agentsMode := resolveAgentComponentMode(cfg, globalManifest, agentType, "agents")
 	switch agentsMode {
 	case config.ComponentModeGlobal:
-		fmt.Println(ui.InfoF("  Agents: using global installation"))
+		fmt.Println(ui.InfoF("  %s: using global installation", agentsComponentDisplayName(agentType)))
 	case config.ComponentModeDisabled:
 		// Skip silently
 	default:
 		// Check if agent supports agents feature
 		if agentConfig.AgentsDir == "" {
-			fmt.Println(ui.InfoF("  Agents: not supported by %s", agents.AgentTypeLabels[agentType]))
+			fmt.Println(ui.InfoF("  %s: not supported by %s", agentsComponentDisplayName(agentType), agents.AgentTypeLabels[agentType]))
 		} else {
 			agentsCopied, agentFiles, err := copyAgents(agentDir, agentType, agentConfig)
 			if err != nil {
 				fmt.Println(ui.WarningF("  Could not copy agents: %v", err))
+				if agentType == agents.AgentDroid {
+					return fmt.Errorf("copy Droid droids: %w", err)
+				}
 			} else if agentsCopied > 0 {
 				filesCopied += agentsCopied
-				for _, f := range agentFiles {
-					manifest.Files = append(manifest.Files, filepath.Join(agentConfig.AgentsDir, f))
-				}
-				fmt.Println(ui.SuccessF("  Copied %d agent(s)", agentsCopied))
+				appendManifestFiles(manifest, agentConfig.AgentsDir, agentFiles)
+				fmt.Println(ui.SuccessF("  Copied %d %s", agentsCopied, strings.ToLower(agentsComponentDisplayName(agentType))))
 			}
 		}
 	}
@@ -799,7 +852,6 @@ func initAgent(projectDir string, agentType agents.AgentType, level IntegrationL
 	// Setup integration level
 	// Normalize level for legacy manifests
 	level = normalizeIntegrationLevel(level)
-	hooksMode := resolveAgentComponentMode(cfg, globalManifest, agentType, "hooks")
 	removeLocalPiExtension := level == IntegrationAgentsContent || level == IntegrationOnDemand || usesGlobalPiRuntimeAdapter(agentType, agentConfig, hooksMode)
 	if err := removeManifestOwnedPiExtension(agentDir, agentConfig, removeLocalPiExtension); err != nil {
 		return fmt.Errorf("remove previous Pi extension: %w", err)
@@ -811,6 +863,9 @@ func initAgent(projectDir string, agentType agents.AgentType, level IntegrationL
 			fmt.Printf("%s\n", ui.InfoF("  %s: using global installation", runtimeAdapterDisplayName(agentType)))
 		case config.ComponentModeLocal:
 			if err := setupHookIntegration(projectDir, agentDir, agentType, agentConfig, manifest); err != nil {
+				if agentType == agents.AgentDroid {
+					return fmt.Errorf("setup Droid hook integration: %w", err)
+				}
 				fmt.Println(ui.WarningF("  Could not setup hook integration: %v", err))
 			}
 		}
@@ -822,13 +877,33 @@ func initAgent(projectDir string, agentType agents.AgentType, level IntegrationL
 		// Traditional integration (markers or config)
 		instMod, gitignorePatterns, err := setupIntegrationLevel(projectDir, agentDir, agentConfig, level)
 		if err != nil {
+			if agentType == agents.AgentDroid {
+				if instMod != nil {
+					manifest.Modifications.InstructionsMD = instMod
+				}
+				setupErr := fmt.Errorf("setup Droid integration: %w", err)
+				if saveErr := writeManifest(agentDir, manifest); saveErr != nil {
+					return errors.Join(setupErr, fmt.Errorf("save partial Droid integration: %w", saveErr))
+				}
+				return setupErr
+			}
 			fmt.Println(ui.WarningF("  Could not setup integration: %v", err))
 		} else {
 			if instMod != nil {
+				if agentType == agents.AgentDroid && previousManifest != nil &&
+					previousManifest.Modifications.InstructionsMD != nil &&
+					previousManifest.Modifications.InstructionsMD.Action == "created" &&
+					filepath.Clean(previousManifest.Modifications.InstructionsMD.Path) == filepath.Clean(instMod.Path) {
+					instMod.Action = "created"
+				}
 				manifest.Modifications.InstructionsMD = instMod
+			} else if agentType == agents.AgentDroid && previousManifest != nil && normalizeIntegrationLevel(previousManifest.IntegrationLevel) == level {
+				manifest.Modifications.InstructionsMD = previousManifest.Modifications.InstructionsMD
 			}
 			if len(gitignorePatterns) > 0 {
 				manifest.Modifications.Gitignore = &GitignoreModification{Patterns: gitignorePatterns}
+			} else if agentType == agents.AgentDroid && previousManifest != nil && normalizeIntegrationLevel(previousManifest.IntegrationLevel) == level {
+				manifest.Modifications.Gitignore = previousManifest.Modifications.Gitignore
 			}
 		}
 	}
@@ -848,11 +923,128 @@ func initAgent(projectDir string, agentType agents.AgentType, level IntegrationL
 
 	// Write manifest
 	if err := writeManifest(agentDir, manifest); err != nil {
+		if agentType == agents.AgentDroid {
+			return fmt.Errorf("write Droid manifest: %w", err)
+		}
 		fmt.Println(ui.WarningF("  Could not write manifest: %v", err))
 	}
 
 	fmt.Println(ui.SuccessF("  Initialized with %d file(s)", filesCopied))
 	return nil
+}
+
+func validateDroidProjectResourceCollisions(
+	agentDir string,
+	agentConfig *agents.AgentConfig,
+	cfg *config.Config,
+	globalManifest *GlobalManifest,
+	previousManifest *Manifest,
+	level IntegrationLevel,
+) error {
+	if initForce {
+		return nil
+	}
+
+	for _, relativePath := range droidProjectResourcePaths(agentConfig, cfg, globalManifest, level) {
+		if previousManifest != nil && slices.Contains(previousManifest.Files, relativePath) {
+			continue
+		}
+		if _, err := os.Lstat(filepath.Join(agentDir, relativePath)); err == nil {
+			return fmt.Errorf("%s already exists and is not owned by thts; use --force to overwrite it", filepath.Join(agentConfig.RootDir, relativePath))
+		} else if !os.IsNotExist(err) {
+			return fmt.Errorf("check existing Droid resource %s: %w", relativePath, err)
+		}
+	}
+
+	return nil
+}
+
+func droidProjectResourcePaths(agentConfig *agents.AgentConfig, cfg *config.Config, globalManifest *GlobalManifest, level IntegrationLevel) []string {
+	var relativePaths []string
+	if resolveAgentComponentMode(cfg, globalManifest, agents.AgentDroid, "skills") == config.ComponentModeLocal {
+		for _, name := range thtsfiles.GetAvailableSkills() {
+			relativePaths = append(relativePaths, filepath.Join(agentConfig.SkillsDir, name, "SKILL.md"))
+		}
+	}
+	if resolveAgentComponentMode(cfg, globalManifest, agents.AgentDroid, "commands") == config.ComponentModeLocal {
+		for _, name := range thtsfiles.GetAvailableCommands() {
+			relativePaths = append(relativePaths, filepath.Join(agentConfig.CommandsDir, name+".md"))
+		}
+	}
+	if resolveAgentComponentMode(cfg, globalManifest, agents.AgentDroid, "agents") == config.ComponentModeLocal {
+		for _, name := range thtsfiles.GetAvailableAgents() {
+			relativePaths = append(relativePaths, filepath.Join(agentConfig.AgentsDir, name+".md"))
+		}
+	}
+	if level == IntegrationHook && resolveAgentComponentMode(cfg, globalManifest, agents.AgentDroid, "hooks") == config.ComponentModeLocal {
+		for _, name := range thtsfiles.GetAvailableHooks() {
+			relativePaths = append(relativePaths, filepath.Join(agentConfig.HooksDir, name+".sh"))
+		}
+	}
+	return relativePaths
+}
+
+// reconcileDroidProjectComponents removes only manifest-owned local resources
+// after a component is moved to global installation or disabled.
+func reconcileDroidProjectComponents(agentDir string, agentConfig *agents.AgentConfig, manifest *Manifest, cfg *config.Config, globalManifest *GlobalManifest) error {
+	for _, component := range []string{"skills", "commands", "agents"} {
+		if resolveAgentComponentMode(cfg, globalManifest, agents.AgentDroid, component) == config.ComponentModeLocal {
+			continue
+		}
+		for _, relativePath := range droidProjectComponentPaths(agentConfig, component) {
+			if !slices.Contains(manifest.Files, relativePath) {
+				continue
+			}
+			if err := os.Remove(filepath.Join(agentDir, relativePath)); err != nil && !os.IsNotExist(err) {
+				return err
+			}
+			manifest.Files = removeStringValue(manifest.Files, relativePath)
+		}
+	}
+	for _, directory := range []string{agentConfig.SkillsDir, agentConfig.CommandsDir, agentConfig.AgentsDir} {
+		if directory != "" {
+			cleanEmptyDirs(filepath.Join(agentDir, directory))
+		}
+	}
+	return nil
+}
+
+// droidProjectComponentPaths lists the generated files for one local component.
+func droidProjectComponentPaths(agentConfig *agents.AgentConfig, component string) []string {
+	var relativePaths []string
+	switch component {
+	case "skills":
+		for _, name := range thtsfiles.GetAvailableSkills() {
+			relativePaths = append(relativePaths, filepath.Join(agentConfig.SkillsDir, name, "SKILL.md"))
+		}
+	case "commands":
+		for _, name := range thtsfiles.GetAvailableCommands() {
+			relativePaths = append(relativePaths, filepath.Join(agentConfig.CommandsDir, name+".md"))
+		}
+	case "agents":
+		for _, name := range thtsfiles.GetAvailableAgents() {
+			relativePaths = append(relativePaths, filepath.Join(agentConfig.AgentsDir, name+".md"))
+		}
+	}
+	return relativePaths
+}
+
+// retainDroidManifest persists files written before an installation error so
+// future operations can safely remove or refresh only thts-owned resources.
+func retainDroidManifest(agentDir string, manifest *Manifest, operationErr error) error {
+	if err := writeManifest(agentDir, manifest); err != nil {
+		return errors.Join(operationErr, fmt.Errorf("save partial Droid installation: %w", err))
+	}
+	return operationErr
+}
+
+func appendManifestFiles(manifest *Manifest, directory string, files []string) {
+	for _, file := range files {
+		relativePath := filepath.Join(directory, file)
+		if !slices.Contains(manifest.Files, relativePath) {
+			manifest.Files = append(manifest.Files, relativePath)
+		}
+	}
 }
 
 // readThtsInstructions returns the rendered thts-instructions.md content with current config.
@@ -1249,8 +1441,26 @@ func setupIntegrationLevel(projectDir, agentDir string, cfg *agents.AgentConfig,
 		if cfg.Type == agents.AgentClaude {
 			// For Claude, use CLAUDE.local.md
 			localFile = "CLAUDE.local.md"
+		} else if cfg.Type == agents.AgentDroid {
+			localFile = "AGENTS.md"
 		} else {
 			localFile = "AGENTS.local.md"
+		}
+		if cfg.Type == agents.AgentDroid {
+			mod, err := appendWithMarkers(agentDir, agentDir, cfg)
+			if err != nil {
+				return nil, nil, err
+			}
+			pattern := filepath.Join(cfg.RootDir, localFile)
+			added, err := fsutil.AddToGitignore(projectDir, pattern, "project")
+			if err != nil {
+				return mod, nil, fmt.Errorf("failed to update .gitignore: %w", err)
+			}
+			if added {
+				gitignorePatterns = append(gitignorePatterns, pattern)
+				fmt.Println(ui.InfoF("  Updated .gitignore to exclude %s", filepath.Join(cfg.RootDir, localFile)))
+			}
+			return mod, gitignorePatterns, nil
 		}
 		if err := createLocalInstructionsMD(agentDir, localFile, cfg); err != nil {
 			return nil, nil, err
@@ -1527,24 +1737,43 @@ func buildClaudeSettings() string {
 	return string(content) + "\n"
 }
 
-// mergeHooksIntoSettings adds hook configuration to the appropriate settings file without clobbering existing config.
-// For project-level: uses settings.local.json (personal, gitignored)
-// For global-level: uses the main settings file (e.g., settings.json) since there's no .local variant globally
-// Returns the path to the settings file and whether it was created/modified.
+// hookConfigFile returns the hook configuration filename for an installation scope.
+func hookConfigFile(cfg *agents.AgentConfig, isGlobal bool) string {
+	if cfg.HookConfigFile != "" {
+		return cfg.HookConfigFile
+	}
+	if isGlobal {
+		return cfg.SettingsFile
+	}
+	return "settings.local.json"
+}
+
+func validateHookConfig(agentDir string, cfg *agents.AgentConfig, isGlobal bool) error {
+	name := hookConfigFile(cfg, isGlobal)
+	path := filepath.Join(agentDir, name)
+	if !fsutil.Exists(path) {
+		return nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read %s: %w", name, err)
+	}
+	var document map[string]any
+	if err := json.Unmarshal(data, &document); err != nil {
+		return fmt.Errorf("parse %s: %w", name, err)
+	}
+	return nil
+}
+
+// mergeHooksIntoSettings adds hook configuration without clobbering existing config.
+// Standalone hook files use their root object as the event map; settings files
+// retain the wrapped "hooks" object used by Claude and Gemini.
 func mergeHooksIntoSettings(agentDir string, agentType agents.AgentType, cfg *agents.AgentConfig, isGlobal bool) (string, bool, error) {
 	if cfg.SettingsFormat == "toml" {
 		return "", false, fmt.Errorf("hook integration not supported for TOML settings (agent: %s)", agentType)
 	}
 
-	// Determine settings file based on scope
-	// - Global: use main settings file (no .local variant exists at global level)
-	// - Project: use settings.local.json (personal config, gitignored)
-	var settingsFile string
-	if isGlobal {
-		settingsFile = cfg.SettingsFile
-	} else {
-		settingsFile = "settings.local.json"
-	}
+	settingsFile := hookConfigFile(cfg, isGlobal)
 
 	settingsPath := filepath.Join(agentDir, settingsFile)
 
@@ -1561,6 +1790,9 @@ func mergeHooksIntoSettings(agentDir string, agentType agents.AgentType, cfg *ag
 	} else {
 		settings = make(map[string]any)
 	}
+	if settings == nil {
+		settings = make(map[string]any)
+	}
 
 	// Build hooks configuration based on agent type
 	hooksConfig := buildHooksConfig(agentType, cfg, isGlobal)
@@ -1569,9 +1801,15 @@ func mergeHooksIntoSettings(agentDir string, agentType agents.AgentType, cfg *ag
 	}
 
 	// Merge hooks into settings (hooks is a map with event names as keys)
-	existingHooks, hasHooks := settings["hooks"].(map[string]any)
-	if !hasHooks {
-		existingHooks = make(map[string]any)
+	standalone := cfg.HookConfigFile != ""
+	var existingHooks map[string]any
+	if standalone {
+		existingHooks = settings
+	} else {
+		existingHooks, _ = settings["hooks"].(map[string]any)
+		if existingHooks == nil {
+			existingHooks = make(map[string]any)
+		}
 	}
 
 	// Get the event names that thts uses
@@ -1592,11 +1830,15 @@ func mergeHooksIntoSettings(agentDir string, agentType agents.AgentType, cfg *ag
 			mergedHooks[event] = newHooks
 		}
 	}
-	settings["hooks"] = mergedHooks
+	if standalone {
+		settings = mergedHooks
+	} else {
+		settings["hooks"] = mergedHooks
+	}
 
 	// Gemini requires explicit hook enabling at both tools and hooks level
 	// See: https://geminicli.com/docs/hooks/
-	if agentType == agents.AgentGemini {
+	if agentType == agents.AgentGemini && !standalone {
 		// Enable hooks at the tools level
 		tools, _ := settings["tools"].(map[string]any)
 		if tools == nil {
@@ -1631,16 +1873,6 @@ func buildHooksConfig(agentType agents.AgentType, cfg *agents.AgentConfig, isGlo
 		return nil
 	}
 
-	// Build the path prefix based on global vs project scope
-	var pathPrefix string
-	if isGlobal {
-		// Global: use absolute path to global agent directory
-		pathPrefix = filepath.Join(config.GlobalAgentDir(string(agentType)), cfg.HooksDir)
-	} else {
-		// Project: use relative path from project root
-		pathPrefix = fmt.Sprintf("./%s/%s", cfg.RootDir, cfg.HooksDir)
-	}
-
 	// Helper to create a hook entry in the new format
 	makeHookEntry := func(command string) []any {
 		return []any{
@@ -1656,19 +1888,29 @@ func buildHooksConfig(agentType agents.AgentType, cfg *agents.AgentConfig, isGlo
 	}
 
 	switch agentType {
-	case agents.AgentClaude:
+	case agents.AgentClaude, agents.AgentDroid:
 		return map[string]any{
-			"SessionStart":     makeHookEntry(filepath.Join(pathPrefix, "thts-session-start.sh")),
-			"UserPromptSubmit": makeHookEntry(filepath.Join(pathPrefix, "thts-prompt-check.sh")),
+			"SessionStart":     makeHookEntry(hookCommandPath(agentType, cfg, isGlobal, "thts-session-start.sh")),
+			"UserPromptSubmit": makeHookEntry(hookCommandPath(agentType, cfg, isGlobal, "thts-prompt-check.sh")),
 		}
 	case agents.AgentGemini:
 		return map[string]any{
-			"SessionStart": makeHookEntry(filepath.Join(pathPrefix, "thts-session-start.sh")),
-			"BeforeAgent":  makeHookEntry(filepath.Join(pathPrefix, "thts-prompt-check.sh")),
+			"SessionStart": makeHookEntry(hookCommandPath(agentType, cfg, isGlobal, "thts-session-start.sh")),
+			"BeforeAgent":  makeHookEntry(hookCommandPath(agentType, cfg, isGlobal, "thts-prompt-check.sh")),
 		}
 	default:
 		return nil
 	}
+}
+
+func hookCommandPath(agentType agents.AgentType, cfg *agents.AgentConfig, isGlobal bool, script string) string {
+	if isGlobal {
+		return filepath.Join(config.GlobalAgentDir(string(agentType)), cfg.HooksDir, script)
+	}
+	if agentType == agents.AgentDroid {
+		return fmt.Sprintf("\"$FACTORY_PROJECT_DIR\"/%s", filepath.ToSlash(filepath.Join(cfg.RootDir, cfg.HooksDir, script)))
+	}
+	return fmt.Sprintf("./%s", filepath.ToSlash(filepath.Join(cfg.RootDir, cfg.HooksDir, script)))
 }
 
 // getThtsHookNames returns the command patterns for thts hooks.
@@ -1679,23 +1921,16 @@ func getThtsHookNames(agentType agents.AgentType, isGlobal bool) []string {
 		return nil
 	}
 
-	var pathPrefix string
-	if isGlobal {
-		pathPrefix = filepath.Join(config.GlobalAgentDir(string(agentType)), cfg.HooksDir)
-	} else {
-		pathPrefix = fmt.Sprintf("./%s/%s", cfg.RootDir, cfg.HooksDir)
-	}
-
 	return []string{
-		filepath.Join(pathPrefix, "thts-session-start.sh"),
-		filepath.Join(pathPrefix, "thts-prompt-check.sh"),
+		hookCommandPath(agentType, cfg, isGlobal, "thts-session-start.sh"),
+		hookCommandPath(agentType, cfg, isGlobal, "thts-prompt-check.sh"),
 	}
 }
 
 // getThtsHookEventNames returns the event names that thts hooks register for.
 func getThtsHookEventNames(agentType agents.AgentType) []string {
 	switch agentType {
-	case agents.AgentClaude:
+	case agents.AgentClaude, agents.AgentDroid:
 		return []string{"SessionStart", "UserPromptSubmit"}
 	case agents.AgentGemini:
 		return []string{"SessionStart", "BeforeAgent"}
@@ -1708,12 +1943,20 @@ func getThtsHookEventNames(agentType agents.AgentType) []string {
 // It filters out thts commands from the specified events, removing events entirely if empty.
 func filterOutThtsHooksFromMap(hooks map[string]any, thtsEvents, thtsCommands []string) map[string]any {
 	result := make(map[string]any)
+	thtsEventSet := make(map[string]bool, len(thtsEvents))
+	for _, event := range thtsEvents {
+		thtsEventSet[event] = true
+	}
 	thtsCommandSet := make(map[string]bool)
 	for _, cmd := range thtsCommands {
 		thtsCommandSet[cmd] = true
 	}
 
 	for event, eventHooks := range hooks {
+		if !thtsEventSet[event] {
+			result[event] = eventHooks
+			continue
+		}
 		hookList, ok := eventHooks.([]any)
 		if !ok {
 			result[event] = eventHooks
@@ -1790,9 +2033,7 @@ func setupHookIntegration(projectDir, agentDir string, agentType agents.AgentTyp
 			if err := makeHooksExecutable(agentDir, cfg, files); err != nil {
 				return fmt.Errorf("failed to make hooks executable: %w", err)
 			}
-			for _, f := range files {
-				manifest.Files = append(manifest.Files, filepath.Join(cfg.HooksDir, f))
-			}
+			appendManifestFiles(manifest, cfg.HooksDir, files)
 			fmt.Println(ui.SuccessF("  Copied %d hook script(s)", copied))
 		}
 	}
@@ -1807,19 +2048,23 @@ func setupHookIntegration(projectDir, agentDir string, agentType agents.AgentTyp
 		}
 	}
 
-	// Merge hooks into settings.local.json (Claude/Gemini only)
+	// Merge hooks into the agent's project hook configuration.
+	configCreated := false
+	if manifest.Modifications.Hooks != nil {
+		configCreated = manifest.Modifications.Hooks.ConfigCreated
+	}
 	if cfg.HooksDir != "" {
+		configCreated = configCreated || !fsutil.Exists(filepath.Join(agentDir, hookConfigFile(cfg, false)))
 		settingsPath, modified, err := mergeHooksIntoSettings(agentDir, agentType, cfg, false)
 		if err != nil {
 			return fmt.Errorf("failed to configure hooks in settings: %w", err)
 		}
 		if modified {
-			manifest.Files = append(manifest.Files, filepath.Base(settingsPath))
 			fmt.Println(ui.SuccessF("  Configured hooks in %s", filepath.Base(settingsPath)))
 		}
 	}
 
-	if cfg.HooksDir != "" {
+	if cfg.HooksDir != "" && cfg.HookConfigFile == "" {
 		// Hook settings are local to the user and should not be committed.
 		pattern := filepath.Join(cfg.RootDir, "settings.local.json")
 		added, err := fsutil.AddToGitignore(projectDir, pattern, "project")
@@ -1837,8 +2082,9 @@ func setupHookIntegration(projectDir, agentDir string, agentType agents.AgentTyp
 	// Track hooks in manifest for uninit
 	if cfg.HooksDir != "" {
 		manifest.Modifications.Hooks = &HooksModification{
-			SettingsFile: "settings.local.json",
-			HookCommands: getThtsHookNames(agentType, false),
+			SettingsFile:  hookConfigFile(cfg, false),
+			HookCommands:  getThtsHookNames(agentType, false),
+			ConfigCreated: configCreated,
 		}
 	}
 
@@ -1846,6 +2092,54 @@ func setupHookIntegration(projectDir, agentDir string, agentType agents.AgentTyp
 		fmt.Println(ui.InfoF("  %s mode: instructions load dynamically", capitalize(pluginName(agentType))))
 	} else {
 		fmt.Println(ui.Info("  Hook mode: instructions load on keyword detection"))
+	}
+	return nil
+}
+
+func reconcileDroidIntegration(projectDir, agentDir string, cfg *agents.AgentConfig, manifest *Manifest, nextLevel IntegrationLevel, hooksMode config.ComponentMode) error {
+	if manifest == nil {
+		return nil
+	}
+	previousLevel := normalizeIntegrationLevel(manifest.IntegrationLevel)
+	keepPrevious := previousLevel == nextLevel
+	if previousLevel == IntegrationHook && hooksMode != config.ComponentModeLocal {
+		keepPrevious = false
+	}
+	if keepPrevious {
+		return nil
+	}
+
+	if previousLevel == IntegrationHook {
+		if manifest.Modifications.Hooks != nil {
+			if err := removeHooksFromSettings(agentDir, cfg, manifest.Modifications.Hooks); err != nil {
+				return err
+			}
+			manifest.Modifications.Hooks = nil
+		}
+		for _, relativePath := range slices.Clone(manifest.Files) {
+			if strings.HasPrefix(filepath.ToSlash(relativePath), filepath.ToSlash(cfg.HooksDir)+"/thts-") {
+				if err := os.Remove(filepath.Join(agentDir, relativePath)); err != nil && !os.IsNotExist(err) {
+					return err
+				}
+				manifest.Files = removeStringValue(manifest.Files, relativePath)
+			}
+		}
+		cleanEmptyDirs(filepath.Join(agentDir, cfg.HooksDir))
+	}
+
+	if (previousLevel == IntegrationAgentsContent || previousLevel == IntegrationAgentsContentLocal) && manifest.Modifications.InstructionsMD != nil {
+		if err := removeThtsIntegration(manifest.Modifications.InstructionsMD, agents.AgentDroid, projectDir); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		manifest.Modifications.InstructionsMD = nil
+	}
+	if previousLevel == IntegrationAgentsContentLocal && manifest.Modifications.Gitignore != nil {
+		for _, pattern := range manifest.Modifications.Gitignore.Patterns {
+			if _, err := fsutil.RemoveFromGitignore(projectDir, pattern, "project"); err != nil {
+				return err
+			}
+		}
+		manifest.Modifications.Gitignore = nil
 	}
 	return nil
 }
@@ -1944,21 +2238,26 @@ func migrateLegacyLocalInstructions(projectDir, agentDir string, cfg *agents.Age
 // Returns the list of installed files as full paths.
 func installGlobalHooks(globalDir string, agentType agents.AgentType, cfg *agents.AgentConfig) ([]string, error) {
 	var installedFiles []string
+	if cfg.HooksDir != "" {
+		if err := validateHookConfig(globalDir, cfg, true); err != nil {
+			return nil, err
+		}
+	}
 
 	// Copy hook scripts (Claude/Gemini)
 	if cfg.HooksDir != "" {
 		_, hookFiles, err := copyHooks(globalDir, agentType, cfg)
+		// Preserve ownership of scripts written before a later hook-config failure.
+		for _, file := range hookFiles {
+			installedFiles = append(installedFiles, filepath.Join(globalDir, cfg.HooksDir, file))
+		}
 		if err != nil {
-			return nil, fmt.Errorf("failed to copy hooks: %w", err)
+			return installedFiles, fmt.Errorf("failed to copy hooks: %w", err)
 		}
 		if len(hookFiles) > 0 {
 			// Make hooks executable
 			if err := makeHooksExecutable(globalDir, cfg, hookFiles); err != nil {
-				return nil, fmt.Errorf("failed to make hooks executable: %w", err)
-			}
-			// Convert to full paths
-			for _, f := range hookFiles {
-				installedFiles = append(installedFiles, filepath.Join(globalDir, cfg.HooksDir, f))
+				return installedFiles, fmt.Errorf("failed to make hooks executable: %w", err)
 			}
 		}
 	}
@@ -1974,13 +2273,13 @@ func installGlobalHooks(globalDir string, agentType agents.AgentType, cfg *agent
 		}
 	}
 
-	// Merge hooks into global settings.local.json
+	// Merge hooks into the global hook configuration.
 	if cfg.HooksDir != "" {
 		settingsPath, modified, err := mergeHooksIntoSettings(globalDir, agentType, cfg, true)
 		if err != nil {
-			return nil, fmt.Errorf("failed to configure hooks in settings: %w", err)
+			return installedFiles, fmt.Errorf("failed to configure hooks in settings: %w", err)
 		}
-		if modified {
+		if modified || cfg.HookConfigFile != "" {
 			installedFiles = append(installedFiles, settingsPath)
 		}
 	}
@@ -2071,7 +2370,9 @@ func getGitignorePatterns(agentType agents.AgentType) []string {
 		cfg.RootDir + "/thts-*",
 		cfg.RootDir + "/*/thts-*",
 		cfg.RootDir + "/*/thoughts-*",
-		cfg.RootDir + "/settings.local.json",
+	}
+	if cfg.HooksDir != "" && cfg.HookConfigFile == "" {
+		patterns = append(patterns, cfg.RootDir+"/settings.local.json")
 	}
 
 	return patterns
@@ -2124,6 +2425,9 @@ func refreshAgentSetup(projectDir string, agentTypes []agents.AgentType) error {
 		// Load existing manifest to get integration level
 		manifest, err := loadManifest(agentDir)
 		if err != nil {
+			if agentType == agents.AgentDroid {
+				return fmt.Errorf("read Droid manifest: %w", err)
+			}
 			fmt.Println(ui.WarningF("Could not read manifest for %s: %v", agentType, err))
 			continue
 		}
@@ -2131,14 +2435,45 @@ func refreshAgentSetup(projectDir string, agentTypes []agents.AgentType) error {
 		fmt.Println(ui.SubHeader(fmt.Sprintf("Refreshing %s:", agents.AgentTypeLabels[agentType])))
 
 		var filesUpdated int
+		level := normalizeIntegrationLevel(manifest.IntegrationLevel)
+		hooksMode := resolveAgentComponentMode(cfg, globalManifest, agentType, "hooks")
+		if agentType == agents.AgentDroid {
+			if err := validateDroidProjectResourceCollisions(agentDir, agentConfig, cfg, globalManifest, manifest, level); err != nil {
+				return err
+			}
+			if level == IntegrationHook && hooksMode == config.ComponentModeLocal {
+				if err := validateHookConfig(agentDir, agentConfig, false); err != nil {
+					return err
+				}
+			}
+			if err := reconcileDroidIntegration(projectDir, agentDir, agentConfig, manifest, level, hooksMode); err != nil {
+				reconcileErr := fmt.Errorf("refresh Droid integration: %w", err)
+				if saveErr := writeManifest(agentDir, manifest); saveErr != nil {
+					return errors.Join(reconcileErr, fmt.Errorf("save partial Droid reconciliation: %w", saveErr))
+				}
+				return reconcileErr
+			}
+			if err := reconcileDroidProjectComponents(agentDir, agentConfig, manifest, cfg, globalManifest); err != nil {
+				return retainDroidManifest(agentDir, manifest, fmt.Errorf("reconcile refreshed Droid project components: %w", err))
+			}
+		}
 
 		// Re-copy skills (check component mode)
 		skillsMode := resolveAgentComponentMode(cfg, globalManifest, agentType, "skills")
 		if skillsMode == config.ComponentModeLocal {
-			copied, _, err := copySkills(agentDir, agentType, agentConfig)
+			copied, files, err := copySkills(agentDir, agentType, agentConfig)
 			if err != nil {
+				if agentType == agents.AgentDroid {
+					return fmt.Errorf("refresh Droid skills: %w", err)
+				}
 				fmt.Println(ui.WarningF("  Could not update skills: %v", err))
 			} else if copied > 0 {
+				for _, file := range files {
+					relativePath := filepath.Join(agentConfig.SkillsDir, file)
+					if !slices.Contains(manifest.Files, relativePath) {
+						manifest.Files = append(manifest.Files, relativePath)
+					}
+				}
 				filesUpdated += copied
 				fmt.Println(ui.SuccessF("  Updated %d skill(s)", copied))
 			}
@@ -2148,10 +2483,19 @@ func refreshAgentSetup(projectDir string, agentTypes []agents.AgentType) error {
 		if agentConfig.SupportsCommands && !agentConfig.CommandsGlobalOnly {
 			commandsMode := resolveAgentComponentMode(cfg, globalManifest, agentType, "commands")
 			if commandsMode == config.ComponentModeLocal {
-				copied, _, err := copyCommands(agentDir, agentType)
+				copied, files, err := copyCommands(agentDir, agentType)
 				if err != nil {
+					if agentType == agents.AgentDroid {
+						return fmt.Errorf("refresh Droid commands: %w", err)
+					}
 					fmt.Println(ui.WarningF("  Could not update commands: %v", err))
 				} else if copied > 0 {
+					for _, file := range files {
+						relativePath := filepath.Join(agentConfig.CommandsDir, file)
+						if !slices.Contains(manifest.Files, relativePath) {
+							manifest.Files = append(manifest.Files, relativePath)
+						}
+					}
 					filesUpdated += copied
 					fmt.Println(ui.SuccessF("  Updated %d command(s)", copied))
 				}
@@ -2162,10 +2506,19 @@ func refreshAgentSetup(projectDir string, agentTypes []agents.AgentType) error {
 		if agentConfig.AgentsDir != "" {
 			agentsMode := resolveAgentComponentMode(cfg, globalManifest, agentType, "agents")
 			if agentsMode == config.ComponentModeLocal {
-				copied, _, err := copyAgents(agentDir, agentType, agentConfig)
+				copied, files, err := copyAgents(agentDir, agentType, agentConfig)
 				if err != nil {
+					if agentType == agents.AgentDroid {
+						return fmt.Errorf("refresh Droid droids: %w", err)
+					}
 					fmt.Println(ui.WarningF("  Could not update agents: %v", err))
 				} else if copied > 0 {
+					for _, file := range files {
+						relativePath := filepath.Join(agentConfig.AgentsDir, file)
+						if !slices.Contains(manifest.Files, relativePath) {
+							manifest.Files = append(manifest.Files, relativePath)
+						}
+					}
 					filesUpdated += copied
 					fmt.Println(ui.SuccessF("  Updated %d agent(s)", copied))
 				}
@@ -2173,30 +2526,67 @@ func refreshAgentSetup(projectDir string, agentTypes []agents.AgentType) error {
 		}
 
 		// Update integration based on level
-		level := normalizeIntegrationLevel(manifest.IntegrationLevel)
 		switch level {
 		case IntegrationHook:
 			// Refresh hook scripts
-			if agentConfig.HooksDir != "" && resolveAgentComponentMode(cfg, globalManifest, agentType, "hooks") == config.ComponentModeLocal {
+			if agentConfig.HooksDir != "" && hooksMode == config.ComponentModeLocal {
 				copied, files, err := copyHooks(agentDir, agentType, agentConfig)
 				if err != nil {
+					if agentType == agents.AgentDroid {
+						return fmt.Errorf("refresh Droid hooks: %w", err)
+					}
 					fmt.Println(ui.WarningF("  Could not update hooks: %v", err))
 				} else if copied > 0 {
 					if err := makeHooksExecutable(agentDir, agentConfig, files); err != nil {
+						if agentType == agents.AgentDroid {
+							return fmt.Errorf("make refreshed Droid hooks executable: %w", err)
+						}
 						fmt.Println(ui.WarningF("  Could not make hooks executable: %v", err))
+					}
+					for _, file := range files {
+						relativeHook := filepath.Join(agentConfig.HooksDir, file)
+						if !slices.Contains(manifest.Files, relativeHook) {
+							manifest.Files = append(manifest.Files, relativeHook)
+						}
 					}
 					filesUpdated += copied
 					fmt.Println(ui.SuccessF("  Updated %d hook script(s)", copied))
+				}
+				if _, modified, err := mergeHooksIntoSettings(agentDir, agentType, agentConfig, false); err != nil {
+					return fmt.Errorf("refresh hook configuration: %w", err)
+				} else if modified {
+					configCreated := manifest.Modifications.Hooks != nil && manifest.Modifications.Hooks.ConfigCreated
+					manifest.Modifications.Hooks = &HooksModification{
+						SettingsFile:  hookConfigFile(agentConfig, false),
+						HookCommands:  getThtsHookNames(agentType, false),
+						ConfigCreated: configCreated,
+					}
 				}
 			}
 		case IntegrationAgentsContent:
 			// Refresh marker block content
 			if err := refreshIntegration(projectDir, agentDir, agentConfig, cfg); err != nil {
+				if agentType == agents.AgentDroid {
+					return fmt.Errorf("refresh Droid integration: %w", err)
+				}
 				fmt.Println(ui.WarningF("  Could not update integration: %v", err))
+			}
+		case IntegrationAgentsContentLocal:
+			if agentType == agents.AgentDroid {
+				if err := refreshMarkerIntegration(filepath.Join(agentDir, "AGENTS.md"), filepath.Join(agentConfig.RootDir, "AGENTS.md"), cfg); err != nil {
+					return fmt.Errorf("refresh local Droid integration: %w", err)
+				}
+				pattern := filepath.Join(agentConfig.RootDir, "AGENTS.md")
+				added, err := fsutil.AddToGitignore(projectDir, pattern, "project")
+				if err != nil {
+					return fmt.Errorf("refresh Droid .gitignore: %w", err)
+				}
+				if added {
+					manifest.Modifications.Gitignore = &GitignoreModification{Patterns: []string{pattern}}
+				}
 			}
 		}
 
-		hooksMode := resolveAgentComponentMode(cfg, globalManifest, agentType, "hooks")
 		if usesGlobalPiRuntimeAdapter(agentType, agentConfig, hooksMode) && (level == IntegrationHook || level == IntegrationAgentsContentLocal) {
 			if err := removePiExtensionFromManifest(agentDir, agentConfig, manifest); err != nil {
 				fmt.Println(ui.WarningF("  Could not remove local Pi extension: %v", err))
@@ -2221,6 +2611,9 @@ func refreshAgentSetup(projectDir string, agentTypes []agents.AgentType) error {
 		// Update manifest timestamp
 		manifest.CreatedAt = time.Now().UTC().Format(time.RFC3339)
 		if err := writeManifest(agentDir, manifest); err != nil {
+			if agentType == agents.AgentDroid {
+				return fmt.Errorf("update Droid manifest: %w", err)
+			}
 			fmt.Println(ui.WarningF("  Could not update manifest: %v", err))
 		}
 
@@ -2259,6 +2652,10 @@ func refreshIntegration(projectDir, agentDir string, agentCfg *agents.AgentConfi
 	}
 
 	filePath := filepath.Join(gitRoot, targetFile)
+	return refreshMarkerIntegration(filePath, targetFile, cfg)
+}
+
+func refreshMarkerIntegration(filePath, displayPath string, cfg *config.Config) error {
 	if !fsutil.Exists(filePath) {
 		return nil // File doesn't exist, nothing to refresh
 	}
@@ -2311,7 +2708,7 @@ func refreshIntegration(projectDir, agentDir string, agentCfg *agents.AgentConfi
 		return err
 	}
 
-	fmt.Println(ui.SuccessF("  Updated integration in %s", targetFile))
+	fmt.Println(ui.SuccessF("  Updated integration in %s", displayPath))
 	return nil
 }
 
@@ -2390,8 +2787,7 @@ func buildGlobalInstallationPlans(components []string, agentTypes []agents.Agent
 						relPath := filepath.Join(agentCfg.HooksDir, hookName+".sh")
 						files = append(files, relPath)
 					}
-					// Settings file for hooks config
-					files = append(files, agentCfg.SettingsFile)
+					files = append(files, hookConfigFile(agentCfg, true))
 				}
 				if agentCfg.PluginsDir != "" {
 					relPath := filepath.Join(agentCfg.PluginsDir, "thts-integration.ts")
@@ -2421,6 +2817,8 @@ func printGlobalInstallationPlan(plan *globalInstallationPlan) {
 	componentName := capitalize(plan.component)
 	if plan.component == "hooks" && len(plan.agentPlans) == 1 && plan.agentPlans[agents.AgentPi] != nil {
 		componentName = "Runtime Adapters"
+	} else if plan.component == "agents" && len(plan.agentPlans) == 1 && plan.agentPlans[agents.AgentDroid] != nil {
+		componentName = "Droids"
 	}
 	fmt.Printf("%s\n", ui.SubHeader(componentName))
 
@@ -2643,6 +3041,22 @@ func installGlobalComponent(component string, agentTypes []agents.AgentType, man
 
 		var files []string
 		var err error
+		preexistingHookConfig := false
+		if agentType == agents.AgentDroid {
+			if err := validateDroidGlobalResourceCollisions(component, globalDir, agentCfg, manifest); err != nil {
+				installErrors = append(installErrors, err)
+				continue
+			}
+			if component == "hooks" {
+				hookPath := filepath.Join(globalDir, hookConfigFile(agentCfg, true))
+				if info := manifest.Components[component]; info != nil {
+					preexistingHookConfig = slices.Contains(info.PreexistingFiles, hookPath) ||
+						(fsutil.Exists(hookPath) && !slices.Contains(info.Files, hookPath))
+				} else {
+					preexistingHookConfig = fsutil.Exists(hookPath)
+				}
+			}
+		}
 
 		switch component {
 		case "skills":
@@ -2669,6 +3083,9 @@ func installGlobalComponent(component string, agentTypes []agents.AgentType, man
 		}
 
 		if err != nil {
+			if agentType == agents.AgentDroid && len(files) > 0 {
+				recordDroidGlobalComponent(manifest, component, agentType, globalDir, agentCfg, files, preexistingHookConfig)
+			}
 			installErrors = append(installErrors, fmt.Errorf("failed to copy %s for %s: %w", component, agentType, err))
 			continue
 		}
@@ -2678,30 +3095,93 @@ func installGlobalComponent(component string, agentTypes []agents.AgentType, man
 			continue
 		}
 
-		// Convert relative file names to absolute paths.
-		var fullPaths []string
-		for _, f := range files {
-			var fullPath string
-			switch component {
-			case "skills":
-				fullPath = filepath.Join(globalDir, agentCfg.SkillsDir, f)
-			case "commands":
-				fullPath = filepath.Join(globalDir, agentCfg.CommandsDir, f)
-			case "agents":
-				fullPath = filepath.Join(globalDir, agentCfg.AgentsDir, f)
-			case "hooks":
-				// Hooks files are already full paths from installGlobalHooks
-				fullPath = f
-			}
-			fullPaths = append(fullPaths, fullPath)
+		if agentType == agents.AgentDroid {
+			recordDroidGlobalComponent(manifest, component, agentType, globalDir, agentCfg, files, preexistingHookConfig)
+		} else {
+			manifest.RecordAgentComponent(component, agentType, globalComponentPaths(component, globalDir, agentCfg, files))
 		}
-
-		manifest.RecordAgentComponent(component, agentType, fullPaths)
 		successful = append(successful, agentType)
 		fmt.Printf("  %s %s: installed to %s\n", ui.Success(""), globalComponentDisplayName(component, agentType), config.ContractPath(globalDir))
 	}
 
 	return successful, errors.Join(installErrors...)
+}
+
+// recordDroidGlobalComponent records only paths returned by a successful or
+// partially successful install, never the full anticipated resource set.
+func recordDroidGlobalComponent(manifest *GlobalManifest, component string, agentType agents.AgentType, globalDir string, cfg *agents.AgentConfig, files []string, preexistingHookConfig bool) {
+	fullPaths := globalComponentPaths(component, globalDir, cfg, files)
+	manifest.RecordAgentComponent(component, agentType, fullPaths)
+	if component == "hooks" && preexistingHookConfig && slices.Contains(fullPaths, filepath.Join(globalDir, hookConfigFile(cfg, true))) {
+		manifest.Components[component].PreexistingFiles = appendUnique(manifest.Components[component].PreexistingFiles, filepath.Join(globalDir, hookConfigFile(cfg, true)))
+	}
+}
+
+func globalComponentPaths(component, globalDir string, cfg *agents.AgentConfig, files []string) []string {
+	fullPaths := make([]string, 0, len(files))
+	for _, file := range files {
+		switch component {
+		case "skills":
+			fullPaths = append(fullPaths, filepath.Join(globalDir, cfg.SkillsDir, file))
+		case "commands":
+			fullPaths = append(fullPaths, filepath.Join(globalDir, cfg.CommandsDir, file))
+		case "agents":
+			fullPaths = append(fullPaths, filepath.Join(globalDir, cfg.AgentsDir, file))
+		case "hooks":
+			fullPaths = append(fullPaths, file)
+		}
+	}
+	return fullPaths
+}
+
+func validateDroidGlobalResourceCollisions(component, globalDir string, cfg *agents.AgentConfig, manifest *GlobalManifest) error {
+	if initForce {
+		return nil
+	}
+
+	paths := droidGlobalGeneratedPaths(component, globalDir, cfg)
+
+	var ownedFiles []string
+	if manifest != nil && manifest.Components != nil {
+		if info := manifest.Components[component]; info != nil && slices.Contains(info.Agents, string(agents.AgentDroid)) {
+			ownedFiles = info.Files
+		}
+	}
+	for _, path := range paths {
+		if slices.Contains(ownedFiles, path) {
+			continue
+		}
+		if _, err := os.Lstat(path); err == nil {
+			return fmt.Errorf("%s already exists and is not owned by thts; use --force to overwrite it", path)
+		} else if !os.IsNotExist(err) {
+			return fmt.Errorf("check existing global Droid resource %s: %w", path, err)
+		}
+	}
+
+	return nil
+}
+
+func droidGlobalGeneratedPaths(component, globalDir string, cfg *agents.AgentConfig) []string {
+	var paths []string
+	switch component {
+	case "skills":
+		for _, name := range thtsfiles.GetAvailableSkills() {
+			paths = append(paths, filepath.Join(globalDir, cfg.SkillsDir, name, "SKILL.md"))
+		}
+	case "commands":
+		for _, name := range thtsfiles.GetAvailableCommands() {
+			paths = append(paths, filepath.Join(globalDir, cfg.CommandsDir, name+".md"))
+		}
+	case "agents":
+		for _, name := range thtsfiles.GetAvailableAgents() {
+			paths = append(paths, filepath.Join(globalDir, cfg.AgentsDir, name+".md"))
+		}
+	case "hooks":
+		for _, name := range thtsfiles.GetAvailableHooks() {
+			paths = append(paths, filepath.Join(globalDir, cfg.HooksDir, name+".sh"))
+		}
+	}
+	return paths
 }
 
 // capitalize returns the string with the first letter capitalized.
@@ -2734,5 +3214,15 @@ func globalComponentDisplayName(component string, agentType agents.AgentType) st
 	if component == "hooks" && agentType == agents.AgentPi {
 		return "runtime adapter"
 	}
+	if component == "agents" && agentType == agents.AgentDroid {
+		return "droids"
+	}
 	return component
+}
+
+func agentsComponentDisplayName(agentType agents.AgentType) string {
+	if agentType == agents.AgentDroid {
+		return "Droids"
+	}
+	return "Agents"
 }

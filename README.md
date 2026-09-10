@@ -2,8 +2,8 @@
 
 A CLI for storing developer thoughts, plans, and dreams in a central repo while
 keeping them accessible in any project. Integrates with AI coding agents (Claude
-Code, Codex, OpenCode, Gemini CLI, and Pi), giving them persistent memory for
-research, plans, and context across sessions.
+Code, Codex, OpenCode, Gemini CLI, Pi, and Droid CLI), giving them
+persistent memory for research, plans, and context across sessions.
 
 <!-- prettier-ignore-start -->
 > [!WARNING]
@@ -135,13 +135,15 @@ thts sync -m "Added architecture notes"
 ## AI Agent Integration
 
 `thts` integrates with Claude Code, OpenAI Codex CLI, OpenCode, Google Gemini
-CLI, and Pi to give them awareness of your thoughts directory.
+CLI, Pi, and Droid CLI to give them awareness of your thoughts
+directory.
 
 ```bash
 thts init agents              # Install for detected agents
 thts init agents -i           # Interactive mode
 thts init agents --global     # Install to global config directories
 thts init agents --agents pi  # Install Pi's project integration only
+thts init agents --agents droid  # Install Droid CLI integration
 thts uninit agents            # Remove integration
 ```
 
@@ -157,6 +159,12 @@ Pi installs `.pi/skills/thts-integrate/SKILL.md`, prompt templates in
 `.pi/prompts/`, and its `thts-integration.ts` extension in `.pi/extensions/`.
 Pi loads project-local resources only after the project is trusted; use
 `pi --approve` for a one-run override in non-interactive use.
+
+Droid CLI installs the `/thts-integrate`, `/thts-handoff`, and
+`/thts-resume` resources under `.factory/skills/` and `.factory/commands/`, plus
+read-only custom droids under `.factory/droids/`. Its default integration uses
+executable scripts in `.factory/hooks/` registered through standalone
+`.factory/hooks.json`; thts never creates or modifies `.factory/settings.json`.
 
 See [User Guide](docs/guide.md#ai-agent-integration) for details.
 

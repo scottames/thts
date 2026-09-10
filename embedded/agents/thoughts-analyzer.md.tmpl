@@ -8,6 +8,9 @@ mode: subagent
 tools: Read, Grep
 model: {{.AgentModel}}
 {{- end}}
+{{- if .IncludeDroidToolsMetadata}}
+tools: read-only
+{{- end}}
 ---
 
 You extract high-value insights from thoughts documents. Be selective - only

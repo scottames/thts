@@ -24,6 +24,7 @@ run = "bun test embedded/plugins/pi/thts-integration.test.ts"
 run = """
 go test -tags=integration ./internal/cmd/...
 scripts/verify-pi-integration.sh
+scripts/verify-droid-integration.sh
 """
 
 [tasks.test-all]
@@ -31,6 +32,7 @@ depends = ["test"]
 run = """
 go test -tags=integration ./internal/cmd/...
 scripts/verify-pi-integration.sh
+scripts/verify-droid-integration.sh
 """
 
 [tasks.test-coverage]

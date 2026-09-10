@@ -236,15 +236,18 @@ func TestRenderHook_ClaudePlanDirectiveByAgent(t *testing.T) {
 	if strings.Contains(geminiHook, "claudePlanDirective") {
 		t.Error("expected Gemini session-start hook to exclude claudePlanDirective checks")
 	}
+
+	droidHook, err := RenderHook(agents.AgentDroid, "thts-session-start")
+	if err != nil {
+		t.Fatalf("RenderHook(droid) failed: %v", err)
+	}
+	if strings.Contains(droidHook, "Plan Mode Directive") || strings.Contains(droidHook, "claudePlanDirective") {
+		t.Error("expected Droid session-start hook to exclude Claude plan directives")
+	}
 }
 
 func TestRenderSkill_ThtsIntegrateLoadsCanonicalInstructions(t *testing.T) {
-	agentTypes := []agents.AgentType{
-		agents.AgentClaude,
-		agents.AgentCodex,
-		agents.AgentOpenCode,
-		agents.AgentGemini,
-	}
+	agentTypes := agents.AllAgentTypes()
 
 	for _, agentType := range agentTypes {
 		t.Run(string(agentType), func(t *testing.T) {
@@ -272,6 +275,38 @@ func TestRenderSkill_ThtsIntegrateLoadsCanonicalInstructions(t *testing.T) {
 				t.Error("skill must not satisfy its own canonical-instructions check")
 			}
 		})
+	}
+}
+
+func TestRenderAgent_DroidNativeFrontmatter(t *testing.T) {
+	for _, name := range []string{"thoughts-locator", "thoughts-analyzer"} {
+		rendered, err := RenderAgent(agents.AgentDroid, name)
+		if err != nil {
+			t.Fatalf("RenderAgent(droid, %s) failed: %v", name, err)
+		}
+		if !strings.Contains(rendered, "tools: read-only") {
+			t.Errorf("Droid %s is missing native read-only tools metadata", name)
+		}
+		if strings.Contains(rendered, "mode: subagent") || strings.Contains(rendered, "model:") {
+			t.Errorf("Droid %s contains non-native agent metadata", name)
+		}
+	}
+}
+
+func TestRenderCommand_DroidTaskCapabilities(t *testing.T) {
+	handoff, err := RenderCommand(agents.AgentDroid, "thts-handoff")
+	if err != nil {
+		t.Fatalf("RenderCommand(droid, thts-handoff) failed: %v", err)
+	}
+	if !strings.Contains(handoff, "## Task(s)") {
+		t.Error("Droid handoff command is missing task status capture")
+	}
+	resume, err := RenderCommand(agents.AgentDroid, "thts-resume")
+	if err != nil {
+		t.Fatalf("RenderCommand(droid, thts-resume) failed: %v", err)
+	}
+	if !strings.Contains(resume, "TodoWrite") || !strings.Contains(resume, "Spawn research tasks") {
+		t.Error("Droid resume command is missing TodoWrite or Task-capable research wording")
 	}
 }
 
