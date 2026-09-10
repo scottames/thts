@@ -158,6 +158,8 @@ func GlobalAgentDir(agentType string) string {
 			return ExpandPath(piDir)
 		}
 		return filepath.Join(home, ".pi", "agent")
+	case "droid":
+		return filepath.Join(home, ".factory")
 	}
 	return ""
 }

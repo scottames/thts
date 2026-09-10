@@ -24,6 +24,8 @@ func TestParseAgentType(t *testing.T) {
 		{"GEMINI", AgentGemini, false},
 		{"pi", AgentPi, false},
 		{"PI", AgentPi, false},
+		{"droid", AgentDroid, false},
+		{"DROID", AgentDroid, false},
 		{"invalid", "", true},
 		{"", "", true},
 	}
@@ -48,7 +50,7 @@ func TestParseAgentTypeUnknownListsAllAgents(t *testing.T) {
 		t.Fatal("ParseAgentType(invalid) returned nil error")
 	}
 
-	for _, name := range []string{"claude", "codex", "opencode", "gemini", "pi"} {
+	for _, name := range []string{"claude", "codex", "opencode", "gemini", "pi", "droid"} {
 		if !strings.Contains(err.Error(), name) {
 			t.Errorf("ParseAgentType(invalid) error = %q, missing %q", err, name)
 		}
@@ -100,6 +102,8 @@ func TestGetConfig(t *testing.T) {
 		{AgentCodex, ".codex"},
 		{AgentOpenCode, ".opencode"},
 		{AgentGemini, ".gemini"},
+		{AgentPi, ".pi"},
+		{AgentDroid, ".factory"},
 	}
 
 	for _, tt := range tests {
@@ -289,6 +293,27 @@ func TestDetectExistingPi(t *testing.T) {
 	}
 }
 
+func TestDetectExistingDroid(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	if err := os.WriteFile(filepath.Join(tmpDir, "AGENTS.md"), []byte("# Instructions\n"), 0644); err != nil {
+		t.Fatalf("failed to create AGENTS.md: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "droid"), []byte(""), 0755); err != nil {
+		t.Fatalf("failed to create executable: %v", err)
+	}
+	if found := DetectExistingAgents(tmpDir); len(found) != 0 {
+		t.Errorf("DetectExistingAgents() = %v with AGENTS.md and executable only, want none", found)
+	}
+
+	if err := os.Mkdir(filepath.Join(tmpDir, ".factory"), 0755); err != nil {
+		t.Fatalf("failed to create .factory directory: %v", err)
+	}
+	if found := DetectExistingAgents(tmpDir); len(found) != 1 || found[0] != AgentDroid {
+		t.Errorf("DetectExistingAgents() = %v, want [droid]", found)
+	}
+}
+
 func TestSortAgentTypes(t *testing.T) {
 	agents := []AgentType{AgentOpenCode, AgentClaude, AgentCodex}
 	SortAgentTypes(agents)
@@ -341,8 +366,8 @@ func TestStringsToAgentTypes(t *testing.T) {
 
 func TestAllAgentTypes(t *testing.T) {
 	all := AllAgentTypes()
-	if len(all) != 5 {
-		t.Errorf("Expected 5 agent types, got %d", len(all))
+	if len(all) != 6 {
+		t.Errorf("Expected 6 agent types, got %d", len(all))
 	}
 	seen := make(map[AgentType]bool)
 	for _, agentType := range all {
@@ -367,6 +392,9 @@ func TestAllAgentTypes(t *testing.T) {
 	if all[4] != AgentPi {
 		t.Error("Fifth agent should be pi")
 	}
+	if all[5] != AgentDroid {
+		t.Error("Sixth agent should be droid")
+	}
 }
 
 func TestCommandsDirLabel(t *testing.T) {
@@ -379,6 +407,7 @@ func TestCommandsDirLabel(t *testing.T) {
 		{AgentOpenCode, "commands"},
 		{AgentGemini, "commands"},
 		{AgentPi, "prompts"},
+		{AgentDroid, "commands"},
 	}
 
 	for _, tt := range tests {
@@ -472,5 +501,38 @@ func TestPiNativeCapabilities(t *testing.T) {
 	data := GetEmbedTemplateData(AgentPi)
 	if data.HasTaskList || data.TaskTracking != "" || data.HasSpawnTasks || data.HasAgentsFeature {
 		t.Errorf("Pi template capabilities = %+v, want no task tracking, task spawning, or agents metadata", data)
+	}
+}
+
+func TestDroidNativeCapabilities(t *testing.T) {
+	droid := GetConfig(AgentDroid)
+	if droid == nil {
+		t.Fatal("GetConfig(droid) returned nil")
+	}
+	if droid.RootDir != ".factory" || droid.SkillsDir != "skills" || !droid.SkillNeedsDir {
+		t.Errorf("Droid skill configuration = %+v, want .factory/skills/<name>/SKILL.md", droid)
+	}
+	if droid.CommandsDir != "commands" || droid.CommandsGlobalOnly {
+		t.Errorf("Droid command configuration = %+v, want project/global Markdown commands", droid)
+	}
+	if droid.AgentsDir != "droids" {
+		t.Errorf("Droid AgentsDir = %q, want droids", droid.AgentsDir)
+	}
+	if droid.SettingsFile != "settings.json" || droid.SettingsTemplate != "" {
+		t.Errorf("Droid settings = %q template %q, want user-owned settings.json", droid.SettingsFile, droid.SettingsTemplate)
+	}
+	if !droid.SupportsHooks || droid.HooksDir != "hooks" || droid.HookConfigFile != "hooks.json" {
+		t.Errorf("Droid hook configuration = %+v, want hooks directory and standalone hooks.json", droid)
+	}
+	if droid.InstructionTargetFile != "AGENTS.md" || droid.GlobalUsesXDG {
+		t.Errorf("Droid instructions/global configuration = %+v, want AGENTS.md and home directory", droid)
+	}
+
+	data := GetEmbedTemplateData(AgentDroid)
+	if !data.HasTaskList || data.TaskTracking != "Use TodoWrite" || !data.HasSpawnTasks || !data.HasAgentsFeature {
+		t.Errorf("Droid template capabilities = %+v, want TodoWrite and Task-capable wording", data)
+	}
+	if !data.IncludeDroidToolsMetadata || data.IncludeToolsMetadata || data.IncludeAgentMode {
+		t.Errorf("Droid frontmatter capabilities = %+v, want only native Droid tools metadata", data)
 	}
 }

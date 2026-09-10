@@ -30,6 +30,9 @@ type EmbedTemplateData struct {
 	// True for Claude, false for others
 	IncludeToolsMetadata bool
 
+	// IncludeDroidToolsMetadata emits Factory's native read-only tool category.
+	IncludeDroidToolsMetadata bool
+
 	// IncludeAgentMode indicates whether to include agent mode in frontmatter
 	// True for OpenCode, false for others
 	IncludeAgentMode bool
@@ -98,6 +101,15 @@ func GetEmbedTemplateData(agentType AgentType) EmbedTemplateData {
 		data.TaskTracking = ""
 		data.HasSpawnTasks = false
 		data.IncludeToolsMetadata = false
+		data.AgentModel = ""
+		data.IncludeClaudePlanDirective = false
+
+	case AgentDroid:
+		data.AgentName = "Droid"
+		data.HasTaskList = true
+		data.TaskTracking = "Use TodoWrite"
+		data.HasSpawnTasks = true
+		data.IncludeDroidToolsMetadata = true
 		data.AgentModel = ""
 		data.IncludeClaudePlanDirective = false
 	}

@@ -8,6 +8,9 @@ mode: subagent
 tools: Grep, Glob, LS
 model: {{.AgentModel}}
 {{- end}}
+{{- if .IncludeDroidToolsMetadata}}
+tools: read-only
+{{- end}}
 ---
 
 You find documents in the thoughts/ directory. Your job is to locate and

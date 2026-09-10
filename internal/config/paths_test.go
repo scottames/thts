@@ -298,6 +298,17 @@ func TestGlobalAgentDirPi(t *testing.T) {
 	})
 }
 
+func TestGlobalAgentDirDroid(t *testing.T) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatalf("failed to get home directory: %v", err)
+	}
+	want := filepath.Join(home, ".factory")
+	if got := GlobalAgentDir("droid"); got != want {
+		t.Errorf("GlobalAgentDir(droid) = %q, want %q", got, want)
+	}
+}
+
 func TestDefaultThoughtsRepo(t *testing.T) {
 	home, err := os.UserHomeDir()
 	if err != nil {

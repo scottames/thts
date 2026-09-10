@@ -1,5 +1,6 @@
 // Package agents provides multi-agent tool support for thts.
-// Currently supports Claude Code, OpenAI Codex CLI, OpenCode, Google Gemini CLI, and Pi.
+// Currently supports Claude Code, OpenAI Codex CLI, OpenCode, Google Gemini CLI, Pi,
+// and Droid CLI.
 package agents
 
 import (
@@ -19,11 +20,12 @@ const (
 	AgentOpenCode AgentType = "opencode"
 	AgentGemini   AgentType = "gemini"
 	AgentPi       AgentType = "pi"
+	AgentDroid    AgentType = "droid"
 )
 
 // AllAgentTypes returns all supported agent types in canonical order.
 func AllAgentTypes() []AgentType {
-	return []AgentType{AgentClaude, AgentCodex, AgentOpenCode, AgentGemini, AgentPi}
+	return []AgentType{AgentClaude, AgentCodex, AgentOpenCode, AgentGemini, AgentPi, AgentDroid}
 }
 
 // AgentTypeLabels provides human-readable labels for agent types.
@@ -33,6 +35,7 @@ var AgentTypeLabels = map[AgentType]string{
 	AgentOpenCode: "OpenCode",
 	AgentGemini:   "Google Gemini CLI",
 	AgentPi:       "Pi",
+	AgentDroid:    "Droid CLI",
 }
 
 // AgentConfig describes the configuration and conventions for a specific agent.
@@ -103,6 +106,10 @@ type AgentConfig struct {
 	// HooksDir is the directory name for hooks (e.g., "hooks" for Claude/Gemini).
 	// Empty for agents using plugins (OpenCode) or no hook support (Codex).
 	HooksDir string
+
+	// HookConfigFile is a standalone hook configuration file. Empty means hooks
+	// are stored under the "hooks" key in an agent settings file.
+	HookConfigFile string
 
 	// PluginsDir is the directory name for plugins (e.g., "plugins" for OpenCode).
 	// Empty for agents using hooks or no plugin support.
@@ -213,6 +220,27 @@ var AgentConfigs = map[AgentType]*AgentConfig{
 		HooksDir:              "",
 		PluginsDir:            "extensions",
 	},
+	AgentDroid: {
+		Type:                  AgentDroid,
+		RootDir:               ".factory",
+		InstructionsFile:      "",
+		IntegrationType:       "marker",
+		InstructionTargetFile: "AGENTS.md",
+		SkillsDir:             "skills",
+		SkillNeedsDir:         true,
+		AgentsDir:             "droids",
+		SupportsCommands:      true,
+		CommandsDir:           "commands",
+		CommandsGlobalOnly:    false,
+		GlobalUsesXDG:         false,
+		SettingsFile:          "settings.json",
+		SettingsTemplate:      "",
+		SettingsFormat:        "json",
+		SupportsHooks:         true,
+		HooksDir:              "hooks",
+		HookConfigFile:        "hooks.json",
+		PluginsDir:            "",
+	},
 }
 
 // GetConfig returns the configuration for an agent type.
@@ -244,8 +272,10 @@ func ParseAgentType(s string) (AgentType, error) {
 		return AgentGemini, nil
 	case "pi":
 		return AgentPi, nil
+	case "droid":
+		return AgentDroid, nil
 	default:
-		return "", fmt.Errorf("unknown agent type: %q (valid: claude, codex, opencode, gemini, pi)", s)
+		return "", fmt.Errorf("unknown agent type: %q (valid: claude, codex, opencode, gemini, pi, droid)", s)
 	}
 }
 

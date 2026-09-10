@@ -55,6 +55,8 @@ Before starting, gather this information about your agent:
    `AgentsDir` empty if not.)
 8. **Runtime adapter**: Does it use shell hooks, a plugin, an extension, or no
    native adapter? Pi uses an `extensions/` directory.
+9. **Hook configuration**: Are hooks wrapped in a settings file or stored in a
+   standalone file such as Droid CLI's `hooks.json`?
 
 For testbot, we'll assume:
 
@@ -81,6 +83,7 @@ const (
     AgentOpenCode AgentType = "opencode"
     AgentGemini   AgentType = "gemini"
     AgentPi       AgentType = "pi"
+    AgentDroid    AgentType = "droid"
     AgentTestbot  AgentType = "testbot"  // Add this
 )
 ```
@@ -93,7 +96,7 @@ grep -n 'func AllAgentTypes' internal/agents/types.go
 
 ```go
 func AllAgentTypes() []AgentType {
-    return []AgentType{AgentClaude, AgentCodex, AgentOpenCode, AgentGemini, AgentPi, AgentTestbot}
+    return []AgentType{AgentClaude, AgentCodex, AgentOpenCode, AgentGemini, AgentPi, AgentDroid, AgentTestbot}
 }
 ```
 
@@ -116,6 +119,7 @@ var AgentTypeLabels = map[AgentType]string{
     AgentOpenCode: "OpenCode",
     AgentGemini:   "Google Gemini CLI",
     AgentPi:       "Pi",
+     AgentDroid:    "Droid CLI",
     AgentTestbot:  "Testbot",  // Add this
 }
 ```
@@ -176,10 +180,12 @@ func ParseAgentType(s string) (AgentType, error) {
         return AgentGemini, nil
     case "pi":
         return AgentPi, nil
+    case "droid":
+        return AgentDroid, nil
     case "testbot":              // Add this case
         return AgentTestbot, nil
     default:
-        return "", fmt.Errorf("unknown agent type: %q (valid: claude, codex, opencode, gemini, pi, testbot)", s)
+        return "", fmt.Errorf("unknown agent type: %q (valid: claude, codex, opencode, gemini, pi, droid, testbot)", s)
     }
 }
 ```
@@ -240,6 +246,13 @@ Pi is the reference configuration for an extension-only agent: it uses
 `.pi/skills/`, `.pi/prompts/`, and `.pi/extensions/`, with no native sub-agents
 and no thts-managed settings. Do not add an empty settings template merely to
 make `--with-settings` create `settings.json`.
+
+Shell-hook agents normally merge an event map under the `hooks` key in settings.
+Set `HookConfigFile` when the harness instead uses a standalone event map, as
+Droid CLI does with `hooks.json`. Standalone hook configuration is
+merge-cleaned user configuration: track exact commands as a manifest
+modification, preserve unknown keys and unrelated hooks, and never treat the
+whole file as owned.
 
 Only native runtime-adapter assets require an FS case:
 
@@ -343,6 +356,10 @@ field list. Key fields:
 | `SettingsTemplate`      | Embedded default identity; empty when settings are user-owned    |
 | `SettingsFormat`        | `"json"` or `"toml"`                                             |
 | `SettingsContextKey`    | JSON key for context file (e.g., `"contextFileName"` for Gemini) |
+| `SupportsHooks`         | Whether hook-based integration is available                      |
+| `HooksDir`              | Shell hook script directory; empty for plugins/extensions        |
+| `HookConfigFile`        | Standalone hook event-map file; empty means wrapped settings     |
+| `PluginsDir`            | Native plugin or extension directory                             |
 
 ## Global Component Ownership
 
@@ -367,6 +384,7 @@ Before submitting:
 - [ ] Added native hook, plugin, or extension assets only when required
 - [ ] Used extension terminology and `extensions/` for Pi-like adapters
 - [ ] Left `AgentsDir` and `SettingsTemplate` empty when unsupported or user-owned
+- [ ] Merge-cleaned standalone hook configuration without claiming file ownership
 - [ ] Global manifest updates preserve other agents' component ownership
 - [ ] Settings template created in `embedded/settings/` only when it matches `SettingsTemplate`
 - [ ] All tests pass: `go test ./...`

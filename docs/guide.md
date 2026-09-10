@@ -31,7 +31,9 @@
   - [Using a Profile](#using-a-profile)
   - [Managing Profiles](#managing-profiles)
   - [How Profiles Work](#how-profiles-work)
+  - [Moving a Thoughts Repo (Same Config, Same Repos)](#moving-a-thoughts-repo-same-config-same-repos)
 - [Git Worktrees](#git-worktrees)
+  - [Worktree Cleanup](#worktree-cleanup)
   - [Disabling Auto-Sync in Worktrees](#disabling-auto-sync-in-worktrees)
 - [Configuration](#configuration)
   - [Viewing Config](#viewing-config)
@@ -48,7 +50,9 @@
     - [Global vs Project Configuration](#global-vs-project-configuration)
     - [Prerequisites](#prerequisites)
     - [Integration Levels](#integration-levels)
+    - [Pi Project Trust](#pi-project-trust)
     - [Customizing Hook Keywords](#customizing-hook-keywords)
+    - [Claude Plan Directive](#claude-plan-directive)
     - [What Gets Installed](#what-gets-installed)
     - [Using the Commands](#using-the-commands)
     - [Session Handoffs](#session-handoffs)
@@ -783,6 +787,7 @@ your thoughts directory and enable session continuity.
 | OpenCode    | `.opencode/` | `skills/*/SKILL.md`              | `commands/`          | `plugins/`      | `~/.config/opencode/`                    |
 | Gemini CLI  | `.gemini/`   | `skills/*/SKILL.md`              | `commands/*.toml`    | `hooks/`        | `~/.gemini/`                             |
 | Pi          | `.pi/`       | `skills/thts-integrate/SKILL.md` | `prompts/`           | `extensions/`   | `$PI_CODING_AGENT_DIR` or `~/.pi/agent/` |
+| Droid CLI   | `.factory/`  | `skills/*/SKILL.md`              | `commands/`          | `hooks/`        | `~/.factory/`                            |
 
 **Key differences:**
 
@@ -795,26 +800,32 @@ your thoughts directory and enable session continuity.
 - **Pi resources**: Pi uses skills, Markdown prompt templates, and TypeScript
   extensions. It has no native sub-agents and thts does not create or manage Pi
   settings.
+- **Droid resources**: Droid CLI uses Markdown commands, read-only
+  custom droids in `droids/`, and standalone `hooks.json`. Its `settings.json`
+  remains user-owned, including when `--with-settings` is used.
 
 #### Installing Integration
 
 ```bash
-thts init agents              # Install for detected agents
-thts init agents -i           # Interactive mode
+thts init agents                        # Install for detected agents
+thts init agents -i                     # Interactive mode
 thts init agents --agents claude,codex  # Specify agents
-thts init agents --agents pi  # Install Pi's .pi/ resources in this project
-thts init agents --with-settings  # Also create settings files
+thts init agents --agents pi            # Install Pi's .pi/ resources in this project
+thts init agents --agents droid         # Install Droid CLI resources
+thts init agents --with-settings        # Also create settings files
 ```
 
 #### Global vs Project Configuration
 
 By default, `thts init agents` installs to project directories (`.claude/`,
-`.codex/`, `.opencode/`, `.gemini/`, or `.pi/`). You can also install globally:
+`.codex/`, `.opencode/`, `.gemini/`, `.pi/`, or `.factory/`). You can also
+install globally:
 
 ```bash
-thts init agents --global all              # Install everything globally
-thts init agents --global skills,commands  # Install specific components
-thts init agents --agents pi --global=all  # Install only Pi resources globally
+thts init agents --global all                 # Install everything globally
+thts init agents --global skills,commands     # Install specific components
+thts init agents --agents pi --global=all     # Install only Pi resources globally
+thts init agents --agents droid --global=all  # Install only Droid resources globally
 ```
 
 **Global paths:**
@@ -826,6 +837,7 @@ thts init agents --agents pi --global=all  # Install only Pi resources globally
 | OpenCode | `~/.config/opencode/`                                |
 | Gemini   | `~/.gemini/`                                         |
 | Pi       | `$PI_CODING_AGENT_DIR`, or `~/.pi/agent/` when unset |
+| Droid    | `~/.factory/`                                        |
 
 **When to use global:**
 
@@ -835,14 +847,14 @@ thts init agents --agents pi --global=all  # Install only Pi resources globally
 
 Global ownership is per agent and component. A global install records its
 managed paths in the global manifest and writes a corresponding
-`agents.perAgent.<agent>.<component>` mode. Installing or removing Pi resources
-does not change another agent's mode or manifest paths. Partial global installs
-preserve successfully installed agent/component pairs and leave failed pairs
-local.
+`agents.perAgent.<agent>.<component>` mode. Installing or removing one agent's
+resources does not change another agent's mode or manifest paths. Partial global
+installs preserve successfully installed agent/component pairs and leave failed
+pairs local.
 
 #### Prerequisites
 
-Claude and Gemini hook-based integration requires:
+Claude, Gemini, and Droid CLI hook-based integration requires:
 
 - **jq** - JSON parser for hook scripts (required)
 - **yq** - YAML parser for custom keyword configuration (optional)
@@ -890,6 +902,23 @@ Pi uses an idempotent TypeScript extension at
 `before_agent_start` after `thts init --check` succeeds. Pi's extension caches
 the generated policy per working directory for the process, so restart Pi after
 changing thts categories or instruction configuration.
+
+Droid CLI installs `SessionStart` and `UserPromptSubmit` shell hooks in
+`.factory/hooks/`. Project registrations use `$FACTORY_PROJECT_DIR` and are
+merged into `.factory/hooks.json`; global registrations use absolute paths and
+are merged into `~/.factory/hooks.json`. These standalone hook files are distinct
+from Factory's user-owned `settings.json` and unrelated hooks are preserved on
+refresh and uninit. Commit project `hooks.json` and its two thts hook scripts
+together so the registrations work in other checkouts; the local ownership
+manifest remains ignored. A checkout can initialize its remaining local Droid
+resources when the registered scripts still exactly match thts output. Existing
+same-name skills, commands, droids, or different hook scripts are not overwritten
+unless `--force` is used.
+
+Droid snapshots hooks when a session starts. Restart Droid after changing the
+integration, or review and reload hooks through `/hooks`. Factory's
+`hooksDisabled` setting or an enterprise `allowManagedHooksOnly` policy can
+prevent project or user thts hooks from running.
 
 The OpenCode plugin also caches generated instructions for its session. Restart
 OpenCode after changing thts categories or instruction configuration.
@@ -950,10 +979,12 @@ hooks:
 - `skills/thts-integrate.*` - Activation skill with a CLI fallback
 - `commands/` or `prompts/` `thts-handoff` and `thts-resume` - Session handoff
   and resume prompts
-- `agents/thoughts-locator.md` and `agents/thoughts-analyzer.md` - Where native
-  sub-agents are supported
+- `agents/thoughts-locator.md` and `agents/thoughts-analyzer.md`, or Droid's
+  `droids/` equivalents - Where native sub-agents are supported
 - Agent-specific hooks, the OpenCode `thts-integration.ts` plugin, or the Pi
   `thts-integration.ts` extension in hook mode
+- Droid's standalone `hooks.json` registration in hook mode; Factory
+  `settings.json` is not managed
 
 Full integration instructions are generated by `thts agent-instructions`; they
 are not copied as a separate file.
@@ -971,6 +1002,7 @@ are not copied as a separate file.
 **Codex note:** Use `/prompts:thts-handoff` instead of `/thts-handoff`.
 **Pi note:** Use `/skill:thts-integrate` for the skill and `/thts-handoff` or
 `/thts-resume` for its prompt templates.
+**Droid note:** Use `/thts-integrate`, `/thts-handoff`, and `/thts-resume`.
 
 #### Session Handoffs
 

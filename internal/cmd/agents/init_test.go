@@ -135,6 +135,15 @@ func TestResolveAgentComponentMode(t *testing.T) {
 	}
 }
 
+func TestPatternsEqualPreservesGitignoreOrder(t *testing.T) {
+	patterns := getGitignorePatterns(internalagents.AgentDroid)
+	reordered := slices.Clone(patterns)
+	reordered[1], reordered[len(reordered)-1] = reordered[len(reordered)-1], reordered[1]
+	if patternsEqual(patterns, reordered) {
+		t.Fatal("patternsEqual() ignored order-sensitive gitignore negation placement")
+	}
+}
+
 func TestResolveGlobalAgentSelectionPrefersExplicitAgents(t *testing.T) {
 	t.Setenv("THTS_CONFIG_PATH", filepath.Join(t.TempDir(), "config.yaml"))
 	if err := config.Save(&config.Config{Profiles: map[string]*config.ProfileConfig{
@@ -667,6 +676,99 @@ func TestOpenCodeLocalPluginLifecycle(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(agentDir, ManifestFile)); !os.IsNotExist(err) {
 		t.Fatalf("manifest still exists after uninit: %v", err)
+	}
+}
+
+func TestRefreshContinuesAfterNonDroidHookConfigError(t *testing.T) {
+	t.Setenv("THTS_CONFIG_PATH", filepath.Join(t.TempDir(), "missing.yaml"))
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	projectDir := t.TempDir()
+
+	if err := initAgent(projectDir, internalagents.AgentClaude, IntegrationHook); err != nil {
+		t.Fatalf("initialize Claude: %v", err)
+	}
+	if err := initAgent(projectDir, internalagents.AgentPi, IntegrationHook); err != nil {
+		t.Fatalf("initialize Pi: %v", err)
+	}
+
+	claudeDir := filepath.Join(projectDir, internalagents.GetConfig(internalagents.AgentClaude).RootDir)
+	if err := os.WriteFile(filepath.Join(claudeDir, "settings.local.json"), []byte("{not-json\n"), 0644); err != nil {
+		t.Fatalf("write malformed Claude settings: %v", err)
+	}
+	piConfig := internalagents.GetConfig(internalagents.AgentPi)
+	extensionPath := filepath.Join(projectDir, piConfig.RootDir, piConfig.PluginsDir, "thts-integration.ts")
+	if err := os.WriteFile(extensionPath, []byte("stale"), 0644); err != nil {
+		t.Fatalf("write stale Pi extension: %v", err)
+	}
+
+	var refreshErr error
+	output := captureStdout(t, func() {
+		refreshErr = refreshAgentSetup(projectDir, []internalagents.AgentType{internalagents.AgentClaude, internalagents.AgentPi})
+	})
+	if refreshErr != nil {
+		t.Fatalf("refreshAgentSetup() error: %v", refreshErr)
+	}
+	if !strings.Contains(output, "Could not refresh hook configuration") {
+		t.Errorf("refresh output = %q, want hook configuration warning", output)
+	}
+	content, err := os.ReadFile(extensionPath)
+	if err != nil {
+		t.Fatalf("read refreshed Pi extension: %v", err)
+	}
+	if string(content) == "stale" {
+		t.Fatal("refresh stopped before updating Pi")
+	}
+}
+
+func TestNonDroidInitReplacesMalformedManifest(t *testing.T) {
+	t.Setenv("THTS_CONFIG_PATH", filepath.Join(t.TempDir(), "missing.yaml"))
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	projectDir := t.TempDir()
+	agentDir := filepath.Join(projectDir, internalagents.GetConfig(internalagents.AgentClaude).RootDir)
+	if err := os.MkdirAll(agentDir, 0755); err != nil {
+		t.Fatalf("create Claude directory: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(agentDir, ManifestFile), []byte("{not-json\n"), 0644); err != nil {
+		t.Fatalf("write malformed manifest: %v", err)
+	}
+
+	if err := initAgent(projectDir, internalagents.AgentClaude, IntegrationOnDemand); err != nil {
+		t.Fatalf("initAgent() error: %v", err)
+	}
+	manifest, err := loadManifest(agentDir)
+	if err != nil {
+		t.Fatalf("load replacement manifest: %v", err)
+	}
+	if manifest.Agent != string(internalagents.AgentClaude) {
+		t.Fatalf("replacement manifest agent = %q, want claude", manifest.Agent)
+	}
+}
+
+func TestNonDroidReinitRemovesPreviousHookIntegration(t *testing.T) {
+	t.Setenv("THTS_CONFIG_PATH", filepath.Join(t.TempDir(), "missing.yaml"))
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	projectDir := t.TempDir()
+	if err := initAgent(projectDir, internalagents.AgentGemini, IntegrationHook); err != nil {
+		t.Fatalf("initialize Gemini hooks: %v", err)
+	}
+	if err := initAgent(projectDir, internalagents.AgentGemini, IntegrationOnDemand); err != nil {
+		t.Fatalf("reinitialize Gemini on demand: %v", err)
+	}
+	for _, path := range []string{
+		filepath.Join(projectDir, ".gemini", "hooks", "thts-session-start.sh"),
+		filepath.Join(projectDir, ".gemini", "hooks", "thts-prompt-check.sh"),
+		filepath.Join(projectDir, ".gemini", "settings.local.json"),
+	} {
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Errorf("previous hook resource %s after reinit = %v, want absent", path, err)
+		}
+	}
+	manifest, err := loadManifest(filepath.Join(projectDir, ".gemini"))
+	if err != nil {
+		t.Fatalf("load replacement manifest: %v", err)
+	}
+	if manifest.Modifications.Hooks != nil {
+		t.Fatalf("replacement manifest retained hooks: %+v", manifest.Modifications.Hooks)
 	}
 }
 

@@ -20,9 +20,11 @@ type GlobalManifest struct {
 
 // GlobalComponentInfo tracks files for a component.
 type GlobalComponentInfo struct {
-	Agents    []string             `json:"agents"`              // e.g., ["claude", "codex", "opencode"]
-	Files     []string             `json:"files"`               // Absolute paths to installed files
-	Gitignore *GlobalGitignoreInfo `json:"gitignore,omitempty"` // Only for gitignore component
+	Agents            []string                      `json:"agents"`                     // e.g., ["claude", "codex", "opencode"]
+	Files             []string                      `json:"files"`                      // Absolute paths to installed files
+	PreexistingFiles  []string                      `json:"preexistingFiles,omitempty"` // Modified files that must be preserved when empty
+	HookModifications map[string]*HooksModification `json:"hookModifications,omitempty"`
+	Gitignore         *GlobalGitignoreInfo          `json:"gitignore,omitempty"` // Only for gitignore component
 }
 
 // GlobalGitignoreInfo tracks gitignore modifications.
@@ -111,6 +113,12 @@ func (m *GlobalManifest) RecordAgentComponent(component string, agent internalag
 	agentName := string(agent)
 	info.Agents = appendUnique(nil, removeFromAgentSlice(info.Agents, map[string]bool{agentName: true})...)
 	info.Files = appendUnique(nil, removeFilesForAgent(info.Files, agentName)...)
+	info.PreexistingFiles = appendUnique(nil, removeFilesForAgent(info.PreexistingFiles, agentName)...)
+	for path := range info.HookModifications {
+		if getAgentFromPath(path) == agentName {
+			delete(info.HookModifications, path)
+		}
+	}
 	if len(files) == 0 {
 		return
 	}
@@ -199,12 +207,24 @@ func (m *GlobalManifest) FilterByAgents(requested []string) map[string]*GlobalCo
 		}
 
 		filtered[name] = &GlobalComponentInfo{
-			Agents:    filteredAgents,
-			Files:     filteredFiles,
-			Gitignore: info.Gitignore,
+			Agents:            filteredAgents,
+			Files:             filteredFiles,
+			PreexistingFiles:  filterFilesByAgents(info.PreexistingFiles, requestedSet),
+			HookModifications: filterHookModificationsByAgents(info.HookModifications, requestedSet),
+			Gitignore:         info.Gitignore,
 		}
 	}
 	return filtered
+}
+
+func filterHookModificationsByAgents(modifications map[string]*HooksModification, agentSet map[string]bool) map[string]*HooksModification {
+	result := make(map[string]*HooksModification)
+	for path, modification := range modifications {
+		if agentSet[getAgentFromPath(path)] {
+			result[path] = modification
+		}
+	}
+	return result
 }
 
 // filterFilesByAgents filters files to only those belonging to agents in the set.

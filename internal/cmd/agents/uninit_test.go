@@ -4,6 +4,8 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 
 	internalagents "github.com/scottames/thts/internal/agents"
@@ -243,6 +245,246 @@ func TestPiUninitPreservesUnmanagedProjectResources(t *testing.T) {
 	}
 	if _, err := os.Stat(userExtension); err != nil {
 		t.Fatalf("unmanaged Pi extension after uninit: %v", err)
+	}
+}
+
+func TestBatchUninitDoesNotTransferSharedMarkerToRemovedAgent(t *testing.T) {
+	t.Setenv("THTS_CONFIG_PATH", filepath.Join(t.TempDir(), "missing.yaml"))
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	projectDir := t.TempDir()
+
+	if err := initAgent(projectDir, internalagents.AgentCodex, IntegrationAgentsContent); err != nil {
+		t.Fatalf("initialize Codex: %v", err)
+	}
+	if err := initAgent(projectDir, internalagents.AgentPi, IntegrationAgentsContent); err != nil {
+		t.Fatalf("initialize Pi: %v", err)
+	}
+
+	previousAgents, previousForce, previousDryRun, previousAll, previousGlobal := uninitAgents, uninitForce, uninitDryRun, uninitAll, uninitGlobal
+	t.Cleanup(func() {
+		uninitAgents, uninitForce, uninitDryRun, uninitAll, uninitGlobal = previousAgents, previousForce, previousDryRun, previousAll, previousGlobal
+	})
+	uninitAgents, uninitForce, uninitDryRun, uninitAll, uninitGlobal = "codex,pi", true, false, false, false
+	t.Chdir(projectDir)
+
+	if err := runAgentsUninit(nil, nil); err != nil {
+		t.Fatalf("runAgentsUninit() error: %v", err)
+	}
+	for _, path := range []string{
+		filepath.Join(projectDir, "AGENTS.md"),
+		filepath.Join(projectDir, ".codex", ManifestFile),
+		filepath.Join(projectDir, ".pi", ManifestFile),
+	} {
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Errorf("path after batch uninit %s = %v, want absent", path, err)
+		}
+	}
+}
+
+func TestBatchUninitContinuesAfterManifestAnalysisError(t *testing.T) {
+	t.Setenv("THTS_CONFIG_PATH", filepath.Join(t.TempDir(), "missing.yaml"))
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	projectDir := t.TempDir()
+	if err := initAgent(projectDir, internalagents.AgentPi, IntegrationOnDemand); err != nil {
+		t.Fatalf("initialize Pi: %v", err)
+	}
+	droidDir := filepath.Join(projectDir, ".factory")
+	if err := os.MkdirAll(droidDir, 0755); err != nil {
+		t.Fatalf("create Droid directory: %v", err)
+	}
+	const malformed = "{not-json\n"
+	if err := os.WriteFile(filepath.Join(droidDir, ManifestFile), []byte(malformed), 0644); err != nil {
+		t.Fatalf("write malformed Droid manifest: %v", err)
+	}
+
+	previousAgents, previousForce, previousDryRun, previousAll, previousGlobal := uninitAgents, uninitForce, uninitDryRun, uninitAll, uninitGlobal
+	t.Cleanup(func() {
+		uninitAgents, uninitForce, uninitDryRun, uninitAll, uninitGlobal = previousAgents, previousForce, previousDryRun, previousAll, previousGlobal
+	})
+	uninitAgents, uninitForce, uninitDryRun, uninitAll, uninitGlobal = "pi,droid", true, false, false, false
+	t.Chdir(projectDir)
+
+	err := runAgentsUninit(nil, nil)
+	if err == nil || !strings.Contains(err.Error(), "analyze droid") || !strings.Contains(err.Error(), "invalid manifest") {
+		t.Fatalf("runAgentsUninit() error = %v, want Droid analysis error", err)
+	}
+	if _, err := os.Stat(filepath.Join(projectDir, ".pi", ManifestFile)); !os.IsNotExist(err) {
+		t.Fatalf("Pi manifest after mixed batch uninit = %v, want absent", err)
+	}
+	data, readErr := os.ReadFile(filepath.Join(droidDir, ManifestFile))
+	if readErr != nil || string(data) != malformed {
+		t.Fatalf("Droid manifest after mixed batch uninit = %q, %v", data, readErr)
+	}
+}
+
+func TestGeminiHookUninitRemovesCreatedSettings(t *testing.T) {
+	t.Setenv("THTS_CONFIG_PATH", filepath.Join(t.TempDir(), "missing.yaml"))
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	projectDir := t.TempDir()
+	if err := initAgent(projectDir, internalagents.AgentGemini, IntegrationHook); err != nil {
+		t.Fatalf("initialize Gemini: %v", err)
+	}
+	if err := initAgent(projectDir, internalagents.AgentGemini, IntegrationHook); err != nil {
+		t.Fatalf("reinitialize Gemini: %v", err)
+	}
+	settingsPath := filepath.Join(projectDir, ".gemini", "settings.local.json")
+	if _, err := os.Stat(settingsPath); err != nil {
+		t.Fatalf("Gemini settings after init: %v", err)
+	}
+
+	if err := Uninit(projectDir, true, []internalagents.AgentType{internalagents.AgentGemini}); err != nil {
+		t.Fatalf("Uninit() error: %v", err)
+	}
+	if _, err := os.Stat(settingsPath); !os.IsNotExist(err) {
+		t.Fatalf("Gemini settings after uninit = %v, want absent", err)
+	}
+	if data, err := os.ReadFile(filepath.Join(projectDir, ".gitignore")); err == nil && strings.Contains(string(data), ".gemini/settings.local.json") {
+		t.Fatalf("Gemini settings ignore remained after reinit and uninit: %s", data)
+	}
+}
+
+func TestGeminiHookUninitRestoresEnablementWithoutHooksObject(t *testing.T) {
+	t.Setenv("THTS_CONFIG_PATH", filepath.Join(t.TempDir(), "missing.yaml"))
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	projectDir := t.TempDir()
+	geminiDir := filepath.Join(projectDir, ".gemini")
+	if err := os.MkdirAll(geminiDir, 0755); err != nil {
+		t.Fatalf("create Gemini directory: %v", err)
+	}
+	settingsPath := filepath.Join(geminiDir, "settings.local.json")
+	if err := os.WriteFile(settingsPath, []byte("{\"theme\":\"dark\",\"tools\":{\"enableHooks\":false}}\n"), 0644); err != nil {
+		t.Fatalf("write preexisting settings: %v", err)
+	}
+	if err := initAgent(projectDir, internalagents.AgentGemini, IntegrationHook); err != nil {
+		t.Fatalf("initialize Gemini: %v", err)
+	}
+	if err := os.WriteFile(settingsPath, []byte("{\"theme\":\"dark\",\"tools\":{\"enableHooks\":true}}\n"), 0644); err != nil {
+		t.Fatalf("remove hooks object: %v", err)
+	}
+	if err := Uninit(projectDir, true, []internalagents.AgentType{internalagents.AgentGemini}); err != nil {
+		t.Fatalf("Uninit() error: %v", err)
+	}
+	data, err := os.ReadFile(settingsPath)
+	if err != nil {
+		t.Fatalf("preexisting settings after uninit: %v", err)
+	}
+	const expected = "{\n  \"theme\": \"dark\",\n  \"tools\": {\n    \"enableHooks\": false\n  }\n}\n"
+	if string(data) != expected {
+		t.Fatalf("preexisting settings after uninit = %s, want %s", data, expected)
+	}
+}
+
+func TestGeminiHookUninitRestoresPreexistingEnablement(t *testing.T) {
+	t.Setenv("THTS_CONFIG_PATH", filepath.Join(t.TempDir(), "missing.yaml"))
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	projectDir := t.TempDir()
+	geminiDir := filepath.Join(projectDir, ".gemini")
+	if err := os.MkdirAll(geminiDir, 0755); err != nil {
+		t.Fatalf("create Gemini directory: %v", err)
+	}
+	settingsPath := filepath.Join(geminiDir, "settings.local.json")
+	const original = "{\"hooks\":{\"enabled\":false},\"theme\":\"dark\",\"tools\":{\"enableHooks\":false}}\n"
+	if err := os.WriteFile(settingsPath, []byte(original), 0644); err != nil {
+		t.Fatalf("write preexisting settings: %v", err)
+	}
+	if err := initAgent(projectDir, internalagents.AgentGemini, IntegrationHook); err != nil {
+		t.Fatalf("initialize Gemini: %v", err)
+	}
+	if err := initAgent(projectDir, internalagents.AgentGemini, IntegrationHook); err != nil {
+		t.Fatalf("reinitialize Gemini: %v", err)
+	}
+	if err := Uninit(projectDir, true, []internalagents.AgentType{internalagents.AgentGemini}); err != nil {
+		t.Fatalf("Uninit() error: %v", err)
+	}
+	data, err := os.ReadFile(settingsPath)
+	if err != nil {
+		t.Fatalf("preexisting settings after uninit: %v", err)
+	}
+	const expected = "{\n  \"hooks\": {\n    \"enabled\": false\n  },\n  \"theme\": \"dark\",\n  \"tools\": {\n    \"enableHooks\": false\n  }\n}\n"
+	if string(data) != expected {
+		t.Fatalf("preexisting settings after uninit = %s, want %s", data, expected)
+	}
+}
+
+func TestGlobalGeminiHookUninitPreservesPreexistingSettings(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	t.Setenv("THTS_CONFIG_PATH", filepath.Join(t.TempDir(), "config.yaml"))
+	geminiDir := filepath.Join(home, ".gemini")
+	if err := os.MkdirAll(geminiDir, 0755); err != nil {
+		t.Fatalf("create Gemini directory: %v", err)
+	}
+	settingsPath := filepath.Join(geminiDir, "settings.json")
+	const original = "{\"hooks\":{\"enabled\":false},\"theme\":\"dark\",\"tools\":{\"enableHooks\":false}}\n"
+	if err := os.WriteFile(settingsPath, []byte(original), 0644); err != nil {
+		t.Fatalf("write preexisting settings: %v", err)
+	}
+	manifest := NewGlobalManifest()
+	if _, err := installGlobalComponent("hooks", []internalagents.AgentType{internalagents.AgentGemini}, manifest); err != nil {
+		t.Fatalf("installGlobalComponent() error: %v", err)
+	}
+	if !slices.Contains(manifest.Components["hooks"].PreexistingFiles, settingsPath) {
+		t.Fatalf("preexisting settings not recorded: %+v", manifest.Components["hooks"])
+	}
+	if err := SaveGlobalManifest(manifest); err != nil {
+		t.Fatalf("SaveGlobalManifest() error: %v", err)
+	}
+
+	previousAgents, previousForce, previousDryRun, previousGlobal := uninitAgents, uninitForce, uninitDryRun, uninitGlobal
+	t.Cleanup(func() {
+		uninitAgents, uninitForce, uninitDryRun, uninitGlobal = previousAgents, previousForce, previousDryRun, previousGlobal
+	})
+	uninitAgents, uninitForce, uninitDryRun, uninitGlobal = "gemini", true, false, true
+	if err := runGlobalUninit(nil, nil); err != nil {
+		t.Fatalf("runGlobalUninit() error: %v", err)
+	}
+	data, err := os.ReadFile(settingsPath)
+	if err != nil {
+		t.Fatalf("preexisting settings after uninit: %v", err)
+	}
+	const expected = "{\n  \"hooks\": {\n    \"enabled\": false\n  },\n  \"theme\": \"dark\",\n  \"tools\": {\n    \"enableHooks\": false\n  }\n}\n"
+	if string(data) != expected {
+		t.Fatalf("preexisting settings after uninit = %s, want %s", data, expected)
+	}
+}
+
+func TestGlobalGeminiHookUninitPreservesLegacyTrackedSettings(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	t.Setenv("THTS_CONFIG_PATH", filepath.Join(t.TempDir(), "config.yaml"))
+	geminiDir := filepath.Join(home, ".gemini")
+	if err := os.MkdirAll(geminiDir, 0755); err != nil {
+		t.Fatalf("create Gemini directory: %v", err)
+	}
+	settingsPath := filepath.Join(geminiDir, "settings.json")
+	if err := os.WriteFile(settingsPath, []byte("{\"hooks\":{\"enabled\":true},\"theme\":\"dark\",\"tools\":{\"enableHooks\":true}}\n"), 0644); err != nil {
+		t.Fatalf("write legacy settings: %v", err)
+	}
+	manifest := NewGlobalManifest()
+	manifest.Components["hooks"] = &GlobalComponentInfo{
+		Agents: []string{"gemini"},
+		Files:  []string{settingsPath},
+	}
+	if err := SaveGlobalManifest(manifest); err != nil {
+		t.Fatalf("SaveGlobalManifest() error: %v", err)
+	}
+
+	previousAgents, previousForce, previousDryRun, previousGlobal := uninitAgents, uninitForce, uninitDryRun, uninitGlobal
+	t.Cleanup(func() {
+		uninitAgents, uninitForce, uninitDryRun, uninitGlobal = previousAgents, previousForce, previousDryRun, previousGlobal
+	})
+	uninitAgents, uninitForce, uninitDryRun, uninitGlobal = "gemini", true, false, true
+	if err := runGlobalUninit(nil, nil); err != nil {
+		t.Fatalf("runGlobalUninit() error: %v", err)
+	}
+	data, err := os.ReadFile(settingsPath)
+	if err != nil {
+		t.Fatalf("legacy settings after uninit: %v", err)
+	}
+	if !strings.Contains(string(data), `"theme": "dark"`) {
+		t.Fatalf("legacy settings after uninit = %s", data)
 	}
 }
 
