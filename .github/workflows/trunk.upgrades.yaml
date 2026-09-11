@@ -15,10 +15,10 @@ jobs:
     steps:
       - name: Checkout
         # yamllint disable-line rule:line-length
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Generate GitHub token
         # https://github.com/actions/create-github-app-token
-        uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf # v2.2.1
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2.2.2
         id: generate-token
         with:
           app-id: ${{ secrets.APP_ID }}
@@ -28,7 +28,7 @@ jobs:
           permission-issues: write
       - name: Trunk Upgrade
         # yamllint disable-line rule:line-length
-        uses: trunk-io/trunk-action/upgrade@75699af9e26881e564e9d832ef7dc3af25ec031b # v1
+        uses: trunk-io/trunk-action/upgrade@04ba50e7658c81db7356da96657e6e77f220bfa3 # v1
         with:
           github-token: ${{ steps.generate-token.outputs.token }}
           prefix: "chore: "
