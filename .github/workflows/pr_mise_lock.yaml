@@ -5,6 +5,7 @@ on:
     paths:
       - mise.toml
       - mise.lock
+      - .mise/locks/**
 permissions: read-all
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -19,23 +20,6 @@ jobs:
       contents: write
       pull-requests: write
     steps:
-      - name: checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          # should be used for PRs only
-          # https://github.com/marketplace/actions/add-commit#working-with-prs
-          repository: ${{ github.event.pull_request.head.repo.full_name }}
-          ref: ${{ github.event.pull_request.head.ref }}
-          fetch-depth: 0
-      - name: detect Go update
-        id: go-update
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: |
-          mise_diff=$(git diff "$BASE_SHA" -- mise.toml)
-          if grep -Eq '^[+-]go[[:space:]]*=' <<< "$mise_diff"; then
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-          fi
       # yamllint disable-line rule:line-length
       - name: Generate GitHub token
         # https://github.com/actions/create-github-app-token
@@ -45,48 +29,48 @@ jobs:
         with:
           app-id: ${{ secrets.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
-          permission-contents: write # create releases
-          permission-pull-requests: write # create release pull requests
+          permission-contents: write
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.ref }}
+          token: ${{ steps.generate-token.outputs.token }}
       - name: install mise
         uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
         with:
           install: true
-          install_args: aqua:int128/ghcp go
+          install_args: aqua:int128/ghcp
           cache: true
           experimental: true
           github_token: ${{ steps.generate-token.outputs.token }}
       - name: mise lock
-        run: rm -f mise.lock && mise lock # rm to prune
-      - name: refresh Go code
-        if: steps.go-update.outputs.changed == 'true'
-        run: |
-          go fix ./...
-          go mod tidy
-      - name: push changes with ghcp
         env:
-          GITHUB_REPOSITORY: ${{ github.repository }}
+          MISE_LOCKED: 0 # disable "locked=true" for update
+        run: |
+          mise lock
+      - name: push lockfile changes
+        env:
           GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
         run: |
-          set -eu
+          set -euo pipefail
 
-          if ! ghcp -v; then
-            echo "::error ::int128/ghcp not found - needed to push."
-            exit 1
-          fi
-
-          if [ -z "$(git status --porcelain)" ]; then
+          # Version 1 lockfiles do not generate a sidecar directory.
+          mkdir -p mise/.mise/locks
+          git add --all -- mise/mise.lock mise/.mise/locks
+          if git diff --cached --quiet; then
             echo "::notice ::No lockfile changes needed"
             exit 0
           fi
 
-          branch=${GITHUB_HEAD_REF:-} # https://github.com/int128/ghcp
-          if [ -z "${branch}" ]; then
-            branch="${GITHUB_REF_NAME}"
+          # ponytail: ghcp cannot delete files; handle deletions manually.
+          if ! git diff --cached --no-renames --diff-filter=D --quiet; then
+            echo "::error ::ghcp cannot delete files; commit lockfile changes manually"
+            exit 1
           fi
-          # shellcheck disable=SC2046
-          # ^- we want it to split!
-          ghcp commit -r "$GITHUB_REPOSITORY" -b "${branch}" \
-            -m "chore(mise): lock" \
-            $(git --no-pager diff --name-only)
-          echo "::notice ::changes pushed to branch, 'exit 1' to force checks"
+
+          mapfile -d '' -t files < <(git diff --cached --name-only --no-renames -z)
+          ghcp commit -r "${GITHUB_REPOSITORY}" -b "${GITHUB_HEAD_REF}" \
+            -m "chore(mise): lock" "${files[@]}"
+          echo "::notice ::Lockfile changes pushed; checks will run on the new commit"
           exit 1
