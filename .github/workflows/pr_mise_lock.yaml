@@ -3,9 +3,9 @@ name: pr/mise
 on:
   pull_request:
     paths:
-      - mise/config.toml
-      - mise/mise.lock
-      - mise/.mise/locks/**
+      - mise.toml
+      - mise.lock
+      - .mise/locks/**
 permissions: read-all
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
