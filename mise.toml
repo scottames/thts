@@ -25,6 +25,7 @@ run = """
 go test -tags=integration ./internal/cmd/...
 scripts/verify-pi-integration.sh
 scripts/verify-droid-integration.sh
+scripts/verify-opencode-integration.sh
 """
 
 [tasks.test-all]
@@ -33,6 +34,7 @@ run = """
 go test -tags=integration ./internal/cmd/...
 scripts/verify-pi-integration.sh
 scripts/verify-droid-integration.sh
+scripts/verify-opencode-integration.sh
 """
 
 [tasks.test-coverage]

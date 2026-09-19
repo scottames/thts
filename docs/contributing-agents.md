@@ -247,6 +247,24 @@ Pi is the reference configuration for an extension-only agent: it uses
 and no thts-managed settings. Do not add an empty settings template merely to
 make `--with-settings` create `settings.json`.
 
+OpenCode installs one self-contained TypeScript plugin with a default export
+containing `id`, `server` (v1.18.29+), and `setup` (v2). Keep SDK imports type-only;
+the installer does not manage npm dependencies. V2 registers `context` and
+`compaction` hooks and resolves the session directory before loading policy.
+OpenCode settings are user-owned, like Pi and Droid settings.
+
+Run `mise run test-opencode` for behavior tests and
+`scripts/verify-opencode-integration.sh` for installer lifecycle checks. To test
+real loaders and outgoing model requests without provider credentials:
+
+```bash
+bun scripts/verify-opencode-hosts.ts /path/to/opencode-v1.18.29 /path/to/opencode-v2.0.6
+```
+
+The host check uses temporary homes, a local mock model, and both overlapping
+project/global resources and a second global-only project on each server. CI
+downloads the pinned Linux binaries and runs this check.
+
 Shell-hook agents normally merge an event map under the `hooks` key in settings.
 Set `HookConfigFile` when the harness instead uses a standalone event map, as
 Droid CLI does with `hooks.json`. Standalone hook configuration is
@@ -274,7 +292,7 @@ func getPluginsFS(agentType agents.AgentType) fs.FS {
 Create a settings template only when thts should manage a default settings file.
 The template filename must match `SettingsTemplate`; `SettingsFile` remains the
 destination name. Leave `SettingsTemplate` empty when the agent's settings are
-user-owned, as for Pi.
+user-owned, as for OpenCode, Pi, and Droid.
 
 For testbot with `SettingsFile: "config.json"`:
 

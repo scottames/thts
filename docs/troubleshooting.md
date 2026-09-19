@@ -2,6 +2,38 @@
 
 ## Common Issues
 
+### OpenCode Plugin Not Loading
+
+The dual-version plugin requires OpenCode v1.18.29+ or v2 (verified with v2.0.6).
+Refresh installed resources after upgrading thts:
+
+```bash
+thts init agents --agents opencode --refresh             # Project installation
+thts init agents --agents opencode --global=all          # Global installation
+```
+
+Restart OpenCode afterward; for v2 shared servers, restart the server too.
+Check `thts init --check` and `thts agent-instructions` from the session's project
+directory on the server. The plugin quietly skips injection if either fails or
+`thts` is missing from the server's PATH. In v2's active plugin list, its ID is
+`thts.integration`.
+
+### OpenCode Settings Errors
+
+Older `thts init agents --with-settings` generated an `opencode.json` containing
+`"permissions": { "allow": [] }`. That is not a valid current permissions shape.
+If the file is customized, thts preserves it rather than rewriting your settings.
+
+Remove that obsolete empty permissions object, retaining your other settings.
+For intentional permission rules, use the schema for your OpenCode version:
+
+- v1 uses `permission`, for example `"permission": { "edit": "ask" }`.
+- v2 uses a rule array, for example
+  `"permissions": [{ "action": "edit", "resource": "*", "effect": "ask" }]`.
+
+See the [v2 permissions guide](https://opencode.ai/v2/docs/permissions). The thts
+plugin itself does not require a settings file or a plugin config entry.
+
 ### "Run `thts setup` first"
 
 You need to configure thts before using it in any project.

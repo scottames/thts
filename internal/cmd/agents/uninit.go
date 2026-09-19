@@ -252,6 +252,9 @@ func buildRemovalPlan(projectDir string, agentType agents.AgentType) (*removalPl
 	// Try to load manifest
 	manifest, err := loadManifest(agentDir)
 	if err != nil {
+		if agentType == agents.AgentOpenCode && !os.IsNotExist(err) {
+			return nil, err
+		}
 		// Droid support has no legacy manifestless installations. Inferring
 		// ownership from native Factory filenames could delete user resources.
 		if agentType == agents.AgentDroid {
@@ -269,6 +272,16 @@ func buildRemovalPlan(projectDir string, agentType agents.AgentType) (*removalPl
 	}
 
 	plan.manifest = manifest
+	if agentType == agents.AgentOpenCode {
+		remove, err := isLegacyOpenCodeSettings(agentDir, manifest)
+		if err != nil {
+			return nil, err
+		}
+		if !remove {
+			manifest.Files = removeStringValue(manifest.Files, "opencode.json")
+			manifest.SettingsCreated = false
+		}
+	}
 	plan.filesToRemove = slices.Clone(manifest.Files)
 	plan.modifications = manifest.Modifications
 
@@ -572,6 +585,13 @@ func isPathSafeForRemoval(relativePath, baseDir string) bool {
 // performRemoval removes all thts integration files and reverts modifications.
 func performRemoval(plan *removalPlan, removingAgents map[agents.AgentType]bool) error {
 	cfg := agents.GetConfig(plan.agentType)
+	retainProgress := plan.manifest != nil && (plan.agentType == agents.AgentDroid || plan.agentType == agents.AgentOpenCode)
+	if plan.agentType == agents.AgentOpenCode && plan.manifest != nil {
+		if err := migrateOpenCodeSettings(plan.agentDir, plan.manifest); err != nil {
+			return err
+		}
+		plan.filesToRemove = removeStringValue(plan.filesToRemove, "opencode.json")
+	}
 	var warnings []string
 	droidHooksRemoved := false
 	if plan.agentType == agents.AgentDroid && plan.modifications.Hooks != nil {
@@ -590,7 +610,7 @@ func performRemoval(plan *removalPlan, removingAgents map[agents.AgentType]bool)
 		}
 		// Validate path is safe to remove
 		if !isPathSafeForRemoval(f, plan.agentDir) {
-			if plan.agentType == agents.AgentDroid {
+			if retainProgress {
 				warnings = append(warnings, fmt.Sprintf("refused to remove unsafe manifest path %s", f))
 			}
 			continue
@@ -602,7 +622,7 @@ func performRemoval(plan *removalPlan, removingAgents map[agents.AgentType]bool)
 		} else if err == nil {
 			fmt.Println(ui.SuccessF("Removed %s", f))
 		}
-		if plan.agentType == agents.AgentDroid && (err == nil || os.IsNotExist(err)) {
+		if retainProgress && (err == nil || os.IsNotExist(err)) {
 			plan.manifest.Files = removeStringValue(plan.manifest.Files, f)
 		}
 	}
@@ -664,7 +684,7 @@ func performRemoval(plan *removalPlan, removingAgents map[agents.AgentType]bool)
 		if err := removeThtsIntegration(plan.modifications.InstructionsMD, plan.agentType, plan.projectDir, removingAgents); err != nil {
 			warnings = append(warnings, fmt.Sprintf("failed to clean instruction file: %v", err))
 		} else {
-			if plan.agentType == agents.AgentDroid {
+			if retainProgress {
 				plan.manifest.Modifications.InstructionsMD = nil
 			}
 			fmt.Println(ui.Success("Removed thts integration from instruction file"))
@@ -680,11 +700,11 @@ func performRemoval(plan *removalPlan, removingAgents map[agents.AgentType]bool)
 			} else if removed {
 				fmt.Println(ui.SuccessF("Removed %s from .gitignore", pattern))
 			}
-			if plan.agentType == agents.AgentDroid && err == nil {
+			if retainProgress && err == nil {
 				plan.manifest.Modifications.Gitignore.Patterns = removeStringValue(plan.manifest.Modifications.Gitignore.Patterns, pattern)
 			}
 		}
-		if plan.agentType == agents.AgentDroid && len(plan.manifest.Modifications.Gitignore.Patterns) == 0 {
+		if retainProgress && len(plan.manifest.Modifications.Gitignore.Patterns) == 0 {
 			plan.manifest.Modifications.Gitignore = nil
 		}
 	}
@@ -694,7 +714,7 @@ func performRemoval(plan *removalPlan, removingAgents map[agents.AgentType]bool)
 		for _, w := range warnings {
 			fmt.Printf("  %s\n", w)
 		}
-		if plan.agentType == agents.AgentDroid {
+		if retainProgress {
 			if err := writeManifest(plan.agentDir, plan.manifest); err != nil {
 				warnings = append(warnings, fmt.Sprintf("failed to retain manifest: %v", err))
 			}

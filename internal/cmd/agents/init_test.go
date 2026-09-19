@@ -21,7 +21,6 @@ func TestWriteAgentSettingsUsesEmbeddedTemplateAtAgentDestination(t *testing.T) 
 	}{
 		{agentType: internalagents.AgentCodex, destination: "config.toml"},
 		{agentType: internalagents.AgentGemini, destination: "settings.json"},
-		{agentType: internalagents.AgentOpenCode, destination: "opencode.json"},
 	} {
 		t.Run(string(tt.agentType), func(t *testing.T) {
 			cfg := internalagents.GetConfig(tt.agentType)
@@ -357,8 +356,8 @@ func TestLocalContentPlanMatchesPluginHookMode(t *testing.T) {
 		wantInstructions bool
 	}{
 		{name: "local hooks install plugin", hooksMode: config.ComponentModeLocal, wantPlugin: true},
-		{name: "global hooks use local instructions", hooksMode: config.ComponentModeGlobal, wantInstructions: true},
-		{name: "disabled hooks use local instructions", hooksMode: config.ComponentModeDisabled, wantInstructions: true},
+		{name: "global hooks use global plugin", hooksMode: config.ComponentModeGlobal},
+		{name: "disabled hooks have no fallback", hooksMode: config.ComponentModeDisabled},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Setenv("THTS_CONFIG_PATH", filepath.Join(t.TempDir(), "config.yaml"))

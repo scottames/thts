@@ -172,7 +172,7 @@ var AgentConfigs = map[AgentType]*AgentConfig{
 		CommandsGlobalOnly:    false,
 		GlobalUsesXDG:         true, // OpenCode uses ~/.config/opencode/ for global
 		SettingsFile:          "opencode.json",
-		SettingsTemplate:      "opencode.json",
+		SettingsTemplate:      "", // OpenCode settings are user-owned
 		SettingsFormat:        "json",
 		SupportsHooks:         true,
 		HooksDir:              "",
