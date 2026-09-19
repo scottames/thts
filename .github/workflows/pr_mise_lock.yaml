@@ -57,7 +57,7 @@ jobs:
 
           # Version 1 lockfiles do not generate a sidecar directory.
           mkdir -p mise/.mise/locks
-          git add --all -- mise/mise.lock mise/.mise/locks
+          git add --all -- mise.lock .mise/locks
           if git diff --cached --quiet; then
             echo "::notice ::No lockfile changes needed"
             exit 0
