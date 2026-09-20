@@ -24,6 +24,7 @@ lint:
     - linters: [markdownlint, prettier]
       paths:
         - CHANGELOG.md
+        - .mise/**/*.yaml
   enabled:
     - gofmt@1.20.4
     - osv-scanner@2.6.0
