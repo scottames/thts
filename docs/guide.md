@@ -930,6 +930,8 @@ prevent project or user thts hooks from running.
 
 The OpenCode plugin caches generated instructions per working directory for the
 plugin's lifetime, while checking project initialization before each injection.
+If a check fails, cached instructions and any pending render for that directory
+are discarded.
 Restart OpenCode after changing thts categories or instruction configuration.
 For v2, restart the server as well as attached clients when a fresh plugin cache
 is needed.

@@ -1,11 +1,18 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  mkdtemp,
+  mkdir,
+  readFile,
+  rm,
+  watch,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import plugin from "./thts-integration";
 
-type Response = { exitCode: number; stdout?: string };
+type Response = { exitCode: number; stdout?: string; waitForRelease?: boolean };
 type Event = { sessionID: string; system: { type: "text"; text: string }[] };
 const success = { exitCode: 0 };
 const instructions = {
@@ -21,12 +28,16 @@ beforeEach(async () => {
   await writeFile(
     join(root, "thts"),
     `#!${process.execPath}
-const { readFileSync, writeFileSync, appendFileSync } = require("node:fs");
+const { readFileSync, writeFileSync, appendFileSync, existsSync } = require("node:fs");
 const responses = JSON.parse(readFileSync("responses.json", "utf8"));
 const response = responses.shift();
 appendFileSync("calls.txt", process.argv.slice(2).join(" ") + "\\n");
 writeFileSync("responses.json", JSON.stringify(responses));
 if (!response) process.exit(99);
+if (response.waitForRelease) {
+  writeFileSync("render-started", "");
+  while (!existsSync("release-render")) await Bun.sleep(5);
+}
 process.stdout.write(response.stdout ?? "");
 process.exit(response.exitCode);
 `,
@@ -148,6 +159,50 @@ for (const version of [1, 2]) {
         "agent-instructions",
       ]);
     });
+
+    for (const replace of [false, true]) {
+      test(`discards an in-flight policy after cache ${replace ? "replacement" : "deletion"}`, async () => {
+        const directory = await repo("repo", [
+          success,
+          { ...instructions, waitForRelease: true },
+          { exitCode: 1 },
+          success,
+          { exitCode: 0, stdout: "Fresh policy" },
+          success,
+        ]);
+        const instance = await adapter(directory);
+        const events = watch(directory, { signal: AbortSignal.timeout(4000) });
+        const stale: string[] = [];
+        const pending = instance.inject(stale);
+        const fresh: string[] = [];
+        try {
+          for await (const event of events) {
+            if (event.filename === "render-started") break;
+          }
+          const ineligible: string[] = [];
+          await instance.inject(ineligible);
+          expect(ineligible).toEqual([]);
+          if (replace) await instance.inject(fresh);
+        } finally {
+          await writeFile(join(directory, "release-render"), "");
+          await pending;
+        }
+        expect(stale).toEqual([]);
+        if (!replace) await instance.inject(fresh);
+        expect(fresh[0]).toContain("Fresh policy");
+        const cached: string[] = [];
+        await instance.inject(cached);
+        expect(cached).toEqual(fresh);
+        expect(await calls(directory)).toEqual([
+          "init --check",
+          "agent-instructions",
+          "init --check",
+          "init --check",
+          "agent-instructions",
+          "init --check",
+        ]);
+      });
+    }
 
     test("recovers from check, render, and empty-output failures", async () => {
       const directory = await repo("repo", [

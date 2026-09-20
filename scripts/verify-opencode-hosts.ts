@@ -5,6 +5,33 @@ import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
+function createServerAddressParser() {
+  const decoder = new TextDecoder();
+  let stdout = "";
+  return (chunk: Uint8Array) => {
+    stdout += decoder.decode(chunk, { stream: true });
+    return stdout.match(/http:\/\/127\.0\.0\.1:\d+(?=\s)/)?.[0] ?? "";
+  };
+}
+
+// Exercise every chunk boundary, including inside the port and before its delimiter.
+const expectedAddress = "http://127.0.0.1:43210";
+const startup = new TextEncoder().encode(
+  `Server listening on ${expectedAddress}\n`,
+);
+for (let split = 0; split < startup.length; split++) {
+  const parse = createServerAddressParser();
+  assert.equal(parse(startup.subarray(0, split)), "");
+  assert.equal(parse(startup.subarray(split)), expectedAddress);
+}
+const parseByte = createServerAddressParser();
+for (let index = 0; index < startup.length; index++) {
+  assert.equal(
+    parseByte(startup.subarray(index, index + 1)),
+    index === startup.length - 1 ? expectedAddress : "",
+  );
+}
+
 const binaries = process.argv.slice(2).map((path) => resolve(path));
 assert.equal(binaries.length, 2, "Provide v1.18.29 and v2.0.6 binary paths");
 const root = await mkdtemp(join(tmpdir(), "thts-opencode-hosts-"));
@@ -168,11 +195,9 @@ if (process.argv.slice(2).join(" ") === "agent-instructions") {
     const stderr = new Response(child.stderr).text();
     let address = "";
     const output = (async () => {
+      const parse = createServerAddressParser();
       for await (const chunk of child.stdout) {
-        address ||=
-          new TextDecoder()
-            .decode(chunk)
-            .match(/http:\/\/127\.0\.0\.1:\d+/)?.[0] ?? "";
+        address ||= parse(chunk);
       }
     })();
     try {

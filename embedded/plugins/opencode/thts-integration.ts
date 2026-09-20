@@ -43,8 +43,9 @@ function createPolicyLoader() {
       policies.set(directory, pending);
     }
     const content = await pending;
+    if (policies.get(directory) !== pending) return null;
     if (!content) {
-      if (policies.get(directory) === pending) policies.delete(directory);
+      policies.delete(directory);
       return null;
     }
     return `${THTS_MARKER}\n${content}`;
