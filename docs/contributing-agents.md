@@ -274,7 +274,7 @@ func getPluginsFS(agentType agents.AgentType) fs.FS {
 Create a settings template only when thts should manage a default settings file.
 The template filename must match `SettingsTemplate`; `SettingsFile` remains the
 destination name. Leave `SettingsTemplate` empty when the agent's settings are
-user-owned, as for Pi.
+user-owned, as for OpenCode, Pi, and Droid.
 
 For testbot with `SettingsFile: "config.json"`:
 

@@ -251,7 +251,7 @@ func runAgentsInit(cmd *cobra.Command, args []string) error {
 	existingAgents := detectExistingAgentManifests(targetDir)
 
 	// Handle --refresh flag or prompt for action if agents exist
-	if len(existingAgents) > 0 && !initForce {
+	if len(existingAgents) > 0 && (!initForce || initRefresh) {
 		if initRefresh {
 			return refreshAgentSetup(targetDir, existingAgents)
 		}
@@ -546,7 +546,7 @@ func buildInstallationPlan(projectDir string, agentType agents.AgentType, level 
 		if agentConfig.PluginsDir != "" && hooksMode == config.ComponentModeLocal {
 			relPath := filepath.Join(agentConfig.PluginsDir, "thts-integration.ts")
 			plan.pluginFiles = append(plan.pluginFiles, relPath)
-		} else if !usesGlobalPiRuntimeAdapter(agentType, agentConfig, hooksMode) {
+		} else if agentType != agents.AgentOpenCode && !usesGlobalPiRuntimeAdapter(agentType, agentConfig, hooksMode) {
 			if agentConfig.Type == agents.AgentClaude {
 				plan.instructionsFile = "CLAUDE.local.md"
 			} else if agentConfig.Type == agents.AgentDroid {
@@ -740,7 +740,7 @@ func initAgent(projectDir string, agentType agents.AgentType, level IntegrationL
 	level = normalizeIntegrationLevel(level)
 	if existing, err := loadManifest(agentDir); err == nil {
 		previousManifest = existing
-	} else if agentType == agents.AgentDroid && !os.IsNotExist(err) {
+	} else if (agentType == agents.AgentDroid || agentType == agents.AgentOpenCode) && !os.IsNotExist(err) {
 		return fmt.Errorf("read previous manifest: %w", err)
 	}
 	if agentType == agents.AgentDroid {
@@ -761,6 +761,10 @@ func initAgent(projectDir string, agentType agents.AgentType, level IntegrationL
 			}
 			return reconcileErr
 		}
+	} else if agentType == agents.AgentOpenCode && previousManifest != nil {
+		if err := reconcileOpenCodeIntegration(projectDir, agentDir, previousManifest, level, hooksMode); err != nil {
+			return err
+		}
 	} else if previousManifest != nil && normalizeIntegrationLevel(previousManifest.IntegrationLevel) == IntegrationHook && (level != IntegrationHook || hooksMode != config.ComponentModeLocal) {
 		if err := removeProjectHookIntegration(projectDir, agentDir, agentConfig, previousManifest); err != nil {
 			return fmt.Errorf("remove previous hook integration: %w", err)
@@ -771,6 +775,10 @@ func initAgent(projectDir string, agentType agents.AgentType, level IntegrationL
 		Agent:            string(agentType),
 		IntegrationLevel: level,
 		Files:            []string{},
+	}
+	if agentType == agents.AgentOpenCode && previousManifest != nil {
+		manifest.Files = slices.Clone(previousManifest.Files)
+		manifest.Modifications = previousManifest.Modifications
 	}
 	if previousManifest != nil && previousManifest.Modifications.Hooks != nil && level == IntegrationHook && hooksMode == config.ComponentModeLocal {
 		manifest.Modifications.Hooks = previousManifest.Modifications.Hooks
@@ -880,16 +888,21 @@ func initAgent(projectDir string, agentType agents.AgentType, level IntegrationL
 			fmt.Printf("%s\n", ui.InfoF("  %s: using global installation", runtimeAdapterDisplayName(agentType)))
 		case config.ComponentModeLocal:
 			if err := setupHookIntegration(projectDir, agentDir, agentType, agentConfig, manifest); err != nil {
-				if agentType == agents.AgentDroid {
-					return fmt.Errorf("setup Droid hook integration: %w", err)
+				if agentType == agents.AgentDroid || agentType == agents.AgentOpenCode {
+					return fmt.Errorf("setup %s hook integration: %w", agentType, err)
 				}
 				fmt.Println(ui.WarningF("  Could not setup hook integration: %v", err))
 			}
 		}
 	} else if level == IntegrationAgentsContentLocal && agentConfig.PluginsDir != "" && hooksMode == config.ComponentModeLocal {
 		if err := setupHookIntegration(projectDir, agentDir, agentType, agentConfig, manifest); err != nil {
+			if agentType == agents.AgentOpenCode {
+				return fmt.Errorf("setup OpenCode local plugin: %w", err)
+			}
 			fmt.Println(ui.WarningF("  Could not setup local plugin integration: %v", err))
 		}
+	} else if agentType == agents.AgentOpenCode && level == IntegrationAgentsContentLocal {
+		reportOpenCodeRuntimeMode(hooksMode)
 	} else if !usesGlobalPiRuntimeAdapter(agentType, agentConfig, hooksMode) {
 		// Traditional integration (markers or config)
 		instMod, gitignorePatterns, err := setupIntegrationLevel(projectDir, agentDir, agentConfig, level)
@@ -907,7 +920,7 @@ func initAgent(projectDir string, agentType agents.AgentType, level IntegrationL
 			fmt.Println(ui.WarningF("  Could not setup integration: %v", err))
 		} else {
 			if instMod != nil {
-				if agentType == agents.AgentDroid && previousManifest != nil &&
+				if (agentType == agents.AgentDroid || agentType == agents.AgentOpenCode) && previousManifest != nil &&
 					previousManifest.Modifications.InstructionsMD != nil &&
 					previousManifest.Modifications.InstructionsMD.Action == "created" &&
 					filepath.Clean(previousManifest.Modifications.InstructionsMD.Path) == filepath.Clean(instMod.Path) {
@@ -937,11 +950,14 @@ func initAgent(projectDir string, agentType agents.AgentType, level IntegrationL
 			fmt.Println(ui.SuccessF("  Created %s", agentConfig.SettingsFile))
 		}
 	}
+	if agentType == agents.AgentOpenCode && level == IntegrationHook && hooksMode == config.ComponentModeDisabled {
+		reportOpenCodeRuntimeMode(hooksMode)
+	}
 
 	// Write manifest
 	if err := writeManifest(agentDir, manifest); err != nil {
-		if agentType == agents.AgentDroid {
-			return fmt.Errorf("write Droid manifest: %w", err)
+		if agentType == agents.AgentDroid || agentType == agents.AgentOpenCode {
+			return fmt.Errorf("write %s manifest: %w", agentType, err)
 		}
 		fmt.Println(ui.WarningF("  Could not write manifest: %v", err))
 	}
@@ -2502,6 +2518,23 @@ func detectExistingAgentManifests(projectDir string) []agents.AgentType {
 // This re-copies skills, commands, agents, and updates instructions without
 // prompting for integration level (preserves existing level from manifest).
 func refreshAgentSetup(projectDir string, agentTypes []agents.AgentType) error {
+	if initAgents != "" {
+		selected, err := agents.ParseAgentTypes(initAgents)
+		if err != nil {
+			return err
+		}
+		agentTypes = slices.DeleteFunc(slices.Clone(agentTypes), func(agentType agents.AgentType) bool {
+			return !slices.Contains(selected, agentType)
+		})
+		if len(agentTypes) == 0 {
+			return fmt.Errorf("no initialized agents match --agents %s", initAgents)
+		}
+	}
+	if initDryRun {
+		fmt.Println(ui.InfoF("Would refresh: %s", strings.Join(agents.AgentTypesToStrings(agentTypes), ", ")))
+		fmt.Println(ui.Info("Dry run complete. No files were changed."))
+		return nil
+	}
 	fmt.Println(ui.Header("Refreshing Agent Integration"))
 	fmt.Println()
 
@@ -2515,8 +2548,8 @@ func refreshAgentSetup(projectDir string, agentTypes []agents.AgentType) error {
 		// Load existing manifest to get integration level
 		manifest, err := loadManifest(agentDir)
 		if err != nil {
-			if agentType == agents.AgentDroid {
-				return fmt.Errorf("read Droid manifest: %w", err)
+			if agentType == agents.AgentDroid || agentType == agents.AgentOpenCode {
+				return fmt.Errorf("read %s manifest: %w", agentType, err)
 			}
 			fmt.Println(ui.WarningF("Could not read manifest for %s: %v", agentType, err))
 			continue
@@ -2527,6 +2560,14 @@ func refreshAgentSetup(projectDir string, agentTypes []agents.AgentType) error {
 		var filesUpdated int
 		level := normalizeIntegrationLevel(manifest.IntegrationLevel)
 		hooksMode := resolveAgentComponentMode(cfg, globalManifest, agentType, "hooks")
+		if agentType == agents.AgentOpenCode {
+			if err := reconcileOpenCodeIntegration(projectDir, agentDir, manifest, level, hooksMode); err != nil {
+				return err
+			}
+			if level == IntegrationHook || level == IntegrationAgentsContentLocal {
+				reportOpenCodeRuntimeMode(hooksMode)
+			}
+		}
 		if agentType == agents.AgentDroid {
 			if err := validateDroidProjectResourceCollisions(agentDir, agentConfig, cfg, globalManifest, manifest, level); err != nil {
 				return err
@@ -2662,6 +2703,13 @@ func refreshAgentSetup(projectDir string, agentTypes []agents.AgentType) error {
 				}
 			}
 		case IntegrationAgentsContent:
+			if agentType == agents.AgentOpenCode && manifest.Modifications.InstructionsMD == nil {
+				mod, _, err := setupIntegrationLevel(projectDir, agentDir, agentConfig, level)
+				if err != nil {
+					return err
+				}
+				manifest.Modifications.InstructionsMD = mod
+			}
 			// Refresh marker block content
 			if err := refreshIntegration(projectDir, agentDir, agentConfig, cfg); err != nil {
 				if agentType == agents.AgentDroid {
@@ -2694,6 +2742,9 @@ func refreshAgentSetup(projectDir string, agentTypes []agents.AgentType) error {
 		} else if agentConfig.PluginsDir != "" && (level == IntegrationHook || level == IntegrationAgentsContentLocal) && hooksMode == config.ComponentModeLocal {
 			copied, err := copyPluginsToManifest(agentDir, agentType, agentConfig, manifest)
 			if err != nil {
+				if agentType == agents.AgentOpenCode {
+					return fmt.Errorf("refresh OpenCode plugin: %w", err)
+				}
 				fmt.Println(ui.WarningF("  Could not update plugins: %v", err))
 			} else if copied > 0 {
 				filesUpdated += copied
@@ -2709,8 +2760,8 @@ func refreshAgentSetup(projectDir string, agentTypes []agents.AgentType) error {
 		// Update manifest timestamp
 		manifest.CreatedAt = time.Now().UTC().Format(time.RFC3339)
 		if err := writeManifest(agentDir, manifest); err != nil {
-			if agentType == agents.AgentDroid {
-				return fmt.Errorf("update Droid manifest: %w", err)
+			if agentType == agents.AgentDroid || agentType == agents.AgentOpenCode {
+				return fmt.Errorf("update %s manifest: %w", agentType, err)
 			}
 			fmt.Println(ui.WarningF("  Could not update manifest: %v", err))
 		}

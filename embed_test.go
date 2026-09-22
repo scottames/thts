@@ -317,7 +317,6 @@ func TestGetDefaultSettingsByTemplateIdentity(t *testing.T) {
 	}{
 		{template: "codex.toml", want: "# Codex CLI configuration"},
 		{template: "gemini.json", want: `"contextFileName": "AGENTS.md"`},
-		{template: "opencode.json", want: `"model": "anthropic/claude-sonnet-4-20250514"`},
 	}
 
 	for _, tt := range tests {

@@ -28,7 +28,7 @@ var Instructions embed.FS
 var Templates embed.FS
 
 // Settings contains embedded default settings files for agents.
-// Files are named by agent type: codex.toml, opencode.json, etc.
+// Files are named by agent type: codex.toml, gemini.json, etc.
 // Claude settings are built dynamically and not embedded.
 //
 //go:embed embedded/settings/*

@@ -138,6 +138,10 @@ thts sync -m "Added architecture notes"
 CLI, Pi, and Droid CLI to give them awareness of your thoughts
 directory.
 
+OpenCode integration targets v2, retaining best-effort legacy compatibility with
+v1.18.29+. The same plugin handles project and global installs. See the
+[OpenCode upgrade instructions](docs/guide.md#upgrading-opencode-integration).
+
 ```bash
 thts init agents              # Install for detected agents
 thts init agents -i           # Interactive mode

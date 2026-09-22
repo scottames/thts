@@ -50,6 +50,7 @@
     - [Global vs Project Configuration](#global-vs-project-configuration)
     - [Prerequisites](#prerequisites)
     - [Integration Levels](#integration-levels)
+    - [Upgrading OpenCode Integration](#upgrading-opencode-integration)
     - [Pi Project Trust](#pi-project-trust)
     - [Customizing Hook Keywords](#customizing-hook-keywords)
     - [Claude Plan Directive](#claude-plan-directive)
@@ -795,6 +796,10 @@ your thoughts directory and enable session continuity.
   invoked as `/prompts:<name>` (e.g., `/prompts:thts-handoff`).
 - **OpenCode XDG**: OpenCode uses XDG for global config (`~/.config/opencode/`)
   rather than a dot-folder in home.
+  - The plugin targets v2, retaining best-effort legacy compatibility with
+    v1.18.29+ through its existing API adapter.
+  - OpenCode settings are user-owned, including
+    when `--with-settings` is used.
 - **Gemini commands**: Gemini stores commands as TOML and does not support
   native sub-agents.
 - **Pi resources**: Pi uses skills, Markdown prompt templates, and TypeScript
@@ -892,10 +897,16 @@ Claude and Gemini:
 2. Loading full instructions (~200 lines) only when keywords are detected
 3. Keywords include: research, plan, decision, thoughts, handoff, notes, etc.
 
-OpenCode uses an idempotent plugin that adds the generated instructions to each
-model request without adding another copy when another plugin instance already
-supplied it. OpenCode local-only mode installs the same project plugin, which is
-covered by the managed thts patterns in `.gitignore`.
+OpenCode uses an idempotent plugin that adds generated instructions to normal
+agent requests and compaction without adding another copy when policy is already
+present in the system instructions. V2 title and transient generation requests
+do not receive the policy. On shared servers, the plugin uses the session's
+working directory. `thts` must be available on the server's PATH.
+
+OpenCode local-only mode uses the same plugin, covered by the managed thts
+patterns in `.gitignore`. With global hooks configured it uses the global plugin.
+With hooks disabled, automatic injection is unavailable; enable hooks or select
+shared/on-demand integration. OpenCode does not use an `AGENTS.local.md` fallback.
 
 Pi uses an idempotent TypeScript extension at
 `.pi/extensions/thts-integration.ts`. It adds the generated policy at
@@ -920,8 +931,40 @@ integration, or review and reload hooks through `/hooks`. Factory's
 `hooksDisabled` setting or an enterprise `allowManagedHooksOnly` policy can
 prevent project or user thts hooks from running.
 
-The OpenCode plugin also caches generated instructions for its session. Restart
-OpenCode after changing thts categories or instruction configuration.
+The OpenCode plugin caches generated instructions per working directory for the
+plugin's lifetime, while checking project initialization before each injection.
+If a check fails, cached instructions and any pending render for that directory
+are discarded.
+Restart OpenCode after changing thts categories or instruction configuration.
+For v2, restart the server as well as attached clients when a fresh plugin cache
+is needed.
+
+#### Upgrading OpenCode Integration
+
+After upgrading thts, refresh existing project resources:
+
+```bash
+thts init agents --agents opencode --refresh --dry-run  # Preview only
+thts init agents --agents opencode --refresh
+```
+
+For a global installation, reinstall the global components you use:
+
+```bash
+thts init agents --agents opencode --global=all
+```
+
+Refresh any existing project installation afterward to remove its owned local
+plugin when global hooks are selected. Refresh replaces thts-generated plugin,
+skill, command, and subagent files; put custom resources beside them. Restart
+OpenCode to load the update. V2 watches plugin files, but a server restart also
+clears cached policy.
+
+OpenCode settings are no longer created or owned by thts. Upgrade and uninstall
+remove an old manifest-owned `opencode.json` only if it exactly matches the
+obsolete thts template. Customized settings are preserved and released from
+thts ownership. If they retain the old `permissions.allow` object, follow the
+[permissions migration guidance](troubleshooting.md#opencode-settings-errors).
 
 **Note:** Codex does not support hooks and will automatically fall back to
 always-on mode with a warning.

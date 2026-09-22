@@ -79,7 +79,7 @@ binary and copied to agent directories by `thts init agents`.
 | -------- | ------------ | -------------------------------- | -------------------- | --------------- | ---------------- |
 | Claude   | `.claude/`   | `skills/*.md`                    | `commands/`          | `hooks/`        | `settings.json`  |
 | Codex    | `.codex/`    | `skills/*/SKILL.md`              | `prompts/` (global)  | None            | `config.toml`    |
-| OpenCode | `.opencode/` | `skills/*/SKILL.md`              | `commands/`          | `plugins/`      | `opencode.json`  |
+| OpenCode | `.opencode/` | `skills/*/SKILL.md`              | `commands/`          | `plugins/`      | Not thts-managed |
 | Gemini   | `.gemini/`   | `skills/*/SKILL.md`              | `commands/*.toml`    | `hooks/`        | `settings.json`  |
 | Pi       | `.pi/`       | `skills/thts-integrate/SKILL.md` | `prompts/`           | `extensions/`   | Not thts-managed |
 | Droid    | `.factory/`  | `skills/*/SKILL.md`              | `commands/`          | `hooks/`        | Not thts-managed |
@@ -94,14 +94,14 @@ standalone `hooks.json`; do not create or modify its user-owned `settings.json`.
 
 ### Hook Support
 
-| Agent    | Hook Support    | Hook Events                          | Settings File         |
-| -------- | --------------- | ------------------------------------ | --------------------- |
-| Claude   | Yes             | `SessionStart`, `UserPromptSubmit`   | `settings.local.json` |
-| Gemini   | Yes             | `SessionStart`, `BeforeAgent`        | `settings.local.json` |
-| OpenCode | Yes (plugin)    | `experimental.chat.system.transform` | N/A (plugin)          |
-| Pi       | Yes (extension) | `before_agent_start`                 | N/A (extension)       |
-| Droid    | Yes             | `SessionStart`, `UserPromptSubmit`   | `hooks.json`          |
-| Codex    | No              | N/A                                  | N/A                   |
+| Agent    | Hook Support    | Hook Events                                     | Settings File         |
+| -------- | --------------- | ----------------------------------------------- | --------------------- |
+| Claude   | Yes             | `SessionStart`, `UserPromptSubmit`              | `settings.local.json` |
+| Gemini   | Yes             | `SessionStart`, `BeforeAgent`                   | `settings.local.json` |
+| OpenCode | Yes (plugin)    | v1 system transform; v2 `context`, `compaction` | N/A (plugin)          |
+| Pi       | Yes (extension) | `before_agent_start`                            | N/A (extension)       |
+| Droid    | Yes             | `SessionStart`, `UserPromptSubmit`              | `hooks.json`          |
+| Codex    | No              | N/A                                             | N/A                   |
 
 Pi's project `.pi/` resources require Pi project trust. Non-interactive Pi
 runs do not prompt, so use `pi --approve` to load them for one run or
@@ -110,6 +110,13 @@ directory; restart Pi after changing thts instruction configuration.
 Droid snapshots hooks at session startup. Restart it or review/reload through
 `/hooks` after changes. `hooksDisabled` or enterprise `allowManagedHooksOnly`
 can prevent project or user thts hooks from running.
+
+OpenCode targets v2, retaining best-effort legacy compatibility with v1.18.29+
+through its existing API adapter. Its single dependency-free plugin exports
+`id`, `server`, and `setup`. V2 policy follows
+`session.location.directory`, including shared servers; do not append `subpath`.
+Keep settings user-owned. Only an exact, manifest-owned legacy settings template
+may be removed during migration. Customized files must survive refresh/uninit.
 
 ### Embedded Files
 
@@ -182,6 +189,10 @@ go test ./...                                    # Go unit tests only
 go test -tags=integration ./internal/cmd/...     # Integration tests
 go test -tags=integration ./...                  # All tests
 ```
+
+OpenCode adapter behavior is covered by unit tests; installation lifecycle is
+covered by `scripts/verify-opencode-integration.sh`. Smoke-test v2 manually when
+changing the integration or upgrading across a significant API change.
 
 **Coverage targets:** config/git >70%, fs/thts >60% (all met)
 
