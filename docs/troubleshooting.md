@@ -4,7 +4,8 @@
 
 ### OpenCode Plugin Not Loading
 
-The dual-version plugin requires OpenCode v1.18.29+ or v2 (verified with v2.0.6).
+OpenCode v2 is the actively supported version. Legacy v1.18.29+ compatibility is
+best-effort; upgrade to v2 if you encounter a v1-specific issue.
 Refresh installed resources after upgrading thts:
 
 ```bash

@@ -50,6 +50,7 @@
     - [Global vs Project Configuration](#global-vs-project-configuration)
     - [Prerequisites](#prerequisites)
     - [Integration Levels](#integration-levels)
+    - [Upgrading OpenCode Integration](#upgrading-opencode-integration)
     - [Pi Project Trust](#pi-project-trust)
     - [Customizing Hook Keywords](#customizing-hook-keywords)
     - [Claude Plan Directive](#claude-plan-directive)
@@ -794,9 +795,11 @@ your thoughts directory and enable session continuity.
 - **Codex "prompts"**: Codex calls commands "prompts". They are global-only and
   invoked as `/prompts:<name>` (e.g., `/prompts:thts-handoff`).
 - **OpenCode XDG**: OpenCode uses XDG for global config (`~/.config/opencode/`)
-  rather than a dot-folder in home. The same plugin supports v1.18.29+ and v2,
-  verified with v1.18.29 and v2.0.6. OpenCode settings are user-owned, including
-  when `--with-settings` is used.
+  rather than a dot-folder in home.
+  - The plugin targets v2, retaining best-effort legacy compatibility with
+    v1.18.29+ through its existing API adapter.
+  - OpenCode settings are user-owned, including
+    when `--with-settings` is used.
 - **Gemini commands**: Gemini stores commands as TOML and does not support
   native sub-agents.
 - **Pi resources**: Pi uses skills, Markdown prompt templates, and TypeScript

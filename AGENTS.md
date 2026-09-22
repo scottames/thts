@@ -111,8 +111,9 @@ Droid snapshots hooks at session startup. Restart it or review/reload through
 `/hooks` after changes. `hooksDisabled` or enterprise `allowManagedHooksOnly`
 can prevent project or user thts hooks from running.
 
-OpenCode supports v1.18.29+ and v2 (host verification pins v2.0.6). Its single
-dependency-free plugin exports `id`, `server`, and `setup`. V2 policy follows
+OpenCode targets v2, retaining best-effort legacy compatibility with v1.18.29+
+through its existing API adapter. Its single dependency-free plugin exports
+`id`, `server`, and `setup`. V2 policy follows
 `session.location.directory`, including shared servers; do not append `subpath`.
 Keep settings user-owned. Only an exact, manifest-owned legacy settings template
 may be removed during migration. Customized files must survive refresh/uninit.
@@ -187,8 +188,11 @@ mise run test                                    # Go and OpenCode plugin unit t
 go test ./...                                    # Go unit tests only
 go test -tags=integration ./internal/cmd/...     # Integration tests
 go test -tags=integration ./...                  # All tests
-bun scripts/verify-opencode-hosts.ts /path/to/v1.18.29 /path/to/v2.0.6 # Real hosts
 ```
+
+OpenCode adapter behavior is covered by unit tests; installation lifecycle is
+covered by `scripts/verify-opencode-integration.sh`. Smoke-test v2 manually when
+changing the integration or upgrading across a significant API change.
 
 **Coverage targets:** config/git >70%, fs/thts >60% (all met)
 

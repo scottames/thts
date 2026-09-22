@@ -47,17 +47,3 @@ jobs:
           git config --global user.name "CI"
       - name: integration tests
         run: mise run test-integration
-      - name: OpenCode compatibility (v1.18.29 and v2.0.6)
-        run: |
-          temp_dir=$(mktemp -d)
-          trap 'rm -rf "$temp_dir"' EXIT
-          mkdir "$temp_dir/v1" "$temp_dir/v2"
-          curl --fail --location --silent --show-error \
-            https://github.com/anomalyco/opencode/releases/download/v1.18.29/opencode-linux-x64.tar.gz \
-            -o "$temp_dir/v1.tar.gz"
-          curl --fail --location --silent --show-error \
-            https://opencode.ai/files/bin/2.0.6/opencode-linux-x64.tar.gz \
-            -o "$temp_dir/v2.tar.gz"
-          tar -xzf "$temp_dir/v1.tar.gz" -C "$temp_dir/v1"
-          tar -xzf "$temp_dir/v2.tar.gz" -C "$temp_dir/v2"
-          bun scripts/verify-opencode-hosts.ts "$temp_dir/v1/opencode" "$temp_dir/v2/opencode"

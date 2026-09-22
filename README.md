@@ -138,8 +138,8 @@ thts sync -m "Added architecture notes"
 CLI, Pi, and Droid CLI to give them awareness of your thoughts
 directory.
 
-OpenCode integration supports v1.18.29+ and v2 (verified with v2.0.6), using the
-same plugin for project and global installs. See the
+OpenCode integration targets v2, retaining best-effort legacy compatibility with
+v1.18.29+. The same plugin handles project and global installs. See the
 [OpenCode upgrade instructions](docs/guide.md#upgrading-opencode-integration).
 
 ```bash
