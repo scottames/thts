@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.11.0](https://github.com/scottames/thts/compare/v0.10.0...v0.11.0) (2026-09-22)
+
+
+### Features
+
+* **agents:** support OpenCode v2 alongside v1 ([#96](https://github.com/scottames/thts/issues/96)) ([f62cf31](https://github.com/scottames/thts/commit/f62cf317b466df8a13f2648a67be13a3bda0f50b))
+
+
+### Miscellaneous Chores
+
+* upgrade trunk ([#99](https://github.com/scottames/thts/issues/99)) ([bd35403](https://github.com/scottames/thts/commit/bd354038c2d10d4d0f430a7cd978983d55cb9f0d))
+
 ## [0.10.0](https://github.com/scottames/thts/compare/v0.9.0...v0.10.0) (2026-09-15)
 
 
