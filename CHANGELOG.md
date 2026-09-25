@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.1](https://github.com/scottames/thts/compare/v0.11.0...v0.11.1) (2026-09-25)
+
+
+### Miscellaneous Chores
+
+* **deps:** update dependency aqua:goreleaser/goreleaser to v2.18.2 ([#100](https://github.com/scottames/thts/issues/100)) ([bb1b437](https://github.com/scottames/thts/commit/bb1b4374dd74a322c059e2f0ddefbff46c39a7d1))
+
 ## [0.11.0](https://github.com/scottames/thts/compare/v0.10.0...v0.11.0) (2026-09-22)
 
 
