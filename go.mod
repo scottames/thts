@@ -1,6 +1,6 @@
 module github.com/scottames/thts
 
-go 1.27.1
+go 1.27.2
 
 require (
 	charm.land/huh/v2 v2.0.3
