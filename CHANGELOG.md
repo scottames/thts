@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.11.1](https://github.com/scottames/thts/compare/v0.11.0...v0.11.1) (2026-10-16)
+
+
+### Miscellaneous Chores
+
+* **deps:** update ⬆️ trunk go to v1.27.2 ([#105](https://github.com/scottames/thts/issues/105)) ([2bb2da1](https://github.com/scottames/thts/commit/2bb2da1374ae9076dc31d7b7ea690c98e73e798d))
+* **deps:** update dependency aqua:goreleaser/goreleaser to v2.18.2 ([#100](https://github.com/scottames/thts/issues/100)) ([bb1b437](https://github.com/scottames/thts/commit/bb1b4374dd74a322c059e2f0ddefbff46c39a7d1))
+* **deps:** update dependency aqua:goreleaser/goreleaser to v2.18.3 ([#106](https://github.com/scottames/thts/issues/106)) ([45b8de7](https://github.com/scottames/thts/commit/45b8de717062a000ba4c728d79b181bea7c6bb63))
+* **deps:** update dependency bun to v1.4.3 ([#107](https://github.com/scottames/thts/issues/107)) ([7b3c552](https://github.com/scottames/thts/commit/7b3c552ea5adfd93074d345bc58d7179a22242ff))
+* upgrade trunk ([#102](https://github.com/scottames/thts/issues/102)) ([66a6a9b](https://github.com/scottames/thts/commit/66a6a9b7a0df6a73e77765a2d038ed508a3e52f1))
+* upgrade trunk ([#104](https://github.com/scottames/thts/issues/104)) ([aead9ea](https://github.com/scottames/thts/commit/aead9eaac5107d5ebf5fcab1f6fd1fde45ecba65))
+
 ## [0.11.0](https://github.com/scottames/thts/compare/v0.10.0...v0.11.0) (2026-09-22)
 
 
