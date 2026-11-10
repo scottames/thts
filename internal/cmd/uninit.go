@@ -67,6 +67,13 @@ func runUninit(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
+	if ctx := resolveThoughtsRepoContext(cfg, currentRepo); ctx != nil && !isValidThoughtsSetup(thoughtsDir, cfg.User) {
+		printThoughtsRepoRefusal("thts uninit", ctx)
+		cmd.SilenceUsage = true
+		cmd.SilenceErrors = true
+		return ExitCodeError{Code: 1}
+	}
+
 	state := config.LoadStateOrDefault()
 
 	repoIdentity, _ := git.GetRepoIdentityAt(currentRepo)

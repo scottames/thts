@@ -98,7 +98,12 @@ func resolveEditPath(cfg *config.Config, profileName string) (string, error) {
 		return thoughtsDir, nil
 	}
 
-	// Case 2: In git repo without thts
+	// Case 2: In a profile's thoughts repo
+	if ctx := resolveThoughtsRepoContext(cfg, cwd); ctx != nil {
+		return ctx.RepoPath, nil
+	}
+
+	// Case 3: In git repo without thts
 	if git.IsInGitRepoAt(cwd) {
 		_, defaultName := cfg.GetDefaultProfile()
 		fmt.Println(ui.Error("thts not enabled in this repo"))
@@ -108,7 +113,7 @@ func resolveEditPath(cfg *config.Config, profileName string) (string, error) {
 		return "", nil
 	}
 
-	// Case 3: Not in git repo - use default profile
+	// Case 4: Not in git repo - use default profile
 	defaultProfile, _ := cfg.GetDefaultProfile()
 	if defaultProfile == nil {
 		return "", fmt.Errorf("no default profile configured")

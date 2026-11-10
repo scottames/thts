@@ -182,6 +182,37 @@ Use `--all` so the shared repo mapping is removed before reinitializing.
 thts uninit --all
 ```
 
+### "Current repository has thoughts/ but no mapping"
+
+**Symptoms:** `thts status` or `thts sync` warns that the current repository has
+`thoughts/` but no mapping in the active state file.
+
+**Common causes:**
+
+1. `THTS_CONFIG_PATH` points to a different config than the one used for
+   `thts init`, so thts reads a different state file
+2. `thoughts/` is an unrelated directory, not a thts setup
+
+Check which config and state file are active:
+
+```bash
+thts status   # See "Config file" and "State file"
+```
+
+Run `thts init` again under the active config, or switch back to the original
+config. If the directory is the thoughts repo itself (or a git repo that
+contains it), thts detects it and does not show this warning. See "Running from
+the Thoughts Repo" in the [user guide](guide.md).
+
+### "This directory is the thoughts repo"
+
+**Symptoms:** `thts init` or `thts uninit` fails with this message.
+
+These commands manage a project's `thoughts/` symlinks. In the thoughts repo,
+`thoughts/` holds real content, so thts refuses to replace or delete it. Use
+`thts sync` and `thts status` there instead. `thts init agents` and
+`thts uninit agents` still work.
+
 ### Profile Not Found
 
 **Symptoms:** `thts init --profile foo` fails.

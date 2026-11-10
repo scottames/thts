@@ -85,7 +85,26 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	mappingKey, mapping := state.ResolveRepoMapping(currentRepo, repoIdentity)
 	profileConfig := state.ResolveProfileForRepoWithIdentity(cfg, currentRepo, repoIdentity)
 
-	if mapping != nil && profileConfig != nil {
+	var repoContext *thoughtsRepoContext
+	if mapping == nil || profileConfig == nil {
+		repoContext = resolveThoughtsRepoContext(cfg, currentRepo)
+	}
+
+	if repoContext != nil {
+		profileConfig = repoContext.Profile
+		fmt.Println(ui.SubHeader("Current Directory"))
+		tbl := ui.NewTable("Setting", "Value")
+		tbl.Row("Path", config.ContractPath(currentRepo))
+		tbl.Row("Type", fmt.Sprintf("Thoughts repo (profile: %s)", profileConfig.ProfileName))
+		tbl.Row("Thoughts repo", config.ContractPath(repoContext.RepoPath))
+		if repoContext.HostsOtherFiles() {
+			tbl.Row("Git root", config.ContractPath(repoContext.GitRoot))
+		}
+		fmt.Println(tbl)
+		if repoContext.HostsOtherFiles() {
+			fmt.Printf("  %s\n", ui.Muted("The thoughts repo is inside a larger git repo. thts sync commits all changes in that repo."))
+		}
+	} else if mapping != nil && profileConfig != nil {
 		fmt.Println(ui.SubHeader("Current Repository"))
 		tbl := ui.NewTable("Setting", "Value")
 		tbl.Row("Path", currentRepo)

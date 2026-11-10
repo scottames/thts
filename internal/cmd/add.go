@@ -482,7 +482,12 @@ func resolveThoughtsDir(cfg *config.Config, opts *AddOptions) (string, bool, err
 		}
 	}
 
-	// Case 4: Fall back to default profile's global dir
+	// Case 4: In a profile's thoughts repo (targets that profile's global dir)
+	if ctx := resolveThoughtsRepoContext(cfg, cwd); ctx != nil {
+		return resolveProfileGlobalDir(cfg, ctx.Profile.ProfileName)
+	}
+
+	// Case 5: Fall back to default profile's global dir
 	return resolveDefaultGlobalDir(cfg)
 }
 
@@ -617,7 +622,15 @@ func resolveSyncContext(cfg *config.Config, opts *AddOptions) (*addSyncContext, 
 		}
 	}
 
-	// Case 4: Fall back to default profile
+	// Case 4: In a profile's thoughts repo
+	if ctx := resolveThoughtsRepoContext(cfg, cwd); ctx != nil {
+		return &addSyncContext{
+			RepoPath:    ctx.RepoPath,
+			ProfileName: ctx.Profile.ProfileName,
+		}, nil
+	}
+
+	// Case 5: Fall back to default profile
 	defaultProfile := cfg.GetDefaultProfileResolved()
 	if defaultProfile == nil {
 		return nil, fmt.Errorf("no default profile configured")
