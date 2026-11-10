@@ -360,7 +360,7 @@ thts sync -m "Updated docs"  # Sync with custom message
 Open your thoughts directory directly in your editor:
 
 ```bash
-thts edit                    # Open ./thoughts/ (or default profile if not in repo)
+thts edit                    # Open ./thoughts/, the current thoughts repo, or default profile
 thts edit --profile work     # Open specific profile's thoughts repo
 ```
 
@@ -380,6 +380,38 @@ Sync does:
 3. Commits all changes to the thoughts repo
 4. Pulls and rebases from remote
 5. Pushes to remote
+
+### Running from the Thoughts Repo
+
+You can run `thts` from the thoughts repo itself, not only from a project.
+thts treats the current directory as a thoughts repo when it is:
+
+- A profile's `thoughtsRepo` or a directory inside it
+- Anywhere in a larger git repo that contains the thoughts repo as a
+  subdirectory (for example `~/notes/` with `thoughtsRepo: ~/notes/thoughts`)
+
+thts uses the profile that owns that thoughts repo, even if it is not the
+default profile. If several profiles match, `THTS_PROFILE` wins, then the
+default profile.
+
+| Command       | Behavior in the thoughts repo                          |
+| ------------- | ------------------------------------------------------ |
+| `thts sync`   | Syncs the thoughts repo; skips project-only steps      |
+| `thts status` | Shows the thoughts repo, its profile, and the git root |
+| `thts edit`   | Opens the thoughts repo                                |
+| `thts add`    | Writes to that profile's global directory              |
+| `thts init`   | Refuses (would replace real content with symlinks)     |
+| `thts uninit` | Refuses (would delete real content)                    |
+
+```bash
+cd ~/notes
+thts sync
+# ℹ  Syncing thoughts repo (profile: work)...
+```
+
+**Note:** When the thoughts repo is a subdirectory of a larger git repo, sync
+commits all changes in that larger repo, not only files under the thoughts
+repo. `thts status` shows the git root in this case.
 
 ### Sync Modes
 

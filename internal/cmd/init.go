@@ -98,6 +98,13 @@ func runInit(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
+	if ctx := resolveThoughtsRepoContext(cfg, currentRepo); ctx != nil {
+		printThoughtsRepoRefusal("thts init", ctx)
+		cmd.SilenceUsage = true
+		cmd.SilenceErrors = true
+		return ExitCodeError{Code: 1}
+	}
+
 	// Resolve profile name: flag > env var
 	resolvedProfileName := initProfile
 	if resolvedProfileName == "" {

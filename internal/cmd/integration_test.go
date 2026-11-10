@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -1183,6 +1184,246 @@ func TestAddCommand(t *testing.T) {
 		// Output should contain a path
 		if !strings.Contains(output, "thoughts") || !strings.Contains(output, ".md") {
 			t.Errorf("expected file path in output, got: %s", output)
+		}
+	})
+}
+
+// writeTestConfig replaces the test environment's config file.
+func (e *testEnv) writeTestConfig(t *testing.T, cfg *config.Config) {
+	t.Helper()
+	data, err := yaml.Marshal(cfg)
+	if err != nil {
+		t.Fatalf("failed to marshal config: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(e.configHome, "thts", "config.yaml"), data, 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+}
+
+// setupHostRepoEnv creates a "notes" git repo whose thoughts/ subdirectory is
+// the thoughts repo for a non-default "work" profile.
+func setupHostRepoEnv(t *testing.T) (*testEnv, string) {
+	t.Helper()
+	env := setupTestEnv(t)
+
+	host := filepath.Join(env.root, "notes")
+	if err := os.MkdirAll(filepath.Join(host, "thoughts", "global"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := initGitRepo(host); err != nil {
+		t.Fatalf("failed to init host repo: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(host, "thoughts", "global", "README.md"), []byte("# global\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := ensureInitialCommit(host); err != nil {
+		t.Fatalf("failed to commit host repo: %v", err)
+	}
+
+	env.writeTestConfig(t, &config.Config{
+		User:                "testuser",
+		Gitignore:           config.ComponentModeLocal,
+		AutoSyncInWorktrees: true,
+		Profiles: map[string]*config.ProfileConfig{
+			"default": {ThoughtsRepo: env.thoughtsRepo, ReposDir: "repos", GlobalDir: "global", Default: true},
+			"work":    {ThoughtsRepo: filepath.Join(host, "thoughts"), ReposDir: "repos", GlobalDir: "global"},
+		},
+	})
+	return env, host
+}
+
+func gitOutput(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	return string(out)
+}
+
+const namespaceWarning = "no mapping in the active state file"
+
+var ansiPattern = regexp.MustCompile("\x1b\\[[0-9;]*m")
+
+func stripANSI(s string) string {
+	return ansiPattern.ReplaceAllString(s, "")
+}
+
+func TestThoughtsRepoContextCommands(t *testing.T) {
+	t.Run("status and sync from standalone thoughts repo", func(t *testing.T) {
+		env := setupTestEnv(t)
+		defer env.cleanup()
+
+		if err := os.MkdirAll(filepath.Join(env.thoughtsRepo, "thoughts"), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(env.thoughtsRepo, "note.md"), []byte("# note\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		output, err := env.runThtsInDir(env.thoughtsRepo, "status")
+		if err != nil {
+			t.Fatalf("status failed: %v\nOutput: %s", err, output)
+		}
+		for _, want := range []string{"Current Directory", "Thoughts repo (profile: default)"} {
+			if !strings.Contains(output, want) {
+				t.Errorf("status output missing %q\nOutput: %s", want, output)
+			}
+		}
+		for _, unwanted := range []string{namespaceWarning, "not mapped", "Git root"} {
+			if strings.Contains(output, unwanted) {
+				t.Errorf("status output should not contain %q\nOutput: %s", unwanted, output)
+			}
+		}
+
+		output, err = env.runThtsInDir(env.thoughtsRepo, "sync", "--mode", "local", "-m", "standalone sync")
+		if err != nil {
+			t.Fatalf("sync failed: %v\nOutput: %s", err, output)
+		}
+		output = stripANSI(output)
+		if !strings.Contains(output, "Syncing thoughts repo (profile: default)") {
+			t.Errorf("sync output missing profile line\nOutput: %s", output)
+		}
+		if strings.Contains(output, namespaceWarning) {
+			t.Errorf("sync should not warn about state namespace\nOutput: %s", output)
+		}
+		if msg := gitOutput(t, env.thoughtsRepo, "log", "-1", "--pretty=%s"); !strings.Contains(msg, "standalone sync") {
+			t.Errorf("expected commit in thoughts repo, got %q", msg)
+		}
+	})
+
+	t.Run("status and sync from host repo use the matching non-default profile", func(t *testing.T) {
+		env, host := setupHostRepoEnv(t)
+		defer env.cleanup()
+
+		if err := os.WriteFile(filepath.Join(host, "Context.md"), []byte("context\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(host, "thoughts", "global", "idea.md"), []byte("idea\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		daily := filepath.Join(host, "Daily")
+		if err := os.MkdirAll(daily, 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		for _, dir := range []string{host, daily} {
+			output, err := env.runThtsInDir(dir, "status")
+			if err != nil {
+				t.Fatalf("status in %s failed: %v\nOutput: %s", dir, err, output)
+			}
+			for _, want := range []string{"Thoughts repo (profile: work)", "Git root", "(profile: work)", "Context.md"} {
+				if !strings.Contains(output, want) {
+					t.Errorf("status in %s missing %q\nOutput: %s", dir, want, output)
+				}
+			}
+			if strings.Contains(output, namespaceWarning) {
+				t.Errorf("status in %s should not warn about state namespace\nOutput: %s", dir, output)
+			}
+		}
+
+		output, err := env.runThtsInDir(host, "sync", "--mode", "local", "-m", "host sync")
+		if err != nil {
+			t.Fatalf("sync failed: %v\nOutput: %s", err, output)
+		}
+		output = stripANSI(output)
+		if !strings.Contains(output, "Syncing thoughts repo (profile: work)") {
+			t.Errorf("sync output missing work profile\nOutput: %s", output)
+		}
+		if strings.Contains(output, namespaceWarning) {
+			t.Errorf("sync should not warn about state namespace\nOutput: %s", output)
+		}
+
+		files := gitOutput(t, host, "show", "--name-only", "--pretty=%s", "HEAD")
+		for _, want := range []string{"host sync", "Context.md", "thoughts/global/idea.md"} {
+			if !strings.Contains(files, want) {
+				t.Errorf("host commit missing %q, got:\n%s", want, files)
+			}
+		}
+		if log := gitOutput(t, env.thoughtsRepo, "log", "--oneline"); log != "" {
+			t.Errorf("default profile repo should be untouched, got log:\n%s", log)
+		}
+	})
+
+	t.Run("init and uninit refuse in thoughts repo and keep content", func(t *testing.T) {
+		env, host := setupHostRepoEnv(t)
+		defer env.cleanup()
+
+		readme := filepath.Join(host, "thoughts", "global", "README.md")
+
+		for _, args := range [][]string{
+			{"init", "--name", "notes", "--force", "--no-agents"},
+			{"uninit", "--force"},
+			{"uninit", "--all", "--force"},
+		} {
+			output, err := env.runThtsInDir(host, args...)
+			if err == nil {
+				t.Errorf("%v should fail in thoughts repo\nOutput: %s", args, output)
+			}
+			if !strings.Contains(output, `This directory is the thoughts repo for profile "work"`) {
+				t.Errorf("%v missing refusal message\nOutput: %s", args, output)
+			}
+			if strings.Contains(output, "Usage:") {
+				t.Errorf("%v should not print usage\nOutput: %s", args, output)
+			}
+			if _, statErr := os.Stat(readme); statErr != nil {
+				t.Fatalf("%v removed thoughts content: %v", args, statErr)
+			}
+		}
+
+		if _, err := os.Stat(filepath.Join(host, ".git", "hooks", "pre-commit")); err == nil {
+			t.Error("init should not install hooks in the thoughts repo")
+		}
+	})
+
+	t.Run("uninit refuses even when thoughts repo looks like a project setup", func(t *testing.T) {
+		env, host := setupHostRepoEnv(t)
+		defer env.cleanup()
+
+		repo := filepath.Join(host, "thoughts")
+		env.writeTestConfig(t, &config.Config{
+			User:      "testuser",
+			Gitignore: config.ComponentModeLocal,
+			Profiles: map[string]*config.ProfileConfig{
+				"default": {ThoughtsRepo: env.thoughtsRepo, ReposDir: "repos", GlobalDir: "global", Default: true},
+				"work":    {ThoughtsRepo: repo, ReposDir: "repos", GlobalDir: "globals"},
+			},
+		})
+
+		if err := os.RemoveAll(filepath.Join(repo, "global")); err != nil {
+			t.Fatal(err)
+		}
+		note := filepath.Join(repo, "globals", "uncommitted.md")
+		if err := os.MkdirAll(filepath.Dir(note), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(note, []byte("not committed\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		for name, target := range map[string]string{
+			"testuser": filepath.Join(repo, "repos", "notes", "testuser"),
+			"shared":   filepath.Join(repo, "repos", "notes", "shared"),
+			"global":   filepath.Join(repo, "globals"),
+		} {
+			if err := os.MkdirAll(target, 0755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Symlink(target, filepath.Join(repo, name)); err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		output, err := env.runThtsInDir(host, "uninit", "--force")
+		if err == nil {
+			t.Errorf("uninit should fail in thoughts repo\nOutput: %s", output)
+		}
+		if !strings.Contains(output, `This directory is the thoughts repo for profile "work"`) {
+			t.Errorf("missing refusal message\nOutput: %s", output)
+		}
+		if _, statErr := os.Stat(note); statErr != nil {
+			t.Fatalf("uninit removed thoughts content: %v", statErr)
 		}
 	})
 }

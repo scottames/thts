@@ -106,11 +106,17 @@ func runSync(cmd *cobra.Command, args []string) error {
 
 	var profileConfig *config.ResolvedProfile
 	var projectName string
+	var repoContext *thoughtsRepoContext
+	if !isInitialized {
+		repoContext = resolveThoughtsRepoContext(cfg, currentRepo)
+	}
 
 	if isInitialized {
 		// Use repo-specific profile from state
 		projectName = mapping.GetRepoName()
 		profileConfig = state.ResolveProfileForRepoWithIdentity(cfg, mappingKey, repoIdentity)
+	} else if repoContext != nil {
+		profileConfig = repoContext.Profile
 	} else {
 		if fs.Exists(thoughtsDir) {
 			fmt.Println(ui.Warning("Current repository has thoughts/ but no mapping in the active state file"))
@@ -172,6 +178,8 @@ func runSync(cmd *cobra.Command, args []string) error {
 	// 3. Sync the thoughts repository
 	if isInitialized {
 		fmt.Println(ui.InfoF("Syncing thoughts for %s...", ui.Accent(projectName)))
+	} else if repoContext != nil {
+		fmt.Println(ui.InfoF("Syncing thoughts repo (profile: %s)...", ui.Accent(profileConfig.ProfileName)))
 	} else {
 		fmt.Println(ui.Info("Syncing thoughts repo..."))
 	}
