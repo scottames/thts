@@ -27,8 +27,8 @@ lint:
         - .mise/**/*.yaml
   enabled:
     - gofmt@1.20.4
-    - osv-scanner@2.7.0
-    - renovate@44.209.0
+    - osv-scanner@2.7.1
+    - renovate@44.226.2
     - taplo@0.10.0
     - actionlint@1.7.12
     - gitleaks@8.30.1
