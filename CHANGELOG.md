@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.12.0](https://github.com/scottames/thts/compare/v0.11.0...v0.12.0) (2026-11-10)
+
+
+### Features
+
+* support running commands from the thoughts repo ([#117](https://github.com/scottames/thts/issues/117)) ([1402be9](https://github.com/scottames/thts/commit/1402be90b31294d57cc18430b473ef41659c2526))
+
+
+### Miscellaneous Chores
+
+* **deps:** update ⬆️ github-actions to v3.3.0 ([#110](https://github.com/scottames/thts/issues/110)) ([b18f67b](https://github.com/scottames/thts/commit/b18f67b6f7f95d05d138bad3c4aeed023ebcbeba))
+* **deps:** update ⬆️ github-actions to v5 ([#103](https://github.com/scottames/thts/issues/103)) ([2f854d3](https://github.com/scottames/thts/commit/2f854d39f8530043a84a7e034750cdf55ef36f4f))
+* **deps:** update ⬆️ github-actions to v5.2.5 ([#115](https://github.com/scottames/thts/issues/115)) ([b830943](https://github.com/scottames/thts/commit/b83094343a607e9dd9eefe6fc6e9db3e3979857b))
+* **deps:** update ⬆️ gomod patching to v3.0.6 ([#114](https://github.com/scottames/thts/issues/114)) ([aacf66f](https://github.com/scottames/thts/commit/aacf66fd476526d03b5ca96eca841c2573858dda))
+* **deps:** update ⬆️ trunk go to v1.27.2 ([#105](https://github.com/scottames/thts/issues/105)) ([2bb2da1](https://github.com/scottames/thts/commit/2bb2da1374ae9076dc31d7b7ea690c98e73e798d))
+* **deps:** update ⬆️ trunk go to v1.27.3 ([#109](https://github.com/scottames/thts/issues/109)) ([a83f3c1](https://github.com/scottames/thts/commit/a83f3c13639695434d258869740b92d9a940bbce))
+* **deps:** update dependency aqua:goreleaser/goreleaser to v2.18.2 ([#100](https://github.com/scottames/thts/issues/100)) ([bb1b437](https://github.com/scottames/thts/commit/bb1b4374dd74a322c059e2f0ddefbff46c39a7d1))
+* **deps:** update dependency aqua:goreleaser/goreleaser to v2.18.3 ([#106](https://github.com/scottames/thts/issues/106)) ([45b8de7](https://github.com/scottames/thts/commit/45b8de717062a000ba4c728d79b181bea7c6bb63))
+* **deps:** update dependency aqua:goreleaser/goreleaser to v2.19.0 ([#113](https://github.com/scottames/thts/issues/113)) ([1c47bf8](https://github.com/scottames/thts/commit/1c47bf880eaaaa92bbde70d1a396fe6b7c488999))
+* **deps:** update dependency bun to v1.4.3 ([#107](https://github.com/scottames/thts/issues/107)) ([7b3c552](https://github.com/scottames/thts/commit/7b3c552ea5adfd93074d345bc58d7179a22242ff))
+* **deps:** update dependency bun to v1.4.4 ([#111](https://github.com/scottames/thts/issues/111)) ([3494aa1](https://github.com/scottames/thts/commit/3494aa1dacb2f3afed4b041a7e74f2bb50329666))
+* **deps:** update dependency go to v1.27.3 ([#112](https://github.com/scottames/thts/issues/112)) ([513ea16](https://github.com/scottames/thts/commit/513ea167f6a2855652e09e6e81fc374c800499e8))
+* upgrade trunk ([#102](https://github.com/scottames/thts/issues/102)) ([66a6a9b](https://github.com/scottames/thts/commit/66a6a9b7a0df6a73e77765a2d038ed508a3e52f1))
+* upgrade trunk ([#104](https://github.com/scottames/thts/issues/104)) ([aead9ea](https://github.com/scottames/thts/commit/aead9eaac5107d5ebf5fcab1f6fd1fde45ecba65))
+* upgrade trunk ([#116](https://github.com/scottames/thts/issues/116)) ([3449d3c](https://github.com/scottames/thts/commit/3449d3c4bc40199ccc961ea23f8b7fec68aac54c))
+* upgrade trunk to 1.29.0 ([#108](https://github.com/scottames/thts/issues/108)) ([5355b2d](https://github.com/scottames/thts/commit/5355b2d22a32f874bbebe5dacd07ee052f250293))
+
 ## [0.11.0](https://github.com/scottames/thts/compare/v0.10.0...v0.11.0) (2026-09-22)
 
 
