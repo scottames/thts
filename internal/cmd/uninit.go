@@ -67,7 +67,7 @@ func runUninit(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	if ctx := resolveThoughtsRepoContext(cfg, currentRepo); ctx != nil && !isValidThoughtsSetup(thoughtsDir, cfg.User) {
+	if ctx := resolveThoughtsRepoContext(cfg, currentRepo); ctx != nil {
 		printThoughtsRepoRefusal("thts uninit", ctx)
 		cmd.SilenceUsage = true
 		cmd.SilenceErrors = true

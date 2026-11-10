@@ -1377,4 +1377,53 @@ func TestThoughtsRepoContextCommands(t *testing.T) {
 			t.Error("init should not install hooks in the thoughts repo")
 		}
 	})
+
+	t.Run("uninit refuses even when thoughts repo looks like a project setup", func(t *testing.T) {
+		env, host := setupHostRepoEnv(t)
+		defer env.cleanup()
+
+		repo := filepath.Join(host, "thoughts")
+		env.writeTestConfig(t, &config.Config{
+			User:      "testuser",
+			Gitignore: config.ComponentModeLocal,
+			Profiles: map[string]*config.ProfileConfig{
+				"default": {ThoughtsRepo: env.thoughtsRepo, ReposDir: "repos", GlobalDir: "global", Default: true},
+				"work":    {ThoughtsRepo: repo, ReposDir: "repos", GlobalDir: "globals"},
+			},
+		})
+
+		if err := os.RemoveAll(filepath.Join(repo, "global")); err != nil {
+			t.Fatal(err)
+		}
+		note := filepath.Join(repo, "globals", "uncommitted.md")
+		if err := os.MkdirAll(filepath.Dir(note), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(note, []byte("not committed\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+		for name, target := range map[string]string{
+			"testuser": filepath.Join(repo, "repos", "notes", "testuser"),
+			"shared":   filepath.Join(repo, "repos", "notes", "shared"),
+			"global":   filepath.Join(repo, "globals"),
+		} {
+			if err := os.MkdirAll(target, 0755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Symlink(target, filepath.Join(repo, name)); err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		output, err := env.runThtsInDir(host, "uninit", "--force")
+		if err == nil {
+			t.Errorf("uninit should fail in thoughts repo\nOutput: %s", output)
+		}
+		if !strings.Contains(output, `This directory is the thoughts repo for profile "work"`) {
+			t.Errorf("missing refusal message\nOutput: %s", output)
+		}
+		if _, statErr := os.Stat(note); statErr != nil {
+			t.Fatalf("uninit removed thoughts content: %v", statErr)
+		}
+	})
 }
