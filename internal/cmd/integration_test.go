@@ -13,7 +13,7 @@ import (
 	"testing"
 
 	"github.com/scottames/thts/internal/config"
-	"go.yaml.in/yaml/v3"
+	"go.yaml.in/yaml/v4"
 )
 
 var binaryPath string

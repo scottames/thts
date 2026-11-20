@@ -8,7 +8,7 @@ import (
 	"sort"
 	"testing"
 
-	"go.yaml.in/yaml/v3"
+	"go.yaml.in/yaml/v4"
 )
 
 // setupTestXDGState sets up a temporary XDG state directory and returns cleanup function
