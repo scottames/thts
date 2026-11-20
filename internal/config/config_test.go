@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"go.yaml.in/yaml/v3"
+	"go.yaml.in/yaml/v4"
 )
 
 // setupTestXDG sets up a temporary XDG config directory and returns cleanup function
