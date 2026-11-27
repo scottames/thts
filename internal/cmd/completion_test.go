@@ -7,7 +7,7 @@ import (
 
 	"github.com/scottames/thts/internal/config"
 	"github.com/spf13/cobra"
-	"go.yaml.in/yaml/v3"
+	"go.yaml.in/yaml/v4"
 )
 
 func TestCompleteCategories(t *testing.T) {
