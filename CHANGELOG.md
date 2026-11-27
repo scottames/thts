@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.12.1](https://github.com/scottames/thts/compare/v0.12.0...v0.12.1) (2026-11-27)
+
+
+### Miscellaneous Chores
+
+* **deps:** update ⬆️ gomod patching to v2.1.1 ([#125](https://github.com/scottames/thts/issues/125)) ([f23c6ab](https://github.com/scottames/thts/commit/f23c6abc03f0e4605bba575bd37893fefe3cde4c))
+* **deps:** update ⬆️ trunk go to v1.27.4 ([#123](https://github.com/scottames/thts/issues/123)) ([dcca7a4](https://github.com/scottames/thts/commit/dcca7a4c7df69f850497eecbd14eae05fba5bf89))
+* **deps:** update dependency aqua:goreleaser/goreleaser to v2.20.0 ([#118](https://github.com/scottames/thts/issues/118)) ([4a63420](https://github.com/scottames/thts/commit/4a63420279fa8d5fc6a526ae0d914840968f7e38))
+* **deps:** update dependency aqua:goreleaser/goreleaser to v2.20.2 ([#124](https://github.com/scottames/thts/issues/124)) ([26bd44e](https://github.com/scottames/thts/commit/26bd44e84d27d10d3920e9fd3261522981e299a9))
+* **deps:** update dependency aqua:goreleaser/goreleaser to v2.20.3 ([#127](https://github.com/scottames/thts/issues/127)) ([a69e0fd](https://github.com/scottames/thts/commit/a69e0fde7f255ea53bddf70197049f32198eeeea))
+* **deps:** update dependency bun to v1.4.5 ([#128](https://github.com/scottames/thts/issues/128)) ([5502372](https://github.com/scottames/thts/commit/550237211fabef37cdea45f3a157e678b573b9b2))
+* **deps:** update github-actions ([#121](https://github.com/scottames/thts/issues/121)) ([cad49d1](https://github.com/scottames/thts/commit/cad49d1e4669b58363c1a830e7b13949141f00d2))
+* **deps:** update github-actions ([#129](https://github.com/scottames/thts/issues/129)) ([1d583c5](https://github.com/scottames/thts/commit/1d583c547af28752f7804e18ed0863f52377a8bd))
+* upgrade trunk ([#122](https://github.com/scottames/thts/issues/122)) ([c59e468](https://github.com/scottames/thts/commit/c59e468a58284985353dcb6fa481dbc762b50e9f))
+* upgrade trunk ([#126](https://github.com/scottames/thts/issues/126)) ([4737b64](https://github.com/scottames/thts/commit/4737b64dba81e2da37880d5f5f8efe4a8ff86db6))
+
 ## [0.12.0](https://github.com/scottames/thts/compare/v0.11.0...v0.12.0) (2026-11-10)
 
 
